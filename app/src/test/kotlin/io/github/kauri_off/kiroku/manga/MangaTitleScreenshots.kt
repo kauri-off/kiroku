@@ -25,6 +25,7 @@ class MangaTitleScreenshots : ScreenshotRegistry() {
 
     override val cases =
         listOf(
+            case("unavailable") { Screen(MangaTitleContent.Failed(MangaTitleProblem.Unavailable)) },
             case("wide", window = WindowSize(840, 600)) { Screen(mangaFixture.shown()) },
             case("without-cover-or-totals") {
                 Screen(

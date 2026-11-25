@@ -157,7 +157,9 @@ internal class LiveGraph(
     override val anime by lazy { liveTitles(parts, preferences = { preferences }) }
     override val manga by lazy {
         val database = lazy { parts.database }
-        MalMangaRepository(parts.http, { database.onFirstUse(parts.scope) }, parts.clock)
+        MalMangaRepository(parts.http, { database.onFirstUse(parts.scope) }, parts.clock, account) {
+            list.observeSyncedAt().first()
+        }
     }
     override val airing by lazy { LiveAiring(parts, account.observeSession(), { list }, account::whileOwner, airingOf) }
     override val scores by lazy { parts.scores }

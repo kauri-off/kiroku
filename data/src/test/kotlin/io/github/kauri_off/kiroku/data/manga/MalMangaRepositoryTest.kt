@@ -7,6 +7,8 @@ import io.github.kauri_off.kiroku.core.model.MangaFormat
 import io.github.kauri_off.kiroku.core.model.MangaId
 import io.github.kauri_off.kiroku.core.model.MangaPublication
 import io.github.kauri_off.kiroku.core.model.SignInId
+import io.github.kauri_off.kiroku.core.model.owner
+import io.github.kauri_off.kiroku.core.repository.MangaRepository
 import io.github.kauri_off.kiroku.data.anime.MalTitles
 import io.github.kauri_off.kiroku.data.anime.edited
 import io.github.kauri_off.kiroku.data.anime.recordedJson
@@ -19,11 +21,16 @@ import io.github.kauri_off.kiroku.data.network.NetworkFixture.Companion.answer
 import io.github.kauri_off.kiroku.data.network.RepairedAnswer
 import io.github.kauri_off.kiroku.data.network.received
 import io.github.kauri_off.kiroku.data.recorder.RecordedAnswers
+import io.github.kauri_off.kiroku.data.session.SessionFixture
+import io.github.kauri_off.kiroku.data.session.TokenGrant
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withTimeout
 import kotlinx.serialization.json.JsonPrimitive
 import org.junit.After
 import org.junit.Assert.assertEquals
@@ -32,12 +39,15 @@ import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
+import org.junit.rules.TemporaryFolder
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.RuntimeEnvironment
 import java.time.Clock
 import java.time.Instant
 import java.time.ZoneOffset
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
 
 @RunWith(RobolectricTestRunner::class)
 class MalMangaRepositoryTest {
@@ -45,11 +55,19 @@ class MalMangaRepositoryTest {
     internal val network = NetworkFixture()
 
     private val context = RuntimeEnvironment.getApplication()
+
+    @get:Rule
+    val files = TemporaryFolder()
+
+    private val sessions by lazy { SessionFixture(files.root) }
+    private val session by lazy { sessions.open() }
+
     private val dbName = "manga-test.db"
     private val clock = Clock.fixed(Instant.parse("2026-11-25T12:00:00Z"), ZoneOffset.UTC)
 
     @After
     fun removeTestDatabase() {
+        runBlocking { sessions.close() }
         context.deleteDatabase(dbName)
     }
 
@@ -65,7 +83,7 @@ class MalMangaRepositoryTest {
                     val anime = (MalTitles(network.http).title(AnimeId(1), adult = false) as Outcome.Success).value
                     assertEquals("Cowboy Bebop", anime.anime.titles.romaji)
                     TitleStore(db, Dispatchers.IO, network.unexpected::add).refresh(anime.anime, anime.details, clock.instant())
-                    val repository = MalMangaRepository(network.http, { db }, clock)
+                    val repository = repository(db)
                     assertEquals(Outcome.Success(null), repository.stored(id))
                     (repository.refresh(id) as Outcome.Success).value
                 }
@@ -96,7 +114,7 @@ class MalMangaRepositoryTest {
 
         KirokuDatabase.open(context, dbName).withDatabase { db ->
             runBlocking {
-                val repository = MalMangaRepository(network.http, { db }, clock)
+                val repository = repository(db)
                 assertEquals(Outcome.Success(saved), repository.stored(id))
                 val store = TitleStore(db, Dispatchers.IO, network.unexpected::add)
                 assertEquals(
@@ -119,7 +137,7 @@ class MalMangaRepositoryTest {
         KirokuDatabase.builder(context, null).build().withDatabase { db ->
             runBlocking {
                 val id = MangaId(13)
-                val repository = MalMangaRepository(network.http, { db }, clock)
+                val repository = repository(db)
                 val saved = (repository.refresh(id) as Outcome.Success).value
                 assertEquals("One Piece", saved.details.titles.romaji)
                 assertEquals(MangaPublication.Known.Publishing, saved.details.publication)
@@ -146,7 +164,7 @@ class MalMangaRepositoryTest {
         KirokuDatabase.builder(context, null).build().withDatabase { db ->
             runBlocking {
                 val id = MangaId(1)
-                val repository = MalMangaRepository(network.http, { db }, clock)
+                val repository = repository(db)
                 val saved = (repository.refresh(id) as Outcome.Success).value
                 assertNull(saved.details.posterUrl)
                 assertNull(saved.details.synopsis)
@@ -168,12 +186,14 @@ class MalMangaRepositoryTest {
                 runBlocking {
                     val id = MangaId(1)
                     val list = RoomLocalList(db, scope, Dispatchers.IO, network.unexpected::add)
-                    val repository = MalMangaRepository(network.http, { db }, clock)
+                    val repository = repository(db)
                     val saved = repository.refresh(id)
                     assertTrue(saved is Outcome.Success)
                     list.clear(null)
                     assertEquals(saved, repository.stored(id))
-                    list.clear(SignInId("new-owner"))
+                    assertEquals(Outcome.Success(Unit), session.signIn(TokenGrant("access", "refresh")))
+                    assertEquals(Outcome.Failure(DataError.ListEnded), repository.stored(id))
+                    list.clear(session.currentSession()?.owner)
                     assertEquals(Outcome.Success(null), repository.stored(id))
                 }
             } finally {
@@ -181,6 +201,76 @@ class MalMangaRepositoryTest {
             }
         }
     }
+
+    @Test
+    fun `signed-out cold cache read waits for cleanup of the persisted owner`() {
+        val id = MangaId(1)
+        KirokuDatabase.builder(context, null).build().withDatabase { db ->
+            runBlocking {
+                val oldOwner = SignInId("retired")
+                db.list().setState { it.copy(owner = oldOwner.value) }
+                db.manga().save(recordedJson("manga_completed").toRow(id, 1, mutableSetOf()))
+                val cleanupStarted = CompletableDeferred<Unit>()
+                val cleanupFinished = CompletableDeferred<Unit>()
+                val guarded =
+                    repository(db) {
+                        cleanupStarted.complete(Unit)
+                        cleanupFinished.await()
+                    }
+                val lookup = async { guarded.stored(id) }
+                withTimeout(5_000) { cleanupStarted.await() }
+                assertTrue(!lookup.isCompleted)
+                assertEquals(Outcome.Failure(DataError.ListEnded), repository(db).stored(id))
+                db.manga().deleteAll()
+                db.list().setState { it.copy(owner = null) }
+                cleanupFinished.complete(Unit)
+                assertEquals(Outcome.Success(null), lookup.await())
+            }
+        }
+    }
+
+    @Test
+    fun `an in-flight signed-out read cannot save after a sign-in and back to signed out`() {
+        val recorded = RecordedAnswers.named("manga_completed")
+        val release = CountDownLatch(1)
+        network.answers {
+            check(release.await(5, TimeUnit.SECONDS))
+            answer(recorded.status, recorded.body)
+        }
+        KirokuDatabase.builder(context, null).build().withDatabase { db ->
+            runBlocking {
+                val id = MangaId(1)
+                val repository = repository(db)
+                val before = repository.observeOwner().first()
+                val request = async(Dispatchers.Default) { repository.refresh(id, before) }
+                try {
+                    assertEquals(
+                        "/v2/manga/1",
+                        network.api
+                            .received()
+                            .url.encodedPath,
+                    )
+                    assertEquals(Outcome.Success(Unit), session.signIn(TokenGrant("access", "refresh")))
+                    assertEquals(Outcome.Failure(DataError.ListEnded), repository.stored(id, before))
+                    session.signOut()
+                    assertTrue(before !== repository.observeOwner().first())
+                } finally {
+                    release.countDown()
+                }
+                assertEquals(Outcome.Failure(DataError.ListEnded), request.await())
+                assertEquals(Outcome.Success(null), repository.stored(id))
+            }
+        }
+    }
+
+    private fun repository(
+        db: KirokuDatabase,
+        awaitList: suspend () -> Unit = {},
+    ): MalMangaRepository = MalMangaRepository(network.http, { db }, clock, session, awaitList)
+
+    private suspend fun MangaRepository.stored(id: MangaId) = stored(id, observeOwner().first())
+
+    private suspend fun MangaRepository.refresh(id: MangaId) = refresh(id, observeOwner().first())
 
     private fun <T> KirokuDatabase.withDatabase(block: (KirokuDatabase) -> T): T =
         try {

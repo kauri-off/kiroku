@@ -5,6 +5,8 @@ import io.github.kauri_off.kiroku.core.error.DataError
 import io.github.kauri_off.kiroku.core.error.Outcome
 import io.github.kauri_off.kiroku.core.model.MangaId
 import io.github.kauri_off.kiroku.core.model.Session
+import io.github.kauri_off.kiroku.core.model.SessionOwner
+import io.github.kauri_off.kiroku.core.model.SignInId
 import io.github.kauri_off.kiroku.core.model.TitleLanguage
 import io.github.kauri_off.kiroku.core.repository.Connection
 import io.github.kauri_off.kiroku.core.repository.MangaRepository
@@ -17,6 +19,7 @@ import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.StandardTestDispatcher
+import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
@@ -30,6 +33,7 @@ import java.time.ZoneOffset
 class MangaTitleViewModelTest {
     private val dispatcher = StandardTestDispatcher()
     private val now = Instant.parse("2026-11-25T12:00:00Z")
+    private val owners = MutableStateFlow(SessionOwner(null))
     private val online = MutableStateFlow(false)
     private val failures = mutableListOf<DataError>()
     private var reads = 0
@@ -94,13 +98,158 @@ class MangaTitleViewModelTest {
             }
         }
 
-    private fun title(cached: StoredManga): MangaTitleViewModel =
+    @Test
+    fun `fresh cache re-show does not erase a failed offline pull`() =
+        runTest(dispatcher) {
+            val saved = StoredManga(mangaFixture, now)
+            val viewModel = title(saved)
+            try {
+                val firstShow = showing(viewModel.state, viewModel.shown)
+                runCurrent()
+                viewModel.refresh()
+                answer.complete(Outcome.Failure(DataError.NoConnection))
+                runCurrent()
+                firstShow.cancel()
+                runCurrent()
+                advanceTimeBy(5_001)
+                showing(viewModel.state, viewModel.shown)
+                runCurrent()
+                assertEquals(1, reads)
+                assertEquals(saved.details, shown(viewModel).details)
+
+                answer = CompletableDeferred(Outcome.Success(saved))
+                online.value = true
+                runCurrent()
+                assertEquals(2, reads)
+            } finally {
+                viewModel.viewModelScope.cancel()
+            }
+        }
+
+    @Test
+    fun `a second outage can recover even if its error arrives after connectivity returns`() =
+        runTest(dispatcher) {
+            val saved = StoredManga(mangaFixture, now)
+            val viewModel = title(saved)
+            try {
+                showing(viewModel.state, viewModel.shown)
+                runCurrent()
+                viewModel.refresh()
+                answer.complete(Outcome.Failure(DataError.NoConnection))
+                runCurrent()
+                answer = CompletableDeferred(Outcome.Success(saved))
+                online.value = true
+                runCurrent()
+                assertEquals(2, reads)
+
+                online.value = false
+                runCurrent()
+                val late = CompletableDeferred<Outcome<StoredManga>>()
+                answer = late
+                viewModel.refresh()
+                runCurrent()
+                online.value = true
+                runCurrent()
+                answer = CompletableDeferred(Outcome.Failure(DataError.NoConnection))
+                late.complete(Outcome.Failure(DataError.NoConnection))
+                runCurrent()
+                assertEquals(4, reads)
+                assertEquals(saved.details, shown(viewModel).details)
+            } finally {
+                viewModel.viewModelScope.cancel()
+            }
+        }
+
+    @Test
+    fun `a cache lookup finishing while hidden sends nothing until the page is shown again`() =
+        runTest(dispatcher) {
+            val cache = CompletableDeferred<StoredManga?>()
+            val viewModel = title(lookup = { cache.await() })
+            try {
+                val firstShow = showing(viewModel.state, viewModel.shown)
+                runCurrent()
+                firstShow.cancel()
+                runCurrent()
+                cache.complete(null)
+                runCurrent()
+                assertEquals(0, reads)
+
+                showing(viewModel.state, viewModel.shown)
+                runCurrent()
+                assertEquals(1, reads)
+            } finally {
+                viewModel.viewModelScope.cancel()
+            }
+        }
+
+    @Test
+    fun `a new owner drops the prior snapshot while its own lookup is pending`() =
+        runTest(dispatcher) {
+            val original = owners.value
+            val saved = StoredManga(mangaFixture, now)
+            val next = CompletableDeferred<StoredManga?>()
+            val viewModel = title(lookup = { if (it === original) saved else next.await() })
+            try {
+                showing(viewModel.state, viewModel.shown)
+                runCurrent()
+                assertEquals(saved.details, shown(viewModel).details)
+                owners.value = SessionOwner(SignInId("another"))
+                runCurrent()
+                assertEquals(MangaTitleContent.Loading, viewModel.state.value.content)
+                next.complete(null)
+                runCurrent()
+                assertEquals(1, reads)
+                assertEquals(MangaTitleContent.Loading, viewModel.state.value.content)
+            } finally {
+                viewModel.viewModelScope.cancel()
+            }
+        }
+
+    @Test
+    fun `a hidden screen cannot replay the retired owner's title when it is shown again`() =
+        runTest(dispatcher) {
+            val original = owners.value
+            val saved = StoredManga(mangaFixture, now)
+            val next = CompletableDeferred<StoredManga?>()
+            val viewModel = title(lookup = { if (it === original) saved else next.await() })
+            try {
+                val firstShow = showing(viewModel.state, viewModel.shown)
+                runCurrent()
+                assertEquals(saved.details, shown(viewModel).details)
+                firstShow.cancel()
+                runCurrent()
+                advanceTimeBy(5_001)
+                owners.value = SessionOwner(null)
+                runCurrent()
+                assertEquals(MangaTitleContent.Loading, viewModel.state.value.content)
+
+                showing(viewModel.state, viewModel.shown)
+                runCurrent()
+                assertEquals(MangaTitleContent.Loading, viewModel.state.value.content)
+                assertEquals(0, reads)
+            } finally {
+                viewModel.viewModelScope.cancel()
+            }
+        }
+
+    private fun title(
+        cached: StoredManga? = null,
+        lookup: suspend (SessionOwner) -> StoredManga? = { cached },
+    ): MangaTitleViewModel =
         MangaTitleViewModel(
             mangaFixture.id,
             object : MangaRepository {
-                override suspend fun stored(id: MangaId) = Outcome.Success(cached)
+                override fun observeOwner() = owners
 
-                override suspend fun refresh(id: MangaId): Outcome<StoredManga> {
+                override suspend fun stored(
+                    id: MangaId,
+                    owner: SessionOwner,
+                ) = Outcome.Success(lookup(owner))
+
+                override suspend fun refresh(
+                    id: MangaId,
+                    owner: SessionOwner,
+                ): Outcome<StoredManga> {
                     reads++
                     return answer.await()
                 }

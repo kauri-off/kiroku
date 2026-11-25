@@ -1,11 +1,13 @@
 package io.github.kauri_off.kiroku.data.manga
 
 import io.github.kauri_off.kiroku.core.error.DataError
+import io.github.kauri_off.kiroku.core.error.DataException
 import io.github.kauri_off.kiroku.core.error.Outcome
 import io.github.kauri_off.kiroku.core.model.MangaDetails
 import io.github.kauri_off.kiroku.core.model.MangaFormat
 import io.github.kauri_off.kiroku.core.model.MangaId
 import io.github.kauri_off.kiroku.core.model.MangaPublication
+import io.github.kauri_off.kiroku.core.model.SessionOwner
 import io.github.kauri_off.kiroku.core.model.Titles
 import io.github.kauri_off.kiroku.core.repository.MangaRepository
 import io.github.kauri_off.kiroku.core.repository.StoredManga
@@ -18,9 +20,8 @@ import io.github.kauri_off.kiroku.data.network.MalFields
 import io.github.kauri_off.kiroku.data.network.MalHttp
 import io.github.kauri_off.kiroku.data.network.RepairedAnswer
 import io.github.kauri_off.kiroku.data.network.clientIdOutcome
+import io.github.kauri_off.kiroku.data.session.MalSession
 import kotlinx.coroutines.CancellationException
-import kotlinx.coroutines.sync.Mutex
-import kotlinx.coroutines.sync.withLock
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
@@ -37,49 +38,71 @@ class MalMangaRepository(
     private val http: MalHttp,
     private val database: suspend () -> KirokuDatabase,
     private val clock: Clock,
+    private val session: MalSession,
+    private val awaitList: suspend () -> Unit,
 ) : MangaRepository {
     private val api by http.api(MangaApi::class)
-    private val refreshing = Mutex()
 
-    override suspend fun stored(id: MangaId): Outcome<StoredManga?> = storage { database().manga().read(id.value)?.toStored() }
+    override fun observeOwner() = session.observeOwner()
 
-    override suspend fun refresh(id: MangaId): Outcome<StoredManga> =
-        refreshing.withLock {
-            val (db, owner) =
-                when (val opened = storage { database().let { it to it.list().state().owner } }) {
-                    is Outcome.Failure -> return@withLock opened
-                    is Outcome.Success -> opened.value
-                }
-            val repaired = mutableSetOf<String>()
-            val answer =
-                http
-                    .call {
-                        api.details(id.value, MalFields.MANGA_DETAILS).toRow(id, clock.instant().toColumn(), repaired)
-                    }.clientIdOutcome()
-            if (answer is Outcome.Failure) return@withLock answer
-            val row = (answer as Outcome.Success).value
-            if (repaired.isNotEmpty()) http.unexpected(RepairedAnswer(repaired))
-            when (
-                val stored =
-                    storage {
-                        db.transaction {
-                            if (db.list().state().owner != owner) return@transaction null
-                            val dao = db.manga()
-                            dao.save(row)
-                            checkNotNull(dao.read(id.value)).toStored()
-                        }
-                    }
-            ) {
-                is Outcome.Failure -> stored
-                is Outcome.Success -> stored.value?.let { Outcome.Success(it) } ?: Outcome.Failure(DataError.ListEnded)
-            }
+    override suspend fun stored(
+        id: MangaId,
+        owner: SessionOwner,
+    ): Outcome<StoredManga?> =
+        storage {
+            awaitList()
+            inSettledOwner(owner) { it.manga().read(id.value)?.toStored() }
         }
 
-    private inline fun <T> storage(read: () -> T): Outcome<T> =
+    override suspend fun refresh(
+        id: MangaId,
+        owner: SessionOwner,
+    ): Outcome<StoredManga> {
+        val ready = storage { inSettledOwner(owner) {} }
+        if (ready is Outcome.Failure) return ready
+        val repaired = mutableSetOf<String>()
+        val answer =
+            http
+                .call {
+                    api.details(id.value, MalFields.MANGA_DETAILS).toRow(id, clock.instant().toColumn(), repaired)
+                }.clientIdOutcome()
+        if (answer is Outcome.Failure) {
+            return session.withOwner(owner) { answer } ?: Outcome.Failure(DataError.ListEnded)
+        }
+        val row = (answer as Outcome.Success).value
+        if (repaired.isNotEmpty()) http.unexpected(RepairedAnswer(repaired))
+        return storage {
+            inSettledOwner(owner) { db ->
+                val dao = db.manga()
+                dao.save(row)
+                checkNotNull(dao.read(id.value)).toStored()
+            }
+        }
+    }
+
+    private suspend fun <T> inSettledOwner(
+        owner: SessionOwner,
+        run: suspend (KirokuDatabase) -> T,
+    ): Outcome<T> {
+        val db = database()
+        return session.withOwner(owner) {
+            db.transaction {
+                if (db.list().state().owner != owner.id?.value) {
+                    Outcome.Failure(DataError.ListEnded)
+                } else {
+                    Outcome.Success(run(db))
+                }
+            }
+        } ?: Outcome.Failure(DataError.ListEnded)
+    }
+
+    private inline fun <T> storage(read: () -> Outcome<T>): Outcome<T> =
         try {
-            Outcome.Success(read())
+            read()
         } catch (e: CancellationException) {
             throw e
+        } catch (e: DataException) {
+            Outcome.Failure(e.error)
         } catch (e: Exception) {
             http.unexpected(e)
             Outcome.Failure(DataError.StorageError)

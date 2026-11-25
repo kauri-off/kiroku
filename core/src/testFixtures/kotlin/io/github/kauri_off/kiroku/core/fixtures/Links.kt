@@ -54,8 +54,6 @@ object Links {
             "https://myanimelist.net/manga/01",
             "https://myanimelist.net/manga/1/Monster/reviews",
             "https://myanimelist.net/manga/1/a%2Fb",
-            "https://myanimelist.net/manga/1/Monster%2F",
-            "https://myanimelist.net/manga/1/Monster%2f",
             "https://myanimelist.net/mangalist/someone",
             "http://myanimelist.net/manga/1",
             "https://myanimelist.net/animelist/someone",
@@ -75,7 +73,6 @@ object Links {
             "https://myanimelist.net/anime//1",
             "https://myanimelist.net/anime/1//",
             "https://myanimelist.net/anime/1/a%2Fb",
-            "https://myanimelist.net/anime/1/title%2F",
             "https://myanimelist.net",
             "https://m.myanimelist.net/anime/1",
             "https://myanimelist.net.example.com/anime/1",
@@ -101,6 +98,9 @@ object Links {
     val handedOn: List<String> =
         listOf(
             "https://myanimelist.net/anime/99999999999999999999",
+            "https://myanimelist.net/manga/1/Monster%2F",
+            "https://myanimelist.net/manga/1/Monster%2f",
+            "https://myanimelist.net/anime/1/title%2F",
             "https://myanimelist.net/manga/99999999999999999999",
             "https://myanimelist.net/manga/%31",
             "https://myanimelist.net:8443/anime/1",

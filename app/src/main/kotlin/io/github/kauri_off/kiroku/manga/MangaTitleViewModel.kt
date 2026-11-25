@@ -3,11 +3,11 @@ package io.github.kauri_off.kiroku.manga
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import io.github.kauri_off.kiroku.ShownLoads
-import io.github.kauri_off.kiroku.WhileShown
 import io.github.kauri_off.kiroku.core.error.DataError
 import io.github.kauri_off.kiroku.core.error.Outcome
 import io.github.kauri_off.kiroku.core.model.MangaId
 import io.github.kauri_off.kiroku.core.model.Session
+import io.github.kauri_off.kiroku.core.model.SessionOwner
 import io.github.kauri_off.kiroku.core.model.TitleLanguage
 import io.github.kauri_off.kiroku.core.repository.Connection
 import io.github.kauri_off.kiroku.core.repository.MangaRepository
@@ -15,8 +15,10 @@ import io.github.kauri_off.kiroku.core.repository.StoredManga
 import io.github.kauri_off.kiroku.core.repository.mangaStale
 import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.onStart
 import kotlinx.coroutines.flow.stateIn
@@ -41,7 +43,25 @@ internal class MangaTitleViewModel(
 
     private val page = MutableStateFlow(Page())
     private var load: Job? = null
-    private val loads = ShownLoads(viewModelScope, connection, { load(force = false) }, ::refresh)
+    private var owner: SessionOwner? = null
+    private var watchingOwner = false
+    private var reconnectPending = false
+    private var resumeCheck = false
+    private val loads =
+        ShownLoads(
+            viewModelScope,
+            connection,
+            whenShown = {
+                watchOwner()
+                load(force = false)
+            },
+            again = {
+                reconnectPending = true
+                load(force = false)
+            },
+            shownAgain = { if (resumeCheck || reconnectPending) load(force = false) },
+            trackOutagesWhileShown = manga != null,
+        )
     val shown = loads.shown
 
     val state =
@@ -66,30 +86,62 @@ internal class MangaTitleViewModel(
                     },
                 sessionExpired = session is Session.Expired,
             )
-        }.stateIn(viewModelScope, WhileShown, MangaTitleState())
+        }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(replayExpirationMillis = 0), MangaTitleState())
 
     fun refresh() = load(force = true)
 
+    private fun watchOwner() {
+        val source = manga ?: return
+        if (watchingOwner) return
+        watchingOwner = true
+        viewModelScope.launch {
+            source.observeOwner().collect { current ->
+                owner = current
+                load?.cancel()
+                load = null
+                reconnectPending = false
+                resumeCheck = false
+                loads.started()
+                page.value = Page()
+                load(force = false)
+            }
+        }
+    }
+
     private fun load(force: Boolean) {
         if (!loads.isShowing || load?.isActive == true) return
+        val source = manga
+        if (source == null) {
+            page.value = Page(problem = MangaTitleProblem.Unavailable)
+            return
+        }
+        val owner = owner ?: return
+        resumeCheck = false
         load =
             viewModelScope.launch(start = CoroutineStart.LAZY) {
-                val source = manga
-                if (source == null) {
-                    page.value = Page(problem = MangaTitleProblem.Unavailable)
+                val before = page.value
+                val stored = source.stored(id, owner)
+                ensureActive()
+                if (stored is Outcome.Failure && stored.error == DataError.ListEnded) {
+                    page.value = Page(problem = MangaTitleProblem.ReadFailed(stored.error))
                     return@launch
                 }
-                loads.started()
-                val before = page.value
-                page.value = before.copy(problem = null, refreshing = force)
                 val cached =
-                    when (val stored = source.stored(id)) {
+                    when (stored) {
                         is Outcome.Success -> stored.value
                         is Outcome.Failure -> before.cached
                     }
-                page.value = page.value.copy(cached = cached)
-                if (!force && !mangaStale(cached?.fetchedAt, clock.instant())) return@launch
-                val answer = source.refresh(id)
+                page.value = before.copy(cached = cached)
+                if (!loads.isShowing) {
+                    resumeCheck = true
+                    return@launch
+                }
+                if (!force && !reconnectPending && !mangaStale(cached?.fetchedAt, clock.instant())) return@launch
+                reconnectPending = false
+                loads.started()
+                page.value = page.value.copy(problem = null, refreshing = force)
+                val answer = source.refresh(id, owner)
+                ensureActive()
                 load = null
                 when (answer) {
                     is Outcome.Success -> {
@@ -98,8 +150,9 @@ internal class MangaTitleViewModel(
                     }
                     is Outcome.Failure -> {
                         val problem = MangaTitleProblem.ReadFailed(answer.error)
-                        page.value = Page(cached, problem, coverAttempt = before.coverAttempt + 1)
-                        if (cached != null) onRefreshFailed(answer.error)
+                        val stillCached = cached.takeUnless { answer.error == DataError.ListEnded }
+                        page.value = Page(stillCached, problem, coverAttempt = before.coverAttempt + 1)
+                        if (stillCached != null) onRefreshFailed(answer.error)
                         loads.ended(answer.error)
                     }
                 }

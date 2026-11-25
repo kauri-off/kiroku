@@ -3,6 +3,8 @@ package io.github.kauri_off.kiroku.core.repository
 import io.github.kauri_off.kiroku.core.error.Outcome
 import io.github.kauri_off.kiroku.core.model.MangaDetails
 import io.github.kauri_off.kiroku.core.model.MangaId
+import io.github.kauri_off.kiroku.core.model.SessionOwner
+import kotlinx.coroutines.flow.Flow
 import java.time.Instant
 
 data class StoredManga(
@@ -11,7 +13,15 @@ data class StoredManga(
 )
 
 interface MangaRepository {
-    suspend fun stored(id: MangaId): Outcome<StoredManga?>
+    fun observeOwner(): Flow<SessionOwner>
 
-    suspend fun refresh(id: MangaId): Outcome<StoredManga>
+    suspend fun stored(
+        id: MangaId,
+        owner: SessionOwner,
+    ): Outcome<StoredManga?>
+
+    suspend fun refresh(
+        id: MangaId,
+        owner: SessionOwner,
+    ): Outcome<StoredManga>
 }

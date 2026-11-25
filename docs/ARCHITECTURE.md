@@ -22,7 +22,7 @@ stack · 7 Persistence, errors and writes · 8 Design system · 9 How the interf
 
 - Sign in with a MAL account; browse without an account.
 - The user's anime list: read, change status, change watched episodes, score, dates, remove.
-- The title page, including related titles and statistics.
+- Anime title pages with related titles and statistics, and manga title pages opened from MyAnimeList links.
 - For titles that are still airing: episodes aired so far, total episodes, and how many aired episodes the user has
   yet to watch ("to watch").
 - Reliable notifications when a new episode of a title on the user's list has aired.
@@ -30,7 +30,7 @@ stack · 7 Persistence, errors and writes · 8 Design system · 9 How the interf
 - The user's profile and statistics; another user's list and statistics by user name.
 - Russian and English user interface.
 
-**After 1.0**, `ROADMAP.md` lists what is planned (manga, a deeper title page, a schedule, read-only forums) and
+**After 1.0**, `ROADMAP.md` lists what is planned (a deeper title page, a schedule, read-only forums) and
 which dailyAL features are not built, each with its reason. Android only. Later features have to fit without
 redesign: at most five top-level destinations (section 6.3); a new data source is an optional section that can fail
 without affecting its page (section 2.3).
