@@ -32,11 +32,12 @@ class SandboxManga(
     private val mal: SandboxMal,
     poster: (Long) -> String,
     unexpected: (Throwable) -> Unit,
+    retired: (SignInId) -> Boolean,
 ) : MangaListReader,
     MangaRepository {
     private val entries = Entries.map { it.copy(posterUrl = poster(it.id.value)) }
     private val list by lazy {
-        RoomMangaList(database, session, { owner, _ -> readList(owner) }, clock, unexpected)
+        RoomMangaList(database, session, { owner, _ -> readList(owner) }, clock, unexpected, retired)
     }
 
     override suspend fun stored(owner: SignInId) = withContext(Dispatchers.IO) { list.stored(owner) }

@@ -58,6 +58,7 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.RuntimeEnvironment
+import java.io.File
 import java.io.IOException
 import java.time.Clock
 import java.util.concurrent.CopyOnWriteArrayList
@@ -242,6 +243,87 @@ class LiveListTest {
             assertEquals(0L, mangaRows(parts))
             assertTrue(unexpected.isEmpty())
         }
+
+    @Test
+    fun `a failed sign out purge retries without another session emission`() =
+        runBlocking {
+            val parts = parts(process())
+            val owner = seedMangaWithBlockedPurge(parts)
+            val graph = LiveGraph(parts, listStore = { InMemoryLocalList() })
+            assertEquals(Session.Expired(owner), graph.session.observeSession().first())
+            graph.session.signOut()
+
+            withTimeout(5_000) {
+                while (unexpected.count { it.javaClass.simpleName == "UnreadableRow" } < 2) delay(10)
+            }
+            assertEquals(Session.SignedOut, graph.account.currentSession())
+            assertEquals(1L, mangaRows(parts))
+            allowMangaPurge(parts)
+            withTimeout(5_000) {
+                while (mangaRows(parts) != 0L) delay(10)
+            }
+            assertEquals(Session.SignedOut, graph.account.currentSession())
+            assertTrue(mal.asked.isEmpty())
+        }
+
+    @Test
+    fun `restart before token retry cannot read the snapshot when sign out purge also failed`() =
+        runBlocking {
+            val firstProcess = process()
+            val parts = parts(firstProcess)
+            val owner = seedMangaWithBlockedPurge(parts)
+            val blockedTokenWrite = File(parts.tokenFile.path + ".tmp")
+            check(blockedTokenWrite.mkdir())
+            File(blockedTokenWrite, "held").writeText("fixture")
+            val graph = LiveGraph(parts, listStore = { InMemoryLocalList() })
+            assertTrue((graph.mangaList.stored(owner) as Outcome.Success).value != null)
+            graph.session.signOut()
+            assertEquals(Session.SignedOut, graph.account.currentSession())
+            firstProcess.coroutineContext.job.cancelAndJoin()
+            assertEquals(1L, mangaRows(parts))
+
+            val restartedParts = parts(process())
+            val restarted = LiveGraph(restartedParts, listStore = { InMemoryLocalList() })
+            assertEquals(Session.Expired(owner), restarted.session.observeSession().first())
+            assertEquals(Outcome.Failure(DataError.ListEnded), restarted.mangaList.stored(owner))
+            assertEquals(Outcome.Failure(DataError.ListEnded), restarted.mangaList.refresh(owner))
+            assertEquals(1L, mangaRows(restartedParts))
+
+            allowMangaPurge(restartedParts)
+            withTimeout(5_000) {
+                while (mangaRows(restartedParts) != 0L) delay(10)
+            }
+            assertEquals(Session.Expired(owner), restarted.account.currentSession())
+            assertEquals(Outcome.Failure(DataError.ListEnded), restarted.mangaList.stored(owner))
+            assertTrue(mal.asked.isEmpty())
+        }
+
+    private suspend fun seedMangaWithBlockedPurge(parts: LiveParts): SignInId {
+        val owner = SignInId("0f8fad5b-d9cb-469f-a165-70867728950e")
+        parts.tokenFile.writeBytes(byteArrayOf(0) + owner.value.encodeToByteArray())
+        liveTitles(parts).observeAnime(AnimeId(1)).first()
+        editMangaDatabase(parts) { db ->
+            db.execSQL("INSERT INTO manga_list_state (owner, synced_at) VALUES (?, 0)", arrayOf(owner.value))
+            db.execSQL(
+                "INSERT INTO manga_list_entry (owner, manga_id, romaji, synonyms, status) VALUES (?, 1, 'Retained', '[]', 'reading')",
+                arrayOf(owner.value),
+            )
+            db.execSQL(
+                "CREATE TRIGGER deny_manga_purge BEFORE DELETE ON manga_list_state BEGIN SELECT RAISE(ABORT, 'fixture'); END",
+            )
+        }
+        return owner
+    }
+
+    private fun allowMangaPurge(parts: LiveParts) = editMangaDatabase(parts) { it.execSQL("DROP TRIGGER deny_manga_purge") }
+
+    private fun editMangaDatabase(
+        parts: LiveParts,
+        edit: (SQLiteDatabase) -> Unit,
+    ) {
+        val file = context.getDatabasePath(parts.databaseName).path
+        SQLiteDatabase.openDatabase(file, null, SQLiteDatabase.OPEN_READWRITE).use(edit)
+    }
 
     private fun mangaRequests() = mal.asked.filter { "/v2/users/@me/mangalist?" in it }
 

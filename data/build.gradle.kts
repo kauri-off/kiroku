@@ -110,15 +110,19 @@ tasks.named("copyRoomSchemas") {
 }
 
 // Section 11.1: the signed-in recorder's answers stay outside every checkout; the tests that need them read them there.
-val ownerRecordings: String =
+val selectedOwnerRecordings =
     providers
         .gradleProperty("kiroku.ownerRecordings")
         .orElse(providers.environmentVariable("KIROKU_OWNER_RECORDINGS"))
+
+val ownerRecordings: String =
+    selectedOwnerRecordings
         .orElse(providers.systemProperty("user.home").map { "$it/.local/share/kiroku/owner-recordings" })
         .get()
 
 tasks.withType<Test>().configureEach {
     systemProperty("kiroku.ownerRecordings", ownerRecordings)
+    systemProperty("kiroku.ownerRecordings.explicit", selectedOwnerRecordings.isPresent)
     inputs.files(fileTree(ownerRecordings)).withPropertyName("ownerRecordings")
 }
 

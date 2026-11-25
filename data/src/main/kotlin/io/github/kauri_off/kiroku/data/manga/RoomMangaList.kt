@@ -19,8 +19,10 @@ import io.github.kauri_off.kiroku.data.db.transaction
 import io.github.kauri_off.kiroku.data.network.MalHttp
 import io.github.kauri_off.kiroku.data.network.UnusableAnswer
 import io.github.kauri_off.kiroku.data.session.MalSession
+import io.github.kauri_off.kiroku.data.session.fileRetry
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
@@ -40,13 +42,15 @@ class RoomMangaList internal constructor(
     private val source: MangaListSource,
     private val clock: Clock,
     private val unexpected: (Throwable) -> Unit,
+    private val retired: (SignInId) -> Boolean = { false },
 ) : MangaListReader {
     constructor(
         database: () -> KirokuDatabase,
         session: MalSession,
         http: MalHttp,
         clock: Clock,
-    ) : this(database, session, MalMangaListSource(http, session), clock, http.unexpected)
+        retired: (SignInId) -> Boolean,
+    ) : this(database, session, MalMangaListSource(http, session), clock, http.unexpected, retired)
 
     private val database by lazy(database)
     private val dao get() = database.mangaList()
@@ -118,9 +122,16 @@ class RoomMangaList internal constructor(
             }
         }
 
-    suspend fun forgetRetired(currentOwner: SignInId?): Outcome<Unit> =
-        whileOwner(currentOwner) {
-            forget(currentOwner)
+    suspend fun sweepRetired(owner: SignInId?) {
+        var attempt = 0
+        while (forgetRetired(owner) == Outcome.Failure(DataError.StorageError)) {
+            delay(fileRetry(attempt++).toMillis())
+        }
+    }
+
+    internal suspend fun forgetRetired(currentOwner: SignInId?): Outcome<Unit> =
+        whileOwner(currentOwner, allowRetired = true) {
+            forget(currentOwner?.takeUnless(retired))
             Outcome.Success(Unit)
         }
 
@@ -150,13 +161,14 @@ class RoomMangaList internal constructor(
 
     private suspend fun <T> whileOwner(
         owner: SignInId?,
+        allowRetired: Boolean = false,
         operation: suspend () -> Outcome<T>,
     ): Outcome<T> =
         storage {
             var answer: Outcome<T> = Outcome.Failure(DataError.ListEnded)
             val owned =
                 session.whileOwner(owner) {
-                    answer = operation()
+                    if (allowRetired || owner == null || !retired(owner)) answer = operation()
                     true
                 }
             if (!owned && session.currentSession() == null) Outcome.Failure(DataError.StorageError) else answer

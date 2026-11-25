@@ -15,6 +15,7 @@ import io.github.kauri_off.kiroku.data.network.NetworkFixture.Companion.answer
 import io.github.kauri_off.kiroku.data.network.received
 import io.github.kauri_off.kiroku.data.recorder.OwnerRecordings
 import io.github.kauri_off.kiroku.data.recorder.RecordedAnswers
+import io.github.kauri_off.kiroku.data.recorder.mangaCaptureFiles
 import io.github.kauri_off.kiroku.data.session.SessionFixture
 import io.github.kauri_off.kiroku.data.session.TokenGrant
 import io.github.kauri_off.kiroku.data.session.granted
@@ -94,10 +95,22 @@ class MalMangaListTest {
     }
 
     @Test
+    fun `explicit manga replay rejects missing and ambiguous pages`() {
+        val names = (1..5).map { "manga_list_$it" }
+        val files = names.map { folder.newFile("$it.200.json") }
+        val duplicate = folder.newFile("manga_list_5.400.json")
+        for (selection in listOf(files.dropLast(1), files + duplicate)) {
+            val failure = assertThrows(AssertionError::class.java) { mangaCaptureFiles(selection, required = true) }
+            assertEquals("Personal manga list capture must contain five unique HTTP 200 pages", failure.message)
+            assertNull(failure.cause)
+        }
+        assertEquals(files, mangaCaptureFiles(files, required = true))
+    }
+
+    @Test
     fun `recorded manga pages map in order with an authenticated GET at each offset`() =
         runBlocking {
-            val names = (1..5).map { "manga_list_$it" }
-            val pages = names.map(OwnerRecordings::named)
+            val pages = OwnerRecordings.mangaPages()
             OwnerRecordings.read("personal manga list") {
                 network.clientId = ""
                 val owner = signIn("replay")

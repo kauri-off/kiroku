@@ -128,7 +128,7 @@ internal class LiveImages(
 
     private fun retirementFile(owner: SignInId): File = File(retirementDirectory(), owner.diskName())
 
-    private fun wasRecorded(owner: SignInId): Boolean = FileSystem.SYSTEM.metadataOrNull(retirementFile(owner).toOkioPath()) != null
+    fun wasRecorded(owner: SignInId): Boolean = FileSystem.SYSTEM.metadataOrNull(retirementFile(owner).toOkioPath()) != null
 
     private fun SignInId.diskName(): String = value.encodeUtf8().sha256().hex()
 

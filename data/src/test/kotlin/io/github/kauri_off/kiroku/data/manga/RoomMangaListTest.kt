@@ -54,7 +54,7 @@ class RoomMangaListTest {
         context.deleteDatabase(name)
     }
 
-    private fun repository() = RoomMangaList({ database }, session, { owner, _ -> response(owner) }, clock) { reported += it }
+    private fun repository() = RoomMangaList({ database }, session, { owner, _ -> response(owner) }, clock, unexpected = { reported += it })
 
     private suspend fun signIn(name: String): SignInId {
         assertEquals(Outcome.Success(Unit), session.signIn(TokenGrant(name, "refresh-$name")))

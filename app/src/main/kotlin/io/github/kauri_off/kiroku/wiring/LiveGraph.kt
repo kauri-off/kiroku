@@ -40,6 +40,7 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
@@ -153,7 +154,11 @@ internal class LiveGraph(
             { user },
             { notifications },
             runLog,
-            forgetManga = { withContext(Dispatchers.IO) { if (hasDatabase()) mangaList.forgetBeforeSignOut() } },
+            forgetManga = {
+                withContext(Dispatchers.IO) {
+                    !hasDatabase() || mangaList.forgetBeforeSignOut() is Outcome.Success
+                }
+            },
         )
     }
     override val session: SessionRepository get() = sessionWithCleanup
@@ -165,14 +170,16 @@ internal class LiveGraph(
     override val list by lazy { liveList(parts, account, listStore) { preferences.forgetUsersChoices() } }
     override val anime by lazy { liveTitles(parts, preferences = { preferences }) }
     override val mangaCatalogue by lazy { MalMangaCatalogue(parts.http) }
-    override val mangaList by lazy { RoomMangaList({ parts.database }, account, parts.http, clock) }
+    override val mangaList by lazy { RoomMangaList({ parts.database }, account, parts.http, clock, ::wasRetiredOnDisk) }
+
+    internal fun wasRetiredOnDisk(owner: SignInId) = imageCache.wasRecorded(owner)
 
     private fun hasDatabase() = parts.context.getDatabasePath(parts.databaseName).isFile
 
     init {
         parts.scope.launch(Dispatchers.IO) {
-            account.observeSession().map { it.owner }.distinctUntilChanged().collect { owner ->
-                if (hasDatabase()) mangaList.forgetRetired(owner)
+            account.observeSession().map { it.owner }.distinctUntilChanged().collectLatest { owner ->
+                if (hasDatabase()) mangaList.sweepRetired(owner)
             }
         }
     }
@@ -283,7 +290,7 @@ private class SignOutForgets(
     private val user: () -> LiveUser,
     private val notifications: () -> LiveNotifications,
     private val runs: KeptRuns?,
-    private val forgetManga: suspend () -> Unit,
+    private val forgetManga: suspend () -> Boolean,
 ) : SessionRepository by account {
     private val signingOut = mutableSetOf<SignInId?>()
 
@@ -304,7 +311,7 @@ private class SignOutForgets(
                 cancelTaps()
                 airing().retire(owner)
                 user().forgetPublicLists()
-                forgetManga()
+                if (!forgetManga()) images.recordRetirement(owner)
                 images.retire(owner)
             }
         if (!signedOut) return
