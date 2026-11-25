@@ -22,6 +22,7 @@ import org.junit.Rule
 import org.junit.Test
 import java.io.IOException
 import java.net.SocketTimeoutException
+import java.util.concurrent.atomic.AtomicInteger
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Duration.Companion.seconds
@@ -43,6 +44,41 @@ class SendRulesTest {
         network.api.enqueue(answer())
         call { read() }
     }
+
+    @Test
+    fun `allowing a queued read to start does not admit its first exchange`() {
+        val checks = AtomicInteger()
+        assertThrows(ReadDeferred::class.java) {
+            runBlocking {
+                network.http.call(firstRead = {
+                    if (checks.incrementAndGet() == 1) ReadAdmission.Send else ReadAdmission.Defer
+                }) { things.read() }
+            }
+        }
+        assertEquals(2, checks.get())
+        assertEquals(emptyList<String>(), sent())
+        assertTrue(network.unexpected.isEmpty())
+    }
+
+    @Test
+    fun `a first read guard stays admitted across retry while the continuous owner guard is checked again`() =
+        runBlocking {
+            val first = AtomicInteger()
+            network.api.enqueue(answer(503))
+            network.api.enqueue(answer())
+            val retried =
+                network.http.call(firstRead = {
+                    if (first.incrementAndGet() <= 2) ReadAdmission.Send else ReadAdmission.Defer
+                }) { things.read() }
+            assertEquals(MalAnswer.Success(Thing(7)), retried)
+            assertEquals(2, first.get())
+
+            val continuous = AtomicInteger()
+            network.api.enqueue(answer(503))
+            val retired = network.http.call(maySendRead = { continuous.incrementAndGet() <= 2 }) { things.read() }
+            assertEquals(MalAnswer.Failed(DataError.ListEnded), retired)
+            assertEquals(listOf("GET", "GET", "GET"), sent())
+        }
 
     @Test
     fun `a write whose connection drops is sent once`() {

@@ -75,10 +75,10 @@ internal class Sends(
     val spent: Boolean get() = reads.values.any { it.get() >= limit }
 
     @Synchronized
-    fun admitFirstRead() {
+    fun checkFirstRead(admit: Boolean) {
         if (readAdmitted || firstRead == null) return
         when (firstRead()) {
-            ReadAdmission.Send -> readAdmitted = true
+            ReadAdmission.Send -> readAdmitted = admit
             ReadAdmission.Defer -> throw ReadDeferred()
             ReadAdmission.OwnerEnded -> throw ReadOwnerEnded()
         }
@@ -121,7 +121,8 @@ internal object MarkSends : Interceptor {
     override fun intercept(chain: Interceptor.Chain): Response {
         val request = chain.request()
         request.checkReadOwner()
-        if (!request.isRead) request.tag(Sends::class.java)?.wrote = true
+        val sends = request.tag(Sends::class.java)
+        if (request.isRead) sends?.checkFirstRead(admit = false) else sends?.wrote = true
         return chain.proceed(request.newBuilder().tag(Wire::class.java, Wire()).build())
     }
 }
@@ -133,7 +134,7 @@ internal object SendLimits : Interceptor {
         val wire = request.tag(Wire::class.java) ?: return chain.proceed(request)
         request.checkReadOwner()
         val sends = request.tag(Sends::class.java)
-        if (request.isRead) sends?.admitFirstRead()
+        if (request.isRead) sends?.checkFirstRead(admit = true)
         val allowed =
             if (request.isRead) sends?.mayRead(request.url) != false else !wire.written.getAndSet(true)
         if (!allowed) throw NotSentAgain(wire.status, wire.failure)
