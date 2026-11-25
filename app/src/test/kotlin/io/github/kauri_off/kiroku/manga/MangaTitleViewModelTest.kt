@@ -361,6 +361,51 @@ class MangaTitleViewModelTest {
                 assertEquals(1, reads)
                 assertEquals(listOf(DataError.NoConnection), failures)
 
+                answer = CompletableDeferred(Outcome.Failure(DataError.NoConnection))
+                online.value = true
+                runCurrent()
+                assertEquals(2, reads)
+                assertEquals(List(2) { DataError.NoConnection }, failures)
+
+                answer = CompletableDeferred(Outcome.Success(saved))
+                online.value = false
+                runCurrent()
+                online.value = true
+                runCurrent()
+                assertEquals(3, reads)
+                assertEquals(List(2) { DataError.NoConnection }, failures)
+            } finally {
+                viewModel.viewModelScope.cancel()
+            }
+        }
+
+    @Test
+    fun `automatic reconnect does not dispatch when preflight completes after an offline re-show`() =
+        runTest(dispatcher) {
+            val saved = StoredManga(mangaFixture, now)
+            val held = CompletableDeferred<Unit>()
+            var preflights = 0
+            val viewModel = title(saved, preflight = { if (++preflights == 2) held.await() })
+            try {
+                val screen = showing(viewModel.state, viewModel.shown)
+                runCurrent()
+                viewModel.refresh()
+                answer.complete(Outcome.Failure(DataError.NoConnection))
+                runCurrent()
+                online.value = true
+                runCurrent()
+                assertEquals(2, preflights)
+
+                screen.cancel()
+                runCurrent()
+                online.value = false
+                showing(viewModel.state, viewModel.shown)
+                runCurrent()
+                held.complete(Unit)
+                runCurrent()
+                assertEquals(1, reads)
+                assertEquals(listOf(DataError.NoConnection), failures)
+
                 answer = CompletableDeferred(Outcome.Success(saved))
                 online.value = true
                 runCurrent()

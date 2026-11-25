@@ -299,6 +299,40 @@ class MalMangaRepositoryTest {
     }
 
     @Test
+    fun `hidden preflight storage failure defers refresh but reports the storage error`() {
+        serve("manga_completed")
+        KirokuDatabase.builder(context, null).build().withDatabase { db ->
+            runBlocking {
+                val entered = CompletableDeferred<Unit>()
+                val release = CompletableDeferred<Unit>()
+                var failStorage = true
+                val repository =
+                    MalMangaRepository(network.http, {
+                        entered.complete(Unit)
+                        release.await()
+                        check(!failStorage)
+                        db
+                    }, clock, session) {}
+                val id = MangaId(1)
+                val owner = repository.observeOwner().first()
+                val visible = AtomicBoolean(true)
+                val pending = async { repository.refresh(id, owner, visible::get) }
+                withTimeout(5_000) { entered.await() }
+                visible.set(false)
+                release.complete(Unit)
+                assertNull(pending.await())
+                assertEquals(0, network.api.requestCount)
+                assertEquals(1, network.unexpected.size)
+
+                failStorage = false
+                visible.set(true)
+                assertTrue(repository.refresh(id, owner, visible::get) is Outcome.Success)
+                assertEquals(1, network.api.requestCount)
+            }
+        }
+    }
+
+    @Test
     fun `first send queued by OkHttp defers while hidden and sends once on return`() {
         val visible = AtomicBoolean(true)
         queuedRead(change = { visible.set(false) }, canDispatch = visible::get, expected = null, reopen = true)

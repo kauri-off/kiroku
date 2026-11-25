@@ -64,7 +64,10 @@ class MalMangaRepository(
         canDispatch: () -> Boolean,
     ): Outcome<StoredManga>? {
         val ready = storage { inSettledOwner(owner) {} }
-        if (ready is Outcome.Failure) return ready
+        if (ready is Outcome.Failure) {
+            if (ready.error == DataError.ListEnded || !session.isCurrentOwner(owner)) return Outcome.Failure(DataError.ListEnded)
+            return ready.takeIf { canDispatch() }
+        }
         val repaired = mutableSetOf<String>()
         val answer =
             try {

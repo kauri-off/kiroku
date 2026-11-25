@@ -30,7 +30,7 @@ internal class MangaTitleViewModel(
     private val id: MangaId,
     private val manga: MangaRepository?,
     private val clock: Clock,
-    private val connection: Connection,
+    connection: Connection,
     language: Flow<TitleLanguage>,
     session: Flow<Session>,
     private val onRefreshFailed: (DataError) -> Unit,
@@ -42,6 +42,7 @@ internal class MangaTitleViewModel(
         val coverAttempt: Int = 0,
     )
 
+    private val online = connection.observeOnline().stateIn(viewModelScope, SharingStarted.Eagerly, false)
     private val page = MutableStateFlow(Page())
     private var load: Job? = null
     private var owner: SessionOwner? = null
@@ -116,7 +117,7 @@ internal class MangaTitleViewModel(
         if (reconnectWait?.isActive == true) return
         reconnectWait =
             viewModelScope.launch {
-                connection.observeOnline().first { it }
+                online.first { it }
                 load(force = false, reconnectReady = true)
             }
     }
@@ -166,9 +167,10 @@ internal class MangaTitleViewModel(
                 if (!manual && !reconnectPending && !mangaStale(cached?.fetchedAt, clock.instant())) return@launch
                 val reconnect = reconnectPending
                 reconnectPending = false
-                loads.started()
+                val automaticRetry = reconnect && !manual
+                loads.started(reconnect = automaticRetry)
                 page.value = page.value.copy(problem = null, refreshing = manual)
-                val answer = source.refresh(id, owner) { loads.isShowing }
+                val answer = source.refresh(id, owner) { loads.isShowing && (!automaticRetry || online.value) }
                 ensureActive()
                 load = null
                 if (answer == null) {
