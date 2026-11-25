@@ -18,11 +18,12 @@ import io.github.kauri_off.kiroku.data.db.toColumn
 import io.github.kauri_off.kiroku.data.db.transaction
 import io.github.kauri_off.kiroku.data.network.MalFields
 import io.github.kauri_off.kiroku.data.network.MalHttp
+import io.github.kauri_off.kiroku.data.network.ReadAdmission
+import io.github.kauri_off.kiroku.data.network.ReadDeferred
 import io.github.kauri_off.kiroku.data.network.RepairedAnswer
 import io.github.kauri_off.kiroku.data.network.clientIdOutcome
 import io.github.kauri_off.kiroku.data.session.MalSession
 import kotlinx.coroutines.CancellationException
-import kotlinx.coroutines.cancel
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
 import kotlinx.serialization.json.JsonElement
@@ -63,30 +64,26 @@ class MalMangaRepository(
         canDispatch: () -> Boolean,
     ): Outcome<StoredManga>? {
         val ready = storage { inSettledOwner(owner) {} }
-        if (ready is Outcome.Failure) return ready.takeIf { canDispatch() }
+        if (ready is Outcome.Failure) return ready
         val repaired = mutableSetOf<String>()
-        var dispatched = false
-        var deferred = false
         val answer =
             try {
                 http
-                    .call {
-                        val service = api
-                        if (!dispatched && !canDispatch()) {
-                            deferred = true
-                            val context = currentCoroutineContext()
-                            context.cancel()
-                            context.ensureActive()
+                    .call(firstRead = {
+                        when {
+                            !session.isCurrentOwner(owner) -> ReadAdmission.OwnerEnded
+                            !canDispatch() -> ReadAdmission.Defer
+                            else -> ReadAdmission.Send
                         }
-                        dispatched = true
-                        service.details(id.value, MalFields.MANGA_DETAILS).toRow(id, clock.instant().toColumn(), repaired)
+                    }) {
+                        api.details(id.value, MalFields.MANGA_DETAILS).toRow(id, clock.instant().toColumn(), repaired)
                     }.clientIdOutcome()
-            } catch (e: CancellationException) {
+            } catch (_: ReadDeferred) {
                 currentCoroutineContext().ensureActive()
-                if (deferred) return null
-                throw e
+                return null
             }
         if (answer is Outcome.Failure) {
+            if (answer.error == DataError.ListEnded) return answer
             return session.withOwner(owner) { answer } ?: Outcome.Failure(DataError.ListEnded)
         }
         val row = (answer as Outcome.Success).value

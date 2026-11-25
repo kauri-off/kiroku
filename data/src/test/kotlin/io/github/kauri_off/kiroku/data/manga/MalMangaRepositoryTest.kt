@@ -9,6 +9,7 @@ import io.github.kauri_off.kiroku.core.model.MangaPublication
 import io.github.kauri_off.kiroku.core.model.SignInId
 import io.github.kauri_off.kiroku.core.model.owner
 import io.github.kauri_off.kiroku.core.repository.MangaRepository
+import io.github.kauri_off.kiroku.core.repository.StoredManga
 import io.github.kauri_off.kiroku.data.anime.MalTitles
 import io.github.kauri_off.kiroku.data.anime.edited
 import io.github.kauri_off.kiroku.data.anime.recordedJson
@@ -28,10 +29,12 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
 import kotlinx.serialization.json.JsonPrimitive
+import okhttp3.Dispatcher
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
@@ -291,6 +294,85 @@ class MalMangaRepositoryTest {
                 visible.set(true)
                 assertTrue(repository.refresh(id, owner, visible::get) is Outcome.Success)
                 assertEquals(1, network.api.requestCount)
+            }
+        }
+    }
+
+    @Test
+    fun `first send queued by OkHttp defers while hidden and sends once on return`() {
+        val visible = AtomicBoolean(true)
+        queuedRead(change = { visible.set(false) }, canDispatch = visible::get, expected = null, reopen = true)
+    }
+
+    @Test
+    fun `a queued read from a retired owner ends even if it is hidden too`() {
+        val visible = AtomicBoolean(true)
+        queuedRead(
+            change = {
+                visible.set(false)
+                assertEquals(Outcome.Success(Unit), session.signIn(TokenGrant("replacement-access", "replacement-refresh")))
+            },
+            canDispatch = visible::get,
+            expected = Outcome.Failure(DataError.ListEnded),
+        )
+    }
+
+    private fun queuedRead(
+        change: suspend () -> Unit,
+        canDispatch: () -> Boolean,
+        expected: Outcome<StoredManga>?,
+        reopen: Boolean = false,
+    ) {
+        val dispatcher = Dispatcher().apply { maxRequests = 1 }
+        network.calls = dispatcher
+        val release = CountDownLatch(1)
+        val recorded = RecordedAnswers.named("manga_completed")
+        network.answers { request ->
+            if (request.url.encodedPath == "/v2/thing") {
+                check(release.await(5, TimeUnit.SECONDS))
+                answer()
+            } else {
+                answer(recorded.status, recorded.body)
+            }
+        }
+        KirokuDatabase.builder(context, null).build().withDatabase { db ->
+            runBlocking {
+                val repository = repository(db)
+                val owner = repository.observeOwner().first()
+                val id = MangaId(1)
+                val occupying = async(Dispatchers.Default) { network.http.call { network.things.value.read() } }
+                val pending =
+                    try {
+                        assertEquals(
+                            "/v2/thing",
+                            network.api
+                                .received()
+                                .url.encodedPath,
+                        )
+                        val pending = async { repository.refresh(id, owner, canDispatch) }
+                        withTimeout(5_000) {
+                            while (dispatcher.queuedCallsCount() == 0) delay(1)
+                        }
+                        change()
+                        pending
+                    } finally {
+                        release.countDown()
+                    }
+
+                occupying.await()
+                assertEquals(expected, pending.await())
+                assertEquals(1, network.api.requestCount)
+                assertTrue(network.unexpected.isEmpty())
+                if (reopen) {
+                    assertTrue(repository.refresh(id, owner) { true } is Outcome.Success)
+                    assertEquals(
+                        "/v2/manga/1",
+                        network.api
+                            .received()
+                            .url.encodedPath,
+                    )
+                    assertEquals(2, network.api.requestCount)
+                }
             }
         }
     }

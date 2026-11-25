@@ -175,12 +175,14 @@ class MalSession internal constructor(
             emitAll(owners.filterNotNull())
         }
 
+    internal fun isCurrentOwner(owner: SessionOwner): Boolean = owners.value === owner
+
     internal suspend fun <T : Any> withOwner(
         owner: SessionOwner,
         run: suspend () -> T,
     ): T? {
         read.await()
-        return gate.withLock { if (owners.value === owner) run() else null }
+        return gate.withLock { if (isCurrentOwner(owner)) run() else null }
     }
 
     private fun publish(value: Stored) {

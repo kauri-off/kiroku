@@ -20,6 +20,7 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.onStart
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
@@ -29,7 +30,7 @@ internal class MangaTitleViewModel(
     private val id: MangaId,
     private val manga: MangaRepository?,
     private val clock: Clock,
-    connection: Connection,
+    private val connection: Connection,
     language: Flow<TitleLanguage>,
     session: Flow<Session>,
     private val onRefreshFailed: (DataError) -> Unit,
@@ -46,6 +47,7 @@ internal class MangaTitleViewModel(
     private var owner: SessionOwner? = null
     private var watchingOwner = false
     private var reconnectPending = false
+    private var reconnectWait: Job? = null
     private var resumeForce: Boolean? = null
     private val loads =
         ShownLoads(
@@ -59,6 +61,7 @@ internal class MangaTitleViewModel(
                 reconnectPending = true
                 load(force = false)
             },
+            hidden = { reconnectWait?.cancel() },
             shownAgain = { if (resumeForce != null || reconnectPending) load(force = false) },
             trackOutagesWhileShown = manga != null,
         )
@@ -100,6 +103,7 @@ internal class MangaTitleViewModel(
                 load?.cancel()
                 load = null
                 reconnectPending = false
+                reconnectWait?.cancel()
                 resumeForce = false
                 loads.started()
                 page.value = Page()
@@ -108,7 +112,19 @@ internal class MangaTitleViewModel(
         }
     }
 
-    private fun load(force: Boolean) {
+    private fun waitForReconnect() {
+        if (reconnectWait?.isActive == true) return
+        reconnectWait =
+            viewModelScope.launch {
+                connection.observeOnline().first { it }
+                load(force = false, reconnectReady = true)
+            }
+    }
+
+    private fun load(
+        force: Boolean,
+        reconnectReady: Boolean = false,
+    ) {
         if (!loads.isShowing || load?.isActive == true) return
         val source = manga
         if (source == null) {
@@ -117,6 +133,11 @@ internal class MangaTitleViewModel(
         }
         val owner = owner ?: return
         val manual = force || resumeForce == true
+        if (reconnectPending && !manual && !reconnectReady) {
+            waitForReconnect()
+            return
+        }
+        if (manual) reconnectWait?.cancel()
         resumeForce = null
         load =
             viewModelScope.launch(start = CoroutineStart.LAZY) {
@@ -135,6 +156,11 @@ internal class MangaTitleViewModel(
                 page.value = before.copy(cached = cached)
                 if (!loads.isShowing) {
                     resumeForce = manual
+                    return@launch
+                }
+                if (reconnectPending && !manual && !reconnectReady) {
+                    load = null
+                    waitForReconnect()
                     return@launch
                 }
                 if (!manual && !reconnectPending && !mangaStale(cached?.fetchedAt, clock.instant())) return@launch

@@ -333,6 +333,44 @@ class MangaTitleViewModelTest {
             }
         }
 
+    @Test
+    fun `deferred reconnect waits through an offline re-show and sends once when online again`() =
+        runTest(dispatcher) {
+            val saved = StoredManga(mangaFixture, now)
+            val held = CompletableDeferred<Unit>()
+            var preflights = 0
+            val viewModel = title(saved, preflight = { if (++preflights == 2) held.await() })
+            try {
+                val screen = showing(viewModel.state, viewModel.shown)
+                runCurrent()
+                viewModel.refresh()
+                answer.complete(Outcome.Failure(DataError.NoConnection))
+                runCurrent()
+                assertEquals(1, reads)
+
+                online.value = true
+                runCurrent()
+                assertEquals(2, preflights)
+                screen.cancel()
+                runCurrent()
+                online.value = false
+                held.complete(Unit)
+                runCurrent()
+                showing(viewModel.state, viewModel.shown)
+                runCurrent()
+                assertEquals(1, reads)
+                assertEquals(listOf(DataError.NoConnection), failures)
+
+                answer = CompletableDeferred(Outcome.Success(saved))
+                online.value = true
+                runCurrent()
+                assertEquals(2, reads)
+                assertEquals(listOf(DataError.NoConnection), failures)
+            } finally {
+                viewModel.viewModelScope.cancel()
+            }
+        }
+
     private fun title(
         cached: StoredManga? = null,
         lookup: suspend (SessionOwner) -> StoredManga? = { cached },
