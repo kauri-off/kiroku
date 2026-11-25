@@ -44,6 +44,7 @@ internal class MangaListViewModel(
     private var load: Job? = null
     private var watch: Job? = null
     private var refreshPending = false
+    private var recoveryPending = false
     private val loads =
         ShownLoads(
             viewModelScope,
@@ -52,7 +53,10 @@ internal class MangaListViewModel(
                 watchSession()
                 read()
             },
-            again = { read(force = true) },
+            again = {
+                recoveryPending = true
+                read()
+            },
             shownAgain = { read() },
             trackOutagesWhileShown = true,
         )
@@ -84,6 +88,7 @@ internal class MangaListViewModel(
                         load?.cancel()
                         load = null
                         refreshPending = false
+                        recoveryPending = false
                         loads.started()
                         page.value = Page()
                     }
@@ -117,8 +122,10 @@ internal class MangaListViewModel(
                     return@launch
                 }
                 val forced = refreshPending
-                if (!forced && !listStale(snapshot?.syncedAt, clock.instant())) return@launch
+                val recovering = recoveryPending
+                if (!forced && !recovering && !listStale(snapshot?.syncedAt, clock.instant())) return@launch
                 refreshPending = false
+                recoveryPending = false
                 page.value = Page(snapshot, refreshing = true)
                 val result = lists.refresh(owner) { loads.isShowing }
                 ensureActive()
@@ -126,6 +133,7 @@ internal class MangaListViewModel(
                 load = null
                 if (result == null) {
                     refreshPending = refreshPending || forced
+                    recoveryPending = recoveryPending || recovering
                     page.value = Page(snapshot)
                     read()
                     return@launch
@@ -133,15 +141,18 @@ internal class MangaListViewModel(
                 refreshPending = false
                 when (result) {
                     is Outcome.Success -> {
+                        recoveryPending = false
                         val updated = result.value.takeIf { it.owner == owner }
                         page.value = if (updated != null) Page(updated) else Page(error = DataError.ListEnded)
                         loads.ended(null)
                     }
                     is Outcome.Failure -> {
+                        if (result.error != DataError.NoConnection) recoveryPending = false
                         val kept = snapshot.takeUnless { result.error == DataError.ListEnded }
                         page.value = Page(kept, result.error)
                         if (kept != null) onRefreshFailed(result.error)
                         loads.ended(result.error)
+                        if (recoveryPending) read()
                     }
                 }
             }

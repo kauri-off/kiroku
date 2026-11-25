@@ -11,7 +11,6 @@ import io.github.kauri_off.kiroku.core.model.MangaReadingStatus
 import io.github.kauri_off.kiroku.core.model.SessionOwner
 import io.github.kauri_off.kiroku.core.model.SignInId
 import io.github.kauri_off.kiroku.core.model.Titles
-import io.github.kauri_off.kiroku.core.model.owner
 import io.github.kauri_off.kiroku.core.repository.MangaListReader
 import io.github.kauri_off.kiroku.core.repository.MangaRepository
 import io.github.kauri_off.kiroku.core.repository.StoredManga
@@ -20,10 +19,8 @@ import io.github.kauri_off.kiroku.data.manga.RoomMangaList
 import io.github.kauri_off.kiroku.data.network.Device
 import io.github.kauri_off.kiroku.data.session.Attempt
 import io.github.kauri_off.kiroku.data.session.MalSession
-import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.time.Clock
 
@@ -35,14 +32,11 @@ class SandboxManga(
     private val mal: SandboxMal,
     poster: (Long) -> String,
     unexpected: (Throwable) -> Unit,
-    scope: CoroutineScope,
 ) : MangaListReader,
     MangaRepository {
     private val entries = Entries.map { it.copy(posterUrl = poster(it.id.value)) }
     private val list by lazy {
-        RoomMangaList(database(), session, ::readList, clock, unexpected).also { repository ->
-            scope.launch { session.observeSession().collect { repository.forgetRetired(it.owner) } }
-        }
+        RoomMangaList(database(), session, ::readList, clock, unexpected)
     }
 
     override suspend fun stored(owner: SignInId) = withContext(Dispatchers.IO) { list.stored(owner) }

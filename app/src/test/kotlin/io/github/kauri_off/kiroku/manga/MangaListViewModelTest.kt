@@ -107,6 +107,50 @@ class MangaListViewModelTest {
         }
 
     @Test
+    fun `a recovery during an admitted refresh retries only if its answer still says offline`() =
+        runTest(dispatcher) {
+            val updated = snapshot.copy(entries = listOf(mangaEntry.copy(chaptersRead = 99)))
+            for (lateError in listOf(null, DataError.NoConnection)) {
+                online.value = false
+                failures.clear()
+                fetches = 0
+                answer = CompletableDeferred(Outcome.Failure(DataError.NoConnection))
+                val vm = model()
+                val screen = showing(vm.shown, vm.state)
+                val pending = CompletableDeferred<Outcome<MangaListSnapshot>>()
+                try {
+                    runCurrent()
+                    vm.refresh()
+                    runCurrent()
+                    assertEquals(1, fetches)
+
+                    answer = pending
+                    vm.refresh()
+                    runCurrent()
+                    assertEquals(2, fetches)
+                    online.value = true
+                    runCurrent()
+                    assertEquals(2, fetches)
+
+                    answer = CompletableDeferred(Outcome.Success(updated))
+                    pending.complete(if (lateError == null) Outcome.Success(updated) else Outcome.Failure(lateError))
+                    runCurrent()
+                    assertEquals(if (lateError == null) 2 else 3, fetches)
+                    val content = vm.state.value.content as MangaListContent.Ready
+                    assertEquals(updated.entries, content.entries)
+                    assertEquals(false, content.refreshing)
+                    runCurrent()
+                    assertEquals(if (lateError == null) 2 else 3, fetches)
+                } finally {
+                    pending.complete(Outcome.Failure(DataError.NoConnection))
+                    screen.cancel()
+                    vm.viewModelScope.cancel()
+                    runCurrent()
+                }
+            }
+        }
+
+    @Test
     fun `a queued refresh waits for visibility at admission and resumes after Back`() =
         runTest(dispatcher) {
             val vm = model()

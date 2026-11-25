@@ -2,6 +2,7 @@ package io.github.kauri_off.kiroku.sandbox
 
 import android.database.DatabaseUtils
 import android.database.sqlite.SQLiteDatabase
+import io.github.kauri_off.kiroku.core.error.DataError
 import io.github.kauri_off.kiroku.core.error.Outcome
 import io.github.kauri_off.kiroku.core.model.Session
 import io.github.kauri_off.kiroku.core.repository.SignInStep
@@ -11,15 +12,19 @@ import io.github.kauri_off.kiroku.source.StartsOn
 import io.github.kauri_off.kiroku.wiring.AppEnds
 import io.github.kauri_off.kiroku.wiring.KeysInMemory
 import io.github.kauri_off.kiroku.wiring.LiveParts
+import io.github.kauri_off.kiroku.wiring.LiveSource
+import io.github.kauri_off.kiroku.wiring.liveSession
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancelAndJoin
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.job
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotEquals
 import org.junit.Rule
 import org.junit.Test
 import org.junit.rules.ExternalResource
@@ -59,18 +64,32 @@ class SandboxProfileTest {
 
     // A process on the sandbox: its graph, run and then ended with all its work.
     private fun <T> process(run: suspend (SandboxGraph) -> T): T =
+        sandboxScope { scope ->
+            val graph =
+                SandboxGraph.create(context, Clock.systemUTC()) { source, device, clock ->
+                    LiveParts(context, source, SandboxMal.CLIENT_ID, clock, scope, reports::add, device = device)
+                }
+            run(graph)
+        }
+
+    private fun <T> sandboxScope(run: suspend (CoroutineScope) -> T): T =
         runBlocking {
             val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
             try {
-                val graph =
-                    SandboxGraph.create(context, Clock.systemUTC()) { source, device, clock ->
-                        LiveParts(context, source, SandboxMal.CLIENT_ID, clock, scope, reports::add, device = device)
-                    }
-                withTimeout(WAIT) { run(graph) }
+                withTimeout(WAIT) { run(scope) }
             } finally {
                 scope.coroutineContext.job.cancelAndJoin()
             }
         }
+
+    private suspend fun signIn(graph: SandboxGraph): Session.SignedIn {
+        graph.signIn.start { error("The sandbox opened a browser") }
+        assertEquals(SignInStep.SignedIn, graph.signIn.step.first { it == SignInStep.SignedIn || it is SignInStep.Failed })
+        return graph.session.observeSession().first { it is Session.SignedIn } as Session.SignedIn
+    }
+
+    private suspend fun saveManga(graph: SandboxGraph): Session.SignedIn =
+        signIn(graph).also { check(graph.mangaList.refresh(it.signIn) is Outcome.Success) }
 
     @Test
     fun `a new graph over the same files shows the own profile without a request`() {
@@ -97,14 +116,7 @@ class SandboxProfileTest {
 
     @Test
     fun `sign-out after restart removes both manga tables without opening the list`() {
-        val a =
-            process { graph ->
-                graph.signIn.start { error("The sandbox opened a browser") }
-                assertEquals(SignInStep.SignedIn, graph.signIn.step.first { it == SignInStep.SignedIn || it is SignInStep.Failed })
-                val account = graph.session.observeSession().first { it is Session.SignedIn } as Session.SignedIn
-                check(graph.mangaList.refresh(account.signIn) is Outcome.Success)
-                account
-            }
+        val a = process(::saveManga)
 
         process { graph ->
             assertEquals(a, graph.session.observeSession().first())
@@ -115,6 +127,62 @@ class SandboxProfileTest {
         }
         assertEquals(emptyList<URI>(), connections.asked)
         assertEquals(emptyList<Throwable>(), reports)
+    }
+
+    @Test
+    fun `signed-out startup completes manga retirement after the token write survived an interruption`() {
+        process(::saveManga)
+        sandboxScope { scope ->
+            val source = LiveSource("sandbox", SandboxMal.Hosts, standIn = { error("Unexpected HTTP request") })
+            val parts = LiveParts(context, source, SandboxMal.CLIENT_ID, Clock.systemUTC(), scope, reports::add)
+            val account = liveSession(parts)
+            account.signOut()
+            assertEquals(Session.SignedOut, account.currentSession())
+            assertEquals(listOf(1L, 4L), mangaRows())
+        }
+
+        process { graph ->
+            assertEquals(Session.SignedOut, graph.session.observeSession().first())
+            awaitMangaRows(listOf(0L, 0L))
+        }
+        assertEquals(emptyList<URI>(), connections.asked)
+        assertEquals(emptyList<Throwable>(), reports)
+    }
+
+    @Test
+    fun `re-sign-in retires an expired owner's manga on a restarted graph without using the reader`() {
+        val first =
+            process { graph ->
+                val account = saveManga(graph)
+                graph.sandbox.mal.rejecting = true
+                assertEquals(Outcome.Failure(DataError.SessionExpired), graph.mangaList.refresh(account.signIn))
+                account
+            }
+
+        val second =
+            process { graph ->
+                assertEquals(Session.Expired(first.signIn), graph.session.observeSession().first())
+                assertEquals(listOf(1L, 4L), mangaRows())
+                val account = signIn(graph)
+                assertNotEquals(first.signIn, account.signIn)
+                awaitMangaRows(listOf(0L, 0L))
+                check(graph.mangaList.refresh(account.signIn) is Outcome.Success)
+                account
+            }
+
+        process { graph ->
+            assertEquals(second, graph.session.observeSession().first())
+            assertEquals(listOf(1L, 4L), mangaRows())
+            val snapshot = (graph.mangaList.stored(second.signIn) as Outcome.Success).value
+            assertEquals(second.signIn, snapshot?.owner)
+            assertEquals(listOf(1L, 4L), mangaRows())
+        }
+        assertEquals(emptyList<URI>(), connections.asked)
+        assertEquals(emptyList<Throwable>(), reports)
+    }
+
+    private suspend fun awaitMangaRows(rows: List<Long>) {
+        while (mangaRows() != rows) delay(10)
     }
 
     private fun mangaRows(): List<Long> =

@@ -109,7 +109,8 @@ internal class LiveParts(
     fun file(kind: String): File = File(context.noBackupFilesDir, notShown("${source.name}.$kind"))
 
     // The source's own database, named after it; built on its first use, which is off the main thread.
-    val database by lazy { KirokuDatabase.open(context, notShown("${source.name}.db")) }
+    val databaseName = notShown("${source.name}.db")
+    val database by lazy { KirokuDatabase.open(context, databaseName) }
 
     private companion object {
         val ANILIST_BLOCK = notShown("anilist.block")
