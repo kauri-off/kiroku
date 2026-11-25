@@ -1,7 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="recorder_title">Recorder</string>
-    <string name="recorder_detail">Records what MyAnimeList answers to a signed-in user. It adds one title to your list, changes it and removes it again</string>
+    <string name="recorder_read_detail">Records what MyAnimeList answers to a signed-in user. The two buttons below only read data</string>
+    <string name="recorder_suggestions">Record anime suggestions</string>
+    <string name="recorder_manga_list">Record my manga list</string>
+    <string name="recorder_reading">Reading from MyAnimeList</string>
+    <string name="recorder_detail">Recording list changes adds one title to your list, changes it and removes it again</string>
     <string name="recorder_unavailable">The recorder works only on MyAnimeList. Choose MyAnimeList under Data source</string>
     <string name="recorder_title_id">Title id on MyAnimeList</string>
     <string name="recorder_title_id_detail">The number in the title’s address. The title must not be on your list, must have finished airing and have\u00A03\u00A0episodes or more</string>

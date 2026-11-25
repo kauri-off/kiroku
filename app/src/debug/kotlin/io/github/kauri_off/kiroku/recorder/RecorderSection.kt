@@ -1,5 +1,6 @@
 package io.github.kauri_off.kiroku.recorder
 
+import androidx.annotation.StringRes
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -34,6 +35,7 @@ import io.github.kauri_off.kiroku.R
 import io.github.kauri_off.kiroku.collectAsScreenState
 import io.github.kauri_off.kiroku.data.recorder.Halt
 import io.github.kauri_off.kiroku.data.recorder.ListAfter
+import io.github.kauri_off.kiroku.data.recorder.ReadCapture
 import io.github.kauri_off.kiroku.data.recorder.RecordedTitle
 import io.github.kauri_off.kiroku.data.recorder.Recording
 import io.github.kauri_off.kiroku.data.recorder.RecordingRequests
@@ -64,6 +66,10 @@ sealed interface RecorderEvent {
         val title: RecordedTitle,
     ) : RecorderEvent
 
+    data class RecordReads(
+        val capture: ReadCapture,
+    ) : RecorderEvent
+
     data object Dismiss : RecorderEvent
 
     data object Remove : RecorderEvent
@@ -81,13 +87,13 @@ fun RecorderRoute() {
             is RecorderEvent.Type -> typed = event.text.filter(Char::isDigit).take(ID_DIGITS)
             RecorderEvent.Check -> typed.toLongOrNull()?.let { recorder?.check(it) }
             is RecorderEvent.Record -> recorder?.record(event.title)
+            is RecorderEvent.RecordReads -> recorder?.recordReads(event.capture)
             RecorderEvent.Dismiss -> recorder?.dismiss()
             RecorderEvent.Remove -> recorder?.remove()
         }
     }
 }
 
-// Records MAL's answers on one title: nothing is written before the dialog is confirmed, and the end says what was done.
 @Composable
 fun RecorderSection(
     state: RecorderState,
@@ -99,8 +105,11 @@ fun RecorderSection(
         SectionDetail(R.string.recorder_unavailable)
         return
     }
-    SectionDetail(R.string.recorder_detail)
     val free = !recording.busy && !recording.left
+    SectionDetail(R.string.recorder_read_detail)
+    ReadButton(R.string.recorder_suggestions, ReadCapture.Suggestions, free, onEvent)
+    ReadButton(R.string.recorder_manga_list, ReadCapture.MangaList, free, onEvent)
+    SectionDetail(R.string.recorder_detail)
     OutlinedTextField(
         value = state.typed,
         onValueChange = { onEvent(RecorderEvent.Type(it)) },
@@ -128,12 +137,29 @@ fun RecorderSection(
                 stringResource(R.string.recorder_running, recording.answers, recording.of),
             )
         is Recording.Removing -> Progress(null, stringResource(R.string.recorder_removing, recording.title.name))
+        Recording.Reading -> Progress(null, stringResource(R.string.recorder_reading))
         else -> Report(report(recording), recording.left, onEvent)
     }
 }
 
 private val Recording.busy: Boolean
-    get() = this is Recording.Checking || this is Recording.Running || this is Recording.Removing
+    get() = this is Recording.Checking || this is Recording.Running || this is Recording.Removing || this == Recording.Reading
+
+@Composable
+private fun ReadButton(
+    @StringRes label: Int,
+    capture: ReadCapture,
+    enabled: Boolean,
+    onEvent: (RecorderEvent) -> Unit,
+) {
+    OutlinedButton(
+        onClick = { onEvent(RecorderEvent.RecordReads(capture)) },
+        enabled = enabled,
+        modifier = Modifier.padding(horizontal = Spacing.l),
+    ) {
+        Text(stringResource(label))
+    }
+}
 
 // The recorder's title may still be on the list: nothing new starts until it is off.
 private val Recording.left: Boolean
@@ -228,6 +254,18 @@ private fun Report(
 private fun report(recording: Recording): List<Line> =
     when (recording) {
         is Recording.NotStarted -> listOf(Line(recording.halt.text(), alarming = true))
+        is Recording.ReadRecorded ->
+            listOf(
+                Line(stringResource(R.string.recorder_recorded, recording.answers)),
+                Line(stringResource(R.string.recorder_folder, recording.folder.path)),
+            )
+        is Recording.ReadStopped ->
+            listOf(
+                Line(stringResource(R.string.recorder_stopped, recording.at), alarming = true),
+                Line(recording.halt.text(), alarming = true),
+                Line(stringResource(R.string.recorder_stopped_answers, recording.answers)),
+                Line(stringResource(R.string.recorder_folder, recording.folder.path)),
+            )
         is Recording.Recorded ->
             listOf(
                 Line(stringResource(R.string.recorder_recorded, recording.answers)),

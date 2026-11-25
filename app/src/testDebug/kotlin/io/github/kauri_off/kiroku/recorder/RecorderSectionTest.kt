@@ -8,6 +8,7 @@ import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTextInput
 import io.github.kauri_off.kiroku.data.recorder.Halt
 import io.github.kauri_off.kiroku.data.recorder.ListAfter
+import io.github.kauri_off.kiroku.data.recorder.ReadCapture
 import io.github.kauri_off.kiroku.data.recorder.RecordedTitle
 import io.github.kauri_off.kiroku.data.recorder.Recording
 import io.github.kauri_off.kiroku.data.recorder.RecordingRequests
@@ -81,6 +82,26 @@ class RecorderSectionTest {
     }
 
     @Test
+    fun `read actions start the selected capture without a title id or a write confirmation`() {
+        show(Recording.Idle, typed = "")
+
+        compose.onNodeWithText("Record anime suggestions").performClick()
+        compose.onNodeWithText("Record my manga list").performClick()
+        compose.onNodeWithText("Record on this title?").assertDoesNotExist()
+        assertEquals(listOf(RecorderEvent.RecordReads(ReadCapture.Suggestions), RecorderEvent.RecordReads(ReadCapture.MangaList)), events)
+    }
+
+    @Test
+    fun `a read in progress blocks every recorder action`() {
+        show(Recording.Reading)
+
+        compose.onNodeWithText("Reading from MyAnimeList").assertExists()
+        compose.onNodeWithText("Record anime suggestions").assertIsNotEnabled()
+        compose.onNodeWithText("Record my manga list").assertIsNotEnabled()
+        compose.onNodeWithText("Check title").assertIsNotEnabled()
+    }
+
+    @Test
     fun `while the title may still be on the list the section says where to look, removes it at a touch and starts nothing new`() {
         show(Recording.Stopped(title, "score_set", Halt.Refused(429), 31, folder, ListAfter.Left))
 
@@ -91,6 +112,8 @@ class RecorderSectionTest {
         compose.onNodeWithText("myanimelist.net/anime/1", substring = true).assertExists()
         compose.onNodeWithText("“Cowboy Bebop” may still be on your list", substring = true).assertExists()
         compose.onNodeWithText("Check title").assertIsNotEnabled()
+        compose.onNodeWithText("Record anime suggestions").assertIsNotEnabled()
+        compose.onNodeWithText("Record my manga list").assertIsNotEnabled()
         compose.onNodeWithText("Done").assertDoesNotExist()
 
         compose.onNodeWithText("Remove now").performClick()

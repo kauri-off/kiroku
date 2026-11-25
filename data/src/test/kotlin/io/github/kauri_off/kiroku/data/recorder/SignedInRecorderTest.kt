@@ -1,6 +1,10 @@
 package io.github.kauri_off.kiroku.data.recorder
 
+import io.github.kauri_off.kiroku.data.network.AUTHORIZATION
+import io.github.kauri_off.kiroku.data.network.CLIENT_ID_HEADER
+import io.github.kauri_off.kiroku.data.network.MalFields
 import io.github.kauri_off.kiroku.data.network.NetworkFixture
+import io.github.kauri_off.kiroku.data.network.received
 import io.github.kauri_off.kiroku.data.recorder.PlantedMal.Companion.ACCESS
 import io.github.kauri_off.kiroku.data.recorder.PlantedMal.Companion.REFRESH
 import io.github.kauri_off.kiroku.data.recorder.PlantedMal.Companion.SECRETS
@@ -19,12 +23,16 @@ import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.long
 import mockwebserver3.MockResponse
+import okhttp3.HttpUrl
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -384,6 +392,7 @@ class SignedInRecorderTest {
         assertEquals(end, recorder.state.value)
         val asked = mal.asked.size
         assertEquals(Recording.Leftover(title, ListAfter.Left, null), recorder.checked())
+        assertEquals(Recording.Leftover(title, ListAfter.Left, null), recorder.captured(ReadCapture.MangaList))
         assertEquals(asked, mal.asked.size)
 
         mal.instead = { null }
@@ -716,6 +725,198 @@ class SignedInRecorderTest {
         mal.arrived = { if (it.startsWith("DELETE")) mal.addedElsewhere(300) }
 
         assertEquals(Recording.Recorded(title, SignedInAnswers.size, files.recorded, ListAfter.Differs), recorder.recorded())
+    }
+
+    @Test
+    fun `suggestions captures the returned offset with bearer only and removes secrets from both pages`() {
+        val first = pagingBody("https://example.invalid/another?offset=17&limit=99&client_id=${NetworkFixture.CLIENT_ID}")
+        val second = pagingBody("https://example.invalid/another?offset=30&access_token=$ACCESS")
+        answerPages(first, second)
+
+        val end = recorder(signedIn()).captured(ReadCapture.Suggestions) as Recording.ReadRecorded
+
+        assertEquals(2, end.answers)
+        assertEquals(
+            mapOf(
+                "suggestions_first.200.json" to first.replace(NetworkFixture.CLIENT_ID, "client-id"),
+                "suggestions_next.200.json" to second.replace(ACCESS, "access-token"),
+            ),
+            end.folder.texts(),
+        )
+        for (offset in listOf("0", "17")) {
+            val url = readRequest("/v2/anime/suggestions", offset)
+            assertEquals(setOf("fields", "limit", "offset"), url.queryParameterNames)
+            assertEquals("${MalFields.SUMMARY},nsfw", url.queryParameter("fields"))
+            assertEquals("10", url.queryParameter("limit"))
+        }
+        assertEquals(2, network.api.requestCount)
+        assertEquals(listOf("GET /v2/anime/suggestions", "pause", "GET /v2/anime/suggestions"), events)
+        assertFalse(journal.exists())
+        assertFalse(files.recorded.exists())
+        assertFalse(files.run.exists())
+    }
+
+    @Test
+    fun `manga captures every page and a later empty capture keeps earlier answers separate`() {
+        val pages = listOf(pagingBody("https://example.invalid/?offset=2"), pagingBody("https://example.invalid/?offset=4"), pagingBody())
+        val empty = pagingBody(empty = true)
+        answerPages(*(pages + empty).toTypedArray())
+        val recorder = recorder(signedIn())
+
+        val whole = recorder.captured(ReadCapture.MangaList) as Recording.ReadRecorded
+        val single = recorder.captured(ReadCapture.MangaList) as Recording.ReadRecorded
+
+        assertEquals(3, whole.answers)
+        assertEquals(1, single.answers)
+        assertEquals(pages.mapIndexed { index, body -> "manga_list_${index + 1}.200.json" to body }.toMap(), whole.folder.texts())
+        assertEquals(mapOf("manga_list_1.200.json" to empty), single.folder.texts())
+        for (offset in listOf("0", "2", "4", "0")) {
+            val url = readRequest("/v2/users/@me/mangalist", offset)
+            assertEquals(setOf("fields", "nsfw", "sort", "limit", "offset"), url.queryParameterNames)
+            assertEquals(
+                "id,title,main_picture,alternative_titles,media_type,status,num_chapters,num_volumes," +
+                    "list_status{status,score,num_chapters_read,num_volumes_read,updated_at}",
+                url.queryParameter("fields"),
+            )
+            assertEquals("true", url.queryParameter("nsfw"))
+            assertEquals("manga_title", url.queryParameter("sort"))
+            assertEquals("2", url.queryParameter("limit"))
+        }
+        assertFalse(journal.exists())
+    }
+
+    @Test
+    fun `a refused continuation leaves a status and a partial run while the earlier capture stays`() {
+        val terminal = pagingBody()
+        val first = pagingBody("https://example.invalid/?offset=17")
+        val responses = ArrayDeque(listOf(answer(200, terminal), answer(200, first), answer(429, "<html>$ACCESS</html>", "text/html")))
+        mal.instead = { responses.removeFirst() }
+        val recorder = recorder(signedIn())
+
+        val whole = recorder.captured(ReadCapture.Suggestions) as Recording.ReadRecorded
+        val failed = recorder.captured(ReadCapture.Suggestions) as Recording.ReadStopped
+
+        assertEquals(mapOf("suggestions_first.200.json" to terminal), whole.folder.texts())
+        assertEquals("suggestions_next", failed.at)
+        assertEquals(Halt.Refused(429), failed.halt)
+        assertEquals(2, failed.answers)
+        assertEquals(mapOf("suggestions_first.200.json" to first, "suggestions_next.429.txt" to "429\n"), failed.folder.texts())
+        assertEquals(3, network.api.requestCount)
+        assertTrue(mal.writes.isEmpty())
+    }
+
+    @Test
+    fun `a malformed or nonadvancing continuation stops without another request`() {
+        val recorder = recorder(signedIn())
+        for (link in listOf("not a URL", "https://example.invalid/?offset=1&offset=2", "https://example.invalid/?offset=0")) {
+            answerPages(pagingBody(link))
+            val failed = recorder.captured(ReadCapture.MangaList) as Recording.ReadStopped
+            assertEquals("manga_list_1", failed.at)
+            assertEquals(Halt.Unexpected(200), failed.halt)
+            assertEquals(1, failed.answers)
+        }
+        assertEquals(3, network.api.requestCount)
+        assertTrue(mal.writes.isEmpty())
+    }
+
+    @Test
+    fun `a capture holds the same sign-in through a token refresh`() {
+        val first = pagingBody("https://example.invalid/?offset=10")
+        val renewed = "renewed-test-access"
+        val second = pagingBody("https://example.invalid/?offset=20&access_token=$renewed")
+        fixture.answer = { granted(renewed, "renewed-test-refresh") }
+        val responses = ArrayDeque(listOf(answer(200, first), answer(401, ""), answer(200, second)))
+        mal.instead = { responses.removeFirst() }
+
+        val end = recorder(signedIn()).captured(ReadCapture.Suggestions) as Recording.ReadRecorded
+
+        assertEquals(2, end.answers)
+        assertEquals(second.replace(renewed, "access-token"), end.folder.texts().getValue("suggestions_next.200.json"))
+        assertEquals(listOf(ACCESS, ACCESS, renewed), mal.tokens)
+        assertEquals(1, fixture.grants.size)
+        val requests = List(3) { network.api.received() }
+        assertEquals(listOf("0", "10", "10"), requests.map { it.url.queryParameter("offset") })
+    }
+
+    @Test
+    fun `a replacement sign-in cannot fetch the continuation`() {
+        val session = signedIn()
+        val recorder = recorder(session) { session.signIn(TokenGrant("replacement-test-access", "replacement-test-refresh")) }
+        answerPages(pagingBody("https://example.invalid/?offset=10"))
+
+        val failed = recorder.captured(ReadCapture.Suggestions) as Recording.ReadStopped
+
+        assertEquals("suggestions_next", failed.at)
+        assertEquals(Halt.AnotherAccount, failed.halt)
+        assertEquals(1, failed.answers)
+        assertEquals(1, network.api.requestCount)
+        assertTrue(mal.writes.isEmpty())
+    }
+
+    @Test
+    fun `a read capture requires an active sign-in before opening storage or requesting anything`() {
+        val recorder = recorder(runBlocking { fixture.open() })
+
+        for (capture in ReadCapture.entries) assertEquals(Recording.NotStarted(Halt.NotSignedIn), recorder.captured(capture))
+
+        assertEquals(0, foldersAsked.get())
+        assertEquals(0, network.api.requestCount)
+    }
+
+    @Test
+    fun `a redirected response is not kept as a successful page`() {
+        val responses =
+            ArrayDeque(
+                listOf(
+                    MockResponse
+                        .Builder()
+                        .code(307)
+                        .setHeader("Location", "/v2/unexpected")
+                        .build(),
+                    answer(200, pagingBody()),
+                ),
+            )
+        mal.instead = { responses.removeFirst() }
+
+        val failed = recorder(signedIn()).captured(ReadCapture.Suggestions) as Recording.ReadStopped
+
+        assertEquals(Halt.Unexpected(307), failed.halt)
+        assertEquals(mapOf("suggestions_first.307.txt" to "307\n"), failed.folder.texts())
+        assertEquals(2, network.api.requestCount)
+    }
+
+    private fun SignedInRecorder.captured(capture: ReadCapture): Recording =
+        runBlocking {
+            recordReads(capture).join()
+            state.value
+        }
+
+    private fun readRequest(
+        path: String,
+        offset: String,
+    ): HttpUrl {
+        val request = network.api.received()
+        assertEquals("GET", request.method)
+        assertEquals(path, request.url.encodedPath)
+        assertEquals(offset, request.url.queryParameter("offset"))
+        assertEquals("Bearer $ACCESS", request.headers[AUTHORIZATION])
+        assertNull(request.headers[CLIENT_ID_HEADER])
+        return request.url
+    }
+
+    private fun answerPages(vararg bodies: String) {
+        val pages = ArrayDeque(bodies.toList())
+        mal.instead = { answer(200, pages.removeFirst()) }
+    }
+
+    private fun pagingBody(
+        next: String? = null,
+        empty: Boolean = false,
+    ): String {
+        val publicPage = Json.parseToJsonElement(RecordedAnswers.named("list_public_1").body).jsonObject
+        val paging = JsonObject(mapOf("next" to (next?.let(::JsonPrimitive) ?: JsonNull)))
+        val page = publicPage + ("paging" to paging)
+        return JsonObject(if (empty) page + ("data" to JsonArray(emptyList())) else page).toString()
     }
 
     private companion object {

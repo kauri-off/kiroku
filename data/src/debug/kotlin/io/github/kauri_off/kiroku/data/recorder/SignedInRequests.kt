@@ -1,5 +1,34 @@
 package io.github.kauri_off.kiroku.data.recorder
 
+import io.github.kauri_off.kiroku.data.network.MalFields
+
+enum class ReadCapture(
+    internal val key: String,
+    internal val request: String,
+    internal val pages: Int,
+) {
+    Suggestions("suggestions", "anime/suggestions?fields=${MalFields.SUMMARY},nsfw&limit=10", 2),
+    MangaList(
+        "manga_list",
+        "users/@me/mangalist?fields=id,title,main_picture,alternative_titles,media_type,status,num_chapters,num_volumes," +
+            "list_status{status,score,num_chapters_read,num_volumes_read,updated_at}&nsfw=true&sort=manga_title&limit=2",
+        500,
+    ),
+    ;
+
+    internal fun answer(index: Int): String =
+        when (this) {
+            Suggestions -> if (index == 0) "suggestions_first" else "suggestions_next"
+            MangaList -> "manga_list_${index + 1}"
+        }
+}
+
+internal fun isSignedInAnswer(name: String): Boolean =
+    name in SignedInAnswers ||
+        name == "suggestions_first" ||
+        name == "suggestions_next" ||
+        (name.startsWith("manga_list_") && name.removePrefix("manga_list_").toIntOrNull()?.let { it > 0 } == true)
+
 // A change of the recorder's own title on the list: [form] is sent as it is, and the entry is read back after it.
 internal class OwnWrite(
     val name: String,

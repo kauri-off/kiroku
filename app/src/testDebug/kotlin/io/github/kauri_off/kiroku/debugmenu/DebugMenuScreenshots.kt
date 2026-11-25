@@ -98,6 +98,13 @@ class DebugMenuScreenshots : ScreenshotRegistry() {
                 )
             },
             case("recorder-confirm") { Menu(ScenarioState.Unavailable, recorder = RecorderState(Recording.Checked(TITLE), "1")) },
+            case("recorder-read-running") {
+                Menu(ScenarioState.Unavailable, recorder = RecorderState(Recording.Reading))
+            },
+            case("recorder-read-finished") {
+                val output = File(RUN.parentFile, "account.recorded.suggestions/capture-00000000-0000-0000-0000-000000000000")
+                Menu(ScenarioState.Unavailable, recorder = RecorderState(Recording.ReadRecorded(2, output)))
+            },
             case("recorder-running") {
                 Menu(
                     ScenarioState.Unavailable,

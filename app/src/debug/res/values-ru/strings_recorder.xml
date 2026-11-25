@@ -1,7 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="recorder_title">Запись ответов</string>
-    <string name="recorder_detail">Записывает, что MyAnimeList отвечает вошедшему пользователю. Добавляет в ваш список один тайтл, меняет его и снова удаляет</string>
+    <string name="recorder_read_detail">Записывает, что MyAnimeList отвечает вошедшему пользователю. Две кнопки ниже только читают данные</string>
+    <string name="recorder_suggestions">Записать подборку аниме</string>
+    <string name="recorder_manga_list">Записать мой список манги</string>
+    <string name="recorder_reading">Читаем данные MyAnimeList</string>
+    <string name="recorder_detail">При записи изменений в ваш список добавляется один тайтл. Его данные меняются, затем он удаляется</string>
     <string name="recorder_unavailable">Запись работает только с MyAnimeList. Выберите MyAnimeList в разделе «Источник данных»</string>
     <string name="recorder_title_id">Номер тайтла на MyAnimeList</string>
     <string name="recorder_title_id_detail">Число из адреса тайтла. Тайтла не должно быть в вашем списке, он должен быть завершён, и в нём должно быть не меньше\u00A03\u00A0серий</string>
