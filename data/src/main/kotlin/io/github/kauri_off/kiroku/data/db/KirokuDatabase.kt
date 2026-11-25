@@ -16,6 +16,8 @@ import androidx.sqlite.execSQL
     entities = [
         TitleRow::class,
         MangaRow::class,
+        MangaListStateRow::class,
+        MangaListEntryRow::class,
         TitleDetailsRow::class,
         TitleRelationRow::class,
         TitleRecommendationRow::class,
@@ -35,6 +37,8 @@ abstract class KirokuDatabase : RoomDatabase() {
 
     internal abstract fun manga(): MangaDao
 
+    internal abstract fun mangaList(): MangaListDao
+
     internal abstract fun list(): ListDao
 
     internal abstract fun airing(): AiringDao
@@ -45,7 +49,7 @@ abstract class KirokuDatabase : RoomDatabase() {
 
     companion object {
         const val NAME = "kiroku.db"
-        const val VERSION = 8
+        const val VERSION = 9
 
         val migrations: List<Migration> =
             listOf(
@@ -108,6 +112,19 @@ abstract class KirokuDatabase : RoomDatabase() {
                             "`english` TEXT, `japanese` TEXT, `poster` TEXT, `large_poster` TEXT, `synopsis` TEXT, " +
                             "`format` TEXT, `publication` TEXT, `volumes` INTEGER, `chapters` INTEGER, " +
                             "`mean_score` REAL, `fetched_at` INTEGER NOT NULL, PRIMARY KEY(`id`))",
+                    )
+                },
+                migration(8, 9) {
+                    execSQL(
+                        "CREATE TABLE IF NOT EXISTS `manga_list_state` (`owner` TEXT NOT NULL, " +
+                            "`synced_at` INTEGER NOT NULL, PRIMARY KEY(`owner`))",
+                    )
+                    execSQL(
+                        "CREATE TABLE IF NOT EXISTS `manga_list_entry` (`owner` TEXT NOT NULL, `manga_id` INTEGER NOT NULL, " +
+                            "`romaji` TEXT NOT NULL, `english` TEXT, `japanese` TEXT, `synonyms` TEXT NOT NULL, `poster` TEXT, " +
+                            "`status` TEXT NOT NULL, `chapters_read` INTEGER, `volumes_read` INTEGER, `score` INTEGER, " +
+                            "`updated_at` INTEGER, PRIMARY KEY(`owner`, `manga_id`), FOREIGN KEY(`owner`) " +
+                            "REFERENCES `manga_list_state`(`owner`) ON UPDATE NO ACTION ON DELETE CASCADE )",
                     )
                 },
             )

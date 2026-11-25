@@ -332,6 +332,17 @@ class KirokuDatabaseTest {
         val manga =
             mapOf(
                 "manga" to listOf(mapOf("id" to anime.id.value, "romaji" to "Paper Observatory", "fetched_at" to fetchedAt.toColumn())),
+                "manga_list_state" to listOf(mapOf("owner" to "owner", "synced_at" to fetchedAt.toColumn())),
+                "manga_list_entry" to
+                    listOf(
+                        mapOf(
+                            "owner" to "owner",
+                            "manga_id" to anime.id.value,
+                            "romaji" to "Paper Observatory",
+                            "synonyms" to "[]",
+                            "status" to "reading",
+                        ),
+                    ),
             )
         val fixture = list + airing + profile + record + manga
         for (version in 1..KirokuDatabase.VERSION) {
@@ -629,6 +640,7 @@ class KirokuDatabaseTest {
                 6 to "0225027f282ee667b6e073930642ad78",
                 7 to "821cd60397be73230eb12dd46d857650",
                 8 to "1749ab713302e239be8e5228bb07223b",
+                9 to "81a82b9f70d2c5bbe7b24416c50468a9",
             )
     }
 }
