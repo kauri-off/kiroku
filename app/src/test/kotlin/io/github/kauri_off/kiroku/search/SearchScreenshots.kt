@@ -44,7 +44,15 @@ class SearchScreenshots : ScreenshotRegistry() {
         listOf(
             case("start", content = screen(SearchFixtureStates.start)),
             case("start-signed-in", largeText = true, content = screen(SearchFixtureStates.startSignedIn)),
-            case("with-manga", content = screen(SearchFixtureStates.startNoRecent.copy(content = SearchContent.Start(emptyList(), mangaAvailable = true)))),
+            case(
+                "with-manga",
+                content =
+                    screen(
+                        SearchFixtureStates.startNoRecent.copy(
+                            content = SearchContent.Start(emptyList(), suggestions = true, mangaAvailable = true),
+                        ),
+                    ),
+            ),
             case("manga-start", content = screen(SearchState(TextFieldState(), false, SearchContent.MangaStart(emptyList())))),
             case("manga-results", content = screen(mangaResults(Paged.Shown(mangaRows)))),
             case("manga-expanded", content = screen(mangaResults(Paged.Shown(mangaRows), expanded = true))),

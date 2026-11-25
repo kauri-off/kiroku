@@ -68,7 +68,7 @@ internal fun MangaSearchRoute(
         onEvent = { event ->
             when (event) {
                 SearchEvent.Back -> onBack()
-                SearchEvent.Submit -> keep(text)
+                SearchEvent.Submit -> keep(search.text)
                 SearchEvent.Clear -> query.clearText()
                 is SearchEvent.SearchAgain -> {
                     query.setTextAndPlaceCursorAtEnd(event.query)
@@ -100,7 +100,10 @@ internal fun MangaRankingRoute(
     onSignIn: () -> Unit,
 ) {
     val source = graph.mangaCatalogue ?: return
-    val browse = viewModel { BrowseViewModel(source::ranking, MangaDetails::id, graph.connection, graph.showAdultInSearch) }
+    val browse =
+        viewModel {
+            BrowseViewModel(source::ranking, MangaDetails::id, graph.connection, graph.showAdultInSearch, pauseWhenHidden = true)
+        }
     CountAsShown(browse.shown)
     val results by browse.state.collectAsScreenState()
     val language by remember(graph) { graph.titleLanguage }.collectAsScreenState(TitleLanguage.Romaji)

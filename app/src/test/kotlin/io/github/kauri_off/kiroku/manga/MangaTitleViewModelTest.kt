@@ -633,6 +633,27 @@ class MangaTitleViewModelTest {
             }
         }
 
+    @Test
+    fun `fresh sparse details keep the row cover and score without refreshing`() =
+        runTest(dispatcher) {
+            val summary = mangaFixture.copy(synopsis = null)
+            val sparse = mangaFixture.copy(posterUrl = null, meanScore = null, chapters = 180)
+            val viewModel =
+                title(
+                    StoredManga(sparse, now),
+                    opened = MangaTitleSummary(summary, TitleLanguage.Romaji),
+                )
+            try {
+                assertEquals(summary, shown(viewModel).details)
+                showing(viewModel.state, viewModel.shown)
+                runCurrent()
+                assertEquals(0, reads)
+                assertEquals(sparse.copy(posterUrl = summary.posterUrl, meanScore = summary.meanScore), shown(viewModel).details)
+            } finally {
+                viewModel.viewModelScope.cancel()
+            }
+        }
+
     private fun title(
         cached: StoredManga? = null,
         lookup: suspend (SessionOwner) -> StoredManga? = { cached },
@@ -641,6 +662,7 @@ class MangaTitleViewModelTest {
             object : Connection {
                 override fun observeOnline() = online
             },
+        opened: MangaTitleSummary? = null,
     ): MangaTitleViewModel =
         MangaTitleViewModel(
             mangaFixture.id,
@@ -667,7 +689,8 @@ class MangaTitleViewModelTest {
             connection,
             flowOf(TitleLanguage.Romaji),
             flowOf(Session.SignedOut),
-            { failures.add(it) },
+            onRefreshFailed = { failures.add(it) },
+            opened = opened,
         )
 
     private fun shown(viewModel: MangaTitleViewModel) = viewModel.state.value.content as MangaTitleContent.Shown

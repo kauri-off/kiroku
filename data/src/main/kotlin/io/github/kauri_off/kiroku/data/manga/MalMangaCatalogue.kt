@@ -44,14 +44,17 @@ class MalMangaCatalogue(
     override suspend fun ranking(
         offset: Int,
         includeAdult: Boolean,
-    ): Outcome<Page<Ranked<MangaDetails>>> {
+        canDispatch: () -> Boolean,
+    ): Outcome<Page<Ranked<MangaDetails>>>? {
         if (offset < 0) return Outcome.Failure(DataError.InvalidRequest)
-        return http
-            .call {
-                api
-                    .ranking("all", offset, PAGE_SIZE, MalFields.MANGA_SUMMARY, nsfw = true.takeIf { includeAdult })
-                    .mapPage(offset) { hit, repairs -> Ranked(hit.position(repairs), hit.manga(repairs)) }
-            }.clientIdOutcome()
+        val answer =
+            http
+                .call(maySendRead = canDispatch) {
+                    api
+                        .ranking("all", offset, PAGE_SIZE, MalFields.MANGA_SUMMARY, nsfw = true.takeIf { includeAdult })
+                        .mapPage(offset) { hit, repairs -> Ranked(hit.position(repairs), hit.manga(repairs)) }
+                }.clientIdOutcome()
+        return answer.takeUnless { it == Outcome.Failure(DataError.ListEnded) }
     }
 
     private fun <T> CataloguePage.mapPage(

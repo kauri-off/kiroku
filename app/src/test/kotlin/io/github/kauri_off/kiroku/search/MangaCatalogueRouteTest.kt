@@ -1,9 +1,12 @@
 package io.github.kauri_off.kiroku.search
 
 import androidx.compose.ui.semantics.SemanticsActions
+import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.hasAnyAncestor
+import androidx.compose.ui.test.hasClickAction
+import androidx.compose.ui.test.hasContentDescription
 import androidx.compose.ui.test.hasSetTextAction
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.isDialog
@@ -13,6 +16,8 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollToIndex
 import androidx.compose.ui.test.performTextInput
+import androidx.compose.ui.text.AnnotatedString
+import io.github.kauri_off.kiroku.R
 import io.github.kauri_off.kiroku.core.demo.Demo
 import io.github.kauri_off.kiroku.core.error.DataError
 import io.github.kauri_off.kiroku.core.error.Outcome
@@ -64,6 +69,7 @@ class MangaCatalogueRouteTest {
 
     private val demo = TestGraph(Demo(Fixtures.reference, scope))
     private val searchOffsets = mutableListOf<Int>()
+    private val rankingAttempts = mutableListOf<Int>()
     private val rankingOffsets = mutableListOf<Int>()
     private val detailIds = mutableListOf<MangaId>()
     private val detail = CompletableDeferred<Outcome<StoredManga>>()
@@ -133,7 +139,88 @@ class MangaCatalogueRouteTest {
         assertTrue(searchOffsets.isEmpty())
     }
 
-    private fun catalogue() {
+    @Test
+    fun `opening a result pauses a deferred ranking Retry until Back`() {
+        val ready = CompletableDeferred<Unit>()
+        catalogue(beforeRankingRetry = ready)
+        compose.onNodeWithText("Manga ranking").performClick()
+        settle()
+        compose.onNode(scrollable).performScrollToIndex(19)
+        settle()
+        compose.onNode(scrollable).performScrollToIndex(20)
+        compose.onNodeWithText("Retry").performClick()
+        settle()
+        assertEquals(listOf(0, 20, 20), rankingAttempts)
+        assertEquals(listOf(0, 20), rankingOffsets)
+
+        val last = firstPage.last().titles.romaji
+        compose.onNodeWithText("20.\u00a0$last").performClick()
+        settle()
+        compose.onNodeWithText(last).assertIsDisplayed()
+        ready.complete(Unit)
+        settle()
+        assertEquals(listOf(0, 20), rankingOffsets)
+
+        compose.onNodeWithContentDescription("Back").performClick()
+        settle()
+        assertEquals(listOf(0, 20, 20, 20), rankingAttempts)
+        assertEquals(listOf(0, 20, 20), rankingOffsets)
+        compose.onNode(scrollable).performScrollToIndex(20)
+        compose.onNodeWithText("21.\u00a0$title").assertIsDisplayed()
+    }
+
+    @Test
+    fun `a card opened with sparse fresh details shows both synopsis and row score`() {
+        val sparse = firstPage.first().copy(synopsis = checkNotNull(mangaFixture.synopsis), meanScore = null)
+        catalogue(stored = StoredManga(sparse, demo.clock.instant()))
+        compose.onNodeWithText("Manga ranking").performClick()
+        settle()
+        compose.onNodeWithText("1.\u00a0${sparse.titles.romaji}").performClick()
+        settle()
+
+        compose.onNodeWithText("Synopsis").assertExists()
+        compose.onNodeWithText("MAL score 9.16").assertExists()
+        assertTrue(detailIds.isEmpty())
+    }
+
+    @Test
+    fun `IME Search keeps text committed in the same turn before debounce`() {
+        catalogue()
+        compose.onNode(hasSetTextAction() and !inDialog).performClick()
+        settle()
+        val input = compose.onNode(hasSetTextAction() and isFocused() and inDialog).fetchSemanticsNode().config
+        compose.runOnUiThread {
+            assertTrue(input[SemanticsActions.SetText].action?.invoke(AnnotatedString("paper")) == true)
+            assertTrue(input[SemanticsActions.OnImeAction].action?.invoke() == true)
+        }
+        compose.onNode(hasContentDescription("Clear search") and inDialog).performClick()
+        compose.onNode(hasText("paper") and hasClickAction() and inDialog).assertExists()
+        assertTrue(searchOffsets.isEmpty())
+    }
+
+    @Test
+    fun `collapsed and expanded search fields identify manga in English`() {
+        checksSearchLabel("Search manga")
+    }
+
+    @Test
+    @Config(qualifiers = "ru-w411dp-h891dp")
+    fun `collapsed and expanded search fields identify manga in Russian`() {
+        checksSearchLabel("Поиск манги")
+    }
+
+    private fun checksSearchLabel(label: String) {
+        catalogue()
+        val field = hasSetTextAction() and SemanticsMatcher.expectValue(SemanticsProperties.ContentDescription, listOf(label))
+        compose.onNode(field and !inDialog).performClick()
+        settle()
+        compose.onNode(field and inDialog and isFocused()).assertExists()
+    }
+
+    private fun catalogue(
+        stored: StoredManga? = null,
+        beforeRankingRetry: CompletableDeferred<Unit>? = null,
+    ) {
         val graph =
             object : AppGraph by demo {
                 override val madeUp = false
@@ -156,7 +243,11 @@ class MangaCatalogueRouteTest {
                         override suspend fun ranking(
                             offset: Int,
                             includeAdult: Boolean,
-                        ): Outcome<Page<Ranked<MangaDetails>>> {
+                            canDispatch: () -> Boolean,
+                        ): Outcome<Page<Ranked<MangaDetails>>>? {
+                            rankingAttempts += offset
+                            if (rankingAttempts.size >= 3) beforeRankingRetry?.await()
+                            if (!canDispatch()) return null
                             rankingOffsets += offset
                             if (rankingOffsets.size == 2) return Outcome.Failure(DataError.ServerError)
                             val rows = if (offset == 0) firstPage else secondPage
@@ -173,7 +264,7 @@ class MangaCatalogueRouteTest {
                         override suspend fun stored(
                             id: MangaId,
                             owner: SessionOwner,
-                        ): Outcome<StoredManga?> = Outcome.Success(null)
+                        ): Outcome<StoredManga?> = Outcome.Success(stored?.takeIf { it.details.id == id })
 
                         override suspend fun refresh(
                             id: MangaId,
@@ -188,9 +279,11 @@ class MangaCatalogueRouteTest {
             }
         compose.setContent { KirokuTheme(dark = false, dynamicColor = false) { AppRoute(graph) } }
         settle()
-        compose.onNodeWithText("Search").performClick()
+        val activity = compose.activity
+        compose.onNodeWithText(activity.getString(R.string.shell_search)).performClick()
         settle()
-        compose.onNodeWithText("Manga").performClick()
+        compose.onNodeWithText(activity.getString(R.string.search_suggestions)).assertExists()
+        compose.onNodeWithText(activity.getString(R.string.manga_catalogue)).performClick()
         settle()
         assertTrue(searchOffsets.isEmpty())
         assertTrue(rankingOffsets.isEmpty())

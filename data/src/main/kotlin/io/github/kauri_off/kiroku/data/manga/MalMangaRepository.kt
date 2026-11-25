@@ -26,6 +26,7 @@ import io.github.kauri_off.kiroku.data.session.MalSession
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
+import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
@@ -158,14 +159,16 @@ internal fun JsonObject.toManga(
     fun count(key: String) = field(key) { (it as? JsonPrimitive)?.intOrNull?.takeIf { n -> n >= 0 } }?.takeIf { it > 0 }
     val picture = field("main_picture") { it as? JsonObject }
     val alternatives = field("alternative_titles") { it as? JsonObject }
+    val main = text("title")?.takeUnless(String::isBlank)
+    val english = alternatives?.let { field("en", it, "alternative_titles.en", ::stringValue) }?.takeUnless(String::isBlank)
+    val japanese = alternatives?.let { field("ja", it, "alternative_titles.ja", ::stringValue) }?.takeUnless(String::isBlank)
+    if (main == null) repaired += "title"
+    val name =
+        main ?: english ?: japanese
+            ?: (alternatives?.get("synonyms") as? JsonArray)?.firstNotNullOfOrNull { stringValue(it)?.takeUnless(String::isBlank) }
     return MangaDetails(
         id = id,
-        titles =
-            Titles(
-                requireNotNull(text("title")?.takeUnless(String::isBlank)),
-                alternatives?.let { field("en", it, "alternative_titles.en", ::stringValue) }?.takeUnless(String::isBlank),
-                alternatives?.let { field("ja", it, "alternative_titles.ja", ::stringValue) }?.takeUnless(String::isBlank),
-            ),
+        titles = Titles(requireNotNull(name), english, japanese),
         posterUrl = picture?.let { field("medium", it, "main_picture.medium", ::stringValue) }?.takeUnless(String::isBlank),
         largePosterUrl = picture?.let { field("large", it, "main_picture.large", ::stringValue) }?.takeUnless(String::isBlank),
         synopsis = text("synopsis")?.trim()?.takeUnless(String::isEmpty),

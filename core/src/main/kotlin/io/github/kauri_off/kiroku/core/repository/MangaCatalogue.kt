@@ -10,8 +10,10 @@ interface MangaCatalogue {
         includeAdult: Boolean,
     ): Outcome<Page<MangaDetails>>
 
+    // Null when the route deferred dispatch.
     suspend fun ranking(
         offset: Int,
         includeAdult: Boolean,
-    ): Outcome<Page<Ranked<MangaDetails>>>
+        canDispatch: () -> Boolean = { true },
+    ): Outcome<Page<Ranked<MangaDetails>>>?
 }

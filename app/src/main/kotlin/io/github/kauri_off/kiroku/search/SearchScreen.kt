@@ -55,6 +55,8 @@ import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import io.github.kauri_off.kiroku.R
 import io.github.kauri_off.kiroku.core.model.AnimeId
 import io.github.kauri_off.kiroku.core.repository.BrowseList
@@ -190,6 +192,8 @@ private fun SearchField(
 ) {
     val keyboard = LocalSoftwareKeyboardController.current
     val expanded = bar.currentValue == SearchBarValue.Expanded
+    val label = stringResource(if (manga) R.string.manga_search_placeholder else R.string.search_placeholder)
+    val semantics = if (manga) Modifier.semantics { contentDescription = label } else Modifier
     SearchBarDefaults.InputField(
         textFieldState = query,
         searchBarState = bar,
@@ -198,14 +202,8 @@ private fun SearchField(
             keyboard?.hide()
             onEvent(SearchEvent.Submit)
         },
-        modifier = Modifier.withoutAutofill().fillMaxWidth(),
-        // The field is spoken as "Search" already.
-        placeholder = {
-            Text(
-                stringResource(if (manga) R.string.manga_search_placeholder else R.string.search_placeholder),
-                Modifier.clearAndSetSemantics {},
-            )
-        },
+        modifier = Modifier.withoutAutofill().fillMaxWidth().then(semantics),
+        placeholder = { Text(label, Modifier.clearAndSetSemantics {}) },
         leadingIcon = {
             if (expanded) {
                 // The search view's own Back, which closes it as the system's Back does.

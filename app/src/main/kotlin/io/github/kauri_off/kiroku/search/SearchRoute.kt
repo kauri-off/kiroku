@@ -66,7 +66,13 @@ fun SearchRoute(
     val shown = results.takeIf { it.query == text && it.adult == adult }
     val content =
         when {
-            text.isEmpty() -> SearchContent.Start(recent, suggestions = session is Session.SignedIn, mangaAvailable = graph.mangaCatalogue != null)
+            text.isEmpty() ->
+                SearchContent.Start(
+                    recent,
+                    suggestions = session is Session.SignedIn,
+                    mangaAvailable =
+                        graph.mangaCatalogue != null,
+                )
             shown == null -> SearchContent.Results(text, Paged.Loading)
             else -> {
                 val rows =

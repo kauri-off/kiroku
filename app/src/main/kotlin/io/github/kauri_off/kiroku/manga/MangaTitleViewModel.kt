@@ -5,6 +5,7 @@ import androidx.lifecycle.viewModelScope
 import io.github.kauri_off.kiroku.ShownLoads
 import io.github.kauri_off.kiroku.core.error.DataError
 import io.github.kauri_off.kiroku.core.error.Outcome
+import io.github.kauri_off.kiroku.core.model.MangaDetails
 import io.github.kauri_off.kiroku.core.model.MangaId
 import io.github.kauri_off.kiroku.core.model.Session
 import io.github.kauri_off.kiroku.core.model.SessionOwner
@@ -90,10 +91,12 @@ internal class MangaTitleViewModel(
             language.onStart { emit(opened?.language ?: TitleLanguage.Romaji) },
             session,
         ) { current, titleLanguage, session ->
-            val details =
-                current.cached?.details ?: opened?.details?.takeUnless {
+            val summary =
+                opened?.details?.takeUnless {
                     current.problem == MangaTitleProblem.ReadFailed(DataError.ListEnded) || current.problem == MangaTitleProblem.Unavailable
                 }
+            val cached = current.cached?.details
+            val details = if (cached != null && summary != null) cached.withSummary(summary) else cached ?: summary
             MangaTitleState(
                 content =
                     when {
@@ -233,3 +236,15 @@ internal class MangaTitleViewModel(
         load?.start()
     }
 }
+
+private fun MangaDetails.withSummary(summary: MangaDetails): MangaDetails =
+    copy(
+        titles = titles.copy(english = titles.english ?: summary.titles.english, japanese = titles.japanese ?: summary.titles.japanese),
+        posterUrl = posterUrl ?: summary.posterUrl,
+        largePosterUrl = largePosterUrl ?: summary.largePosterUrl.takeIf { posterUrl == null || posterUrl == summary.posterUrl },
+        format = format ?: summary.format,
+        publication = publication ?: summary.publication,
+        volumes = volumes ?: summary.volumes,
+        chapters = chapters ?: summary.chapters,
+        meanScore = meanScore ?: summary.meanScore,
+    )
