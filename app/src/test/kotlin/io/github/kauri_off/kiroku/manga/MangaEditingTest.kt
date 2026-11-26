@@ -64,6 +64,7 @@ class MangaEditingTest {
     ) : MangaListEditor {
         val cache = MutableStateFlow(snapshot(owner, baseline))
         val sessions = MutableStateFlow<Session>(Session.SignedIn(owner))
+        var storeError: DataError? = null
         var observations: Flow<Outcome<MangaListSnapshot?>>? = null
         var refreshAdmission = CompletableDeferred(Unit)
         var answer = CompletableDeferred<MangaListEditResult>()
@@ -75,7 +76,8 @@ class MangaEditingTest {
 
         override fun observe(owner: SignInId) = observations ?: cache.map { Outcome.Success(it.takeIf { it.owner == owner }) }
 
-        override suspend fun stored(owner: SignInId) = Outcome.Success(cache.value.takeIf { it.owner == owner })
+        override suspend fun stored(owner: SignInId): Outcome<MangaListSnapshot?> =
+            storeError?.let { Outcome.Failure(it) } ?: Outcome.Success(cache.value.takeIf { it.owner == owner })
 
         override suspend fun refresh(
             owner: SignInId,
@@ -347,7 +349,8 @@ class MangaEditingTest {
                 assertTrue((subject.open.form.submission as MangaEditSubmission.Failed).canReconcile)
                 val refreshed = if (matches) baseline else baseline.copy(chaptersRead = 21)
                 backend.cache.value = snapshot(owner, refreshed)
-                subject.editing.listRefreshed(owner)
+                backend.storeError = DataError.StorageError
+                subject.editing.listRefreshed(backend.cache.value)
                 runCurrent()
 
                 val failure = subject.open.form.submission as MangaEditSubmission.Failed
@@ -373,7 +376,7 @@ class MangaEditingTest {
             runCurrent()
             assertEquals(2, backend.sent.size)
             backend.cache.value = snapshot(owner, entry.copy(chaptersRead = 26))
-            subject.editing.listRefreshed(owner)
+            subject.editing.listRefreshed(backend.cache.value)
             runCurrent()
             backend.answer.complete(MangaListEditResult.Discarded)
             runCurrent()
@@ -563,7 +566,7 @@ class MangaEditingTest {
             assertTrue((subject.open.form.submission as MangaEditSubmission.Failed).canRetry)
             subject.event(MangaEditSheetEvent.Dismissed)
             backend.cache.value = snapshot(owner, entry.copy(chaptersRead = 26))
-            subject.editing.listRefreshed(owner)
+            subject.editing.listRefreshed(backend.cache.value)
             runCurrent()
             subject.editing.open(owner, entry.id, entry.titles.romaji)
             assertEquals("26", subject.open.form.chapters)
@@ -612,7 +615,7 @@ class MangaEditingTest {
             val subject = start(backend)
             subject.event(MangaEditSheetEvent.Dismissed)
             backend.cache.value = snapshot(owner, entry.copy(chaptersRead = 24))
-            subject.editing.listRefreshed(owner)
+            subject.editing.listRefreshed(backend.cache.value)
             runCurrent()
             subject.editing.open(owner, entry.id, entry.titles.romaji)
             assertEquals("24", subject.open.form.chapters)
