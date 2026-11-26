@@ -72,7 +72,7 @@ place of the commands above. `tools/` holds the maintainer's job queue; the buil
 - Conventional commits: `type(scope): subject`, or `type: subject` when no scope fits; the subject starts in
   lower case, is imperative and has no full stop. Types: `feat`, `fix`, `docs`, `refactor`, `test`, `build`, `ci`,
   `chore`. Scopes: `core`, `data`, `app`, `list`, `title`, `search`, `profile`, `settings`, `notify`, `auth`,
-  `design`. CI checks the pull request title against these lists.
+  `design`.
 - Branches are squash-merged, so the pull request title is the commit message and follows the same format.
 - Tick the task's checkbox in `ROADMAP.md` in the same branch, and cut its entry down to its name.
 
