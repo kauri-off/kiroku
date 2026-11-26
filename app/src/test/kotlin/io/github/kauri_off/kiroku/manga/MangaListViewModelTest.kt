@@ -174,6 +174,39 @@ class MangaListViewModelTest {
         }
 
     @Test
+    fun `a stale populated cache preserves an unfamiliar selection until refresh confirms it`() =
+        runTest(dispatcher) {
+            val unfamiliar = MangaReadingStatus("rereading")
+            val restored = mangaEntry.copy(status = unfamiliar)
+            for (rows in listOf(listOf(restored), listOf(mangaEntry))) {
+                val saved = SavedStateHandle().apply { saveMangaControls(MangaListControls(owner, unfamiliar)) }
+                snapshot = snapshot.copy(entries = listOf(mangaEntry), syncedAt = now.minusSeconds(7 * 24 * 60 * 60))
+                answer = CompletableDeferred()
+                val vm = model(saved)
+                val shown = showing(vm.shown, vm.state)
+                try {
+                    runCurrent()
+                    val waiting = vm.state.value.content as MangaListContent.Ready
+                    val initial = waiting.statuses[waiting.pageIndex(vm.state.value.tab)]
+                    vm.control(owner, MangaListEvent.SelectTab(initial))
+                    assertEquals(unfamiliar, initial)
+
+                    answer.complete(Outcome.Success(snapshot.copy(entries = rows, syncedAt = now)))
+                    runCurrent()
+                    val ready = vm.state.value.content as MangaListContent.Ready
+                    val settled = ready.statuses[ready.pageIndex(vm.state.value.tab)]
+                    vm.control(owner, MangaListEvent.SelectTab(settled))
+                    Snapshot.sendApplyNotifications()
+                    runCurrent()
+                    assertEquals(rows.single().status, vm.state.value.tab)
+                } finally {
+                    shown.cancel()
+                    vm.viewModelScope.cancel()
+                }
+            }
+        }
+
+    @Test
     fun `a fresh task restores Manga sort and direction from preferences`() =
         runTest(dispatcher) {
             val reading = mangaEntry.status

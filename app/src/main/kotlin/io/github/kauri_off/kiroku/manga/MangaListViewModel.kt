@@ -107,12 +107,11 @@ internal class MangaListViewModel(
                 account == Session.SignedOut -> MangaListContent.SignedOut
                 snapshot != null && confirmed != null -> {
                     val displayed = confirmed.entries.map { editing?.displayed(it) ?: it }
-                    val staleBlank =
-                        snapshot.entries.isEmpty() && listStale(snapshot.syncedAt, clock.instant()) && account !is Session.Expired
+                    val awaitingRefresh = listStale(snapshot.syncedAt, clock.instant()) && account !is Session.Expired
                     val awaitingEditor =
                         snapshot.syncedAt != confirmed.syncedAt && snapshot.entries.any { it.status == active.tab }
                     val statuses = confirmed.entries.mapTo(mutableSetOf(), MangaListEntry::status)
-                    if (confirmed.entries.isEmpty() && (staleBlank || awaitingEditor)) statuses += active.tab
+                    if (awaitingRefresh || awaitingEditor) statuses += active.tab
                     MangaListContent.Ready(
                         entries =
                             ordering.entries(
