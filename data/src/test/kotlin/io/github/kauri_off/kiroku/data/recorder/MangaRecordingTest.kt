@@ -363,6 +363,32 @@ class MangaRecordingTest {
         }
 
     @Test
+    fun `a 204 DELETE capture keeps the status even when a body is attached`() =
+        runBlocking {
+            val recorder = recorder()
+            val title = checked(recorder)
+            override = { request ->
+                if (request.method == "DELETE") {
+                    values = null
+                    MockResponse
+                        .Builder()
+                        .code(204)
+                        .addHeader("Content-Type", "application/json")
+                        .chunkedBody("null")
+                        .build()
+                } else {
+                    null
+                }
+            }
+
+            recorder.record(title).join()
+
+            val complete = recorder.state.value as Recording.Recorded
+            assertEquals("204\n", complete.folder.resolve("$MANGA_REMOVED.204.txt").readText())
+            validateMangaMutationCapture(complete.folder)
+        }
+
+    @Test
     fun `a successful DELETE reply still requires authoritative absence before clearing the journal`() =
         runBlocking {
             val recorder = recorder()
@@ -377,7 +403,14 @@ class MangaRecordingTest {
             assertTrue(journal.exists())
             assertEquals(listOf("PATCH", "PATCH", "DELETE"), writes.map { it.method })
 
-            override = { null }
+            override = { request ->
+                if (request.method == "DELETE") {
+                    values = null
+                    response(200, "null", "text/plain")
+                } else {
+                    null
+                }
+            }
             recorder.remove().join()
             val recovered = recorder.state.value as Recording.Stopped
             assertEquals(ListAfter.Removed, recovered.list)

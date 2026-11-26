@@ -602,7 +602,13 @@ class SignedInRecorder internal constructor(
                 if (proof == null) throw Halted(Halt.Unconfirmed, at)
             }
             val reply = send(MANGA_REMOVED, delete(title.id, title.media), owner, manga = true)
-            val kept = mangaReply(MANGA_REMOVED, reply.status, if (reply.literalNull) JsonNull else reply.values)
+            val body =
+                when {
+                    reply.status != OK -> null
+                    reply.literalNull -> JsonNull
+                    else -> reply.values
+                }
+            val kept = mangaReply(MANGA_REMOVED, reply.status, body)
             verifyMangaReply(MANGA_REMOVED, reply, kept, directory, ::mangaDeleted)
             saveManga(MANGA_REMOVED, kept, directory)
             val after = mangaMembership(title, owner, MANGA_REMOVED_READ)
