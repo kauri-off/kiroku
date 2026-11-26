@@ -22,8 +22,23 @@ class MangaListEditTest {
             )
         val edit = MangaListEdit(score = 0, volumesRead = 0)
 
-        assertEquals(entry.copy(score = null, volumesRead = 0), edit.appliedTo(entry))
+        assertEquals(entry.copy(score = null, volumesRead = 0, explicitlyUnrated = true), edit.appliedTo(entry))
         assertEquals(entry.copy(chaptersRead = Int.MAX_VALUE), MangaListEdit(chaptersRead = Int.MAX_VALUE).appliedTo(entry))
         assertTrue(MangaListEdit().isEmpty)
+    }
+
+    @Test
+    fun `unknown values provide neither confirmation nor authority to retry`() {
+        val unknown = MangaListEntry(MangaId(1), Titles("Title"), MangaReadingStatus("reading"))
+        val unrated = unknown.copy(explicitlyUnrated = true)
+        val clear = MangaListEdit(score = 0, chaptersRead = 0)
+        val rate = MangaListEdit(score = 3)
+
+        assertTrue(!clear.isPresentIn(unknown))
+        assertTrue(!clear.hasEvidenceIn(unrated))
+        assertTrue(clear.isPresentIn(unrated.copy(chaptersRead = 0)))
+        assertEquals(MangaListEdit(), rate.remainingAfter(unknown, unrated))
+        assertEquals(MangaListEdit(), rate.remainingAfter(unrated, unknown))
+        assertEquals(rate, rate.remainingAfter(unrated, unrated))
     }
 }

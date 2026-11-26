@@ -20,13 +20,17 @@ data class MangaListEntry(
     val volumesRead: Int? = null,
     val score: Int? = null,
     val updatedAt: Instant? = null,
+    val explicitlyUnrated: Boolean = false,
 ) {
     init {
         require(id.value > 0)
         require(chaptersRead == null || chaptersRead >= 0)
         require(volumesRead == null || volumesRead >= 0)
         require(score == null || score in 1..10)
+        require(!explicitlyUnrated || score == null)
     }
+
+    val recordedScore: Int? get() = score ?: 0.takeIf { explicitlyUnrated }
 }
 
 data class MangaListSnapshot(

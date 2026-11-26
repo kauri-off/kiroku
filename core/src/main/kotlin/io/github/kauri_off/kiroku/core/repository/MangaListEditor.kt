@@ -29,9 +29,21 @@ data class MangaListEdit(
         entry.copy(
             status = status?.readingStatus ?: entry.status,
             score = if (score == null) entry.score else score.takeIf { it > 0 },
+            explicitlyUnrated = if (score == null) entry.explicitlyUnrated else score == 0,
             chaptersRead = chaptersRead ?: entry.chaptersRead,
             volumesRead = volumesRead ?: entry.volumesRead,
         )
+
+    fun hasEvidenceIn(entry: MangaListEntry): Boolean =
+        (score == null || entry.recordedScore != null) &&
+            (chaptersRead == null || entry.chaptersRead != null) &&
+            (volumesRead == null || entry.volumesRead != null)
+
+    fun isPresentIn(entry: MangaListEntry): Boolean =
+        (status == null || entry.status == status.readingStatus) &&
+            (score == null || entry.recordedScore == score) &&
+            (chaptersRead == null || entry.chaptersRead == chaptersRead) &&
+            (volumesRead == null || entry.volumesRead == volumesRead)
 
     fun remainingAfter(
         baseline: MangaListEntry,
@@ -39,11 +51,16 @@ data class MangaListEdit(
     ): MangaListEdit {
         val sameProgress =
             current.status == baseline.status &&
-                (chaptersRead == null || current.chaptersRead == baseline.chaptersRead) &&
-                (volumesRead == null || current.volumesRead == baseline.volumesRead)
+                (chaptersRead == null || (current.chaptersRead != null && current.chaptersRead == baseline.chaptersRead)) &&
+                (volumesRead == null || (current.volumesRead != null && current.volumesRead == baseline.volumesRead))
         return MangaListEdit(
             status = status?.takeIf { sameProgress && it.readingStatus != current.status },
-            score = score?.takeIf { current.score == baseline.score && it.takeIf { value -> value > 0 } != current.score },
+            score =
+                score?.takeIf {
+                    current.recordedScore != null &&
+                        current.recordedScore == baseline.recordedScore &&
+                        it != current.recordedScore
+                },
             chaptersRead = chaptersRead?.takeIf { sameProgress && it != current.chaptersRead },
             volumesRead = volumesRead?.takeIf { sameProgress && it != current.volumesRead },
         )
@@ -69,6 +86,10 @@ sealed interface MangaListEditResult {
 
     data class Failed(
         val error: DataError,
+    ) : MangaListEditResult
+
+    data class Accepted(
+        val readBack: Outcome<MangaListEntry>,
     ) : MangaListEditResult
 
     data class Uncertain(

@@ -1,5 +1,6 @@
 package io.github.kauri_off.kiroku.data.manga
 
+import io.github.kauri_off.kiroku.core.error.DataError
 import io.github.kauri_off.kiroku.core.error.Outcome
 import io.github.kauri_off.kiroku.core.model.MangaId
 import io.github.kauri_off.kiroku.core.model.MangaListEntry
@@ -10,12 +11,14 @@ import io.github.kauri_off.kiroku.core.repository.MangaListStatus
 import io.github.kauri_off.kiroku.core.repository.readingStatus
 import io.github.kauri_off.kiroku.data.list.updatedAtOf
 import io.github.kauri_off.kiroku.data.network.MalHttp
+import io.github.kauri_off.kiroku.data.network.MalJson
 import io.github.kauri_off.kiroku.data.network.ReadAdmission
 import io.github.kauri_off.kiroku.data.network.ReadDeferred
 import io.github.kauri_off.kiroku.data.network.RepairedAnswer
 import io.github.kauri_off.kiroku.data.session.MalSession
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
+import kotlinx.serialization.SerializationException
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonNull
@@ -23,23 +26,33 @@ import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.intOrNull
 import kotlinx.serialization.json.jsonObject
+import okhttp3.MediaType.Companion.toMediaTypeOrNull
 
 internal class MalMangaListSource(
     private val http: MalHttp,
     private val session: MalSession,
+    retired: (SignInId) -> Boolean = { false },
 ) : MangaListSource,
     MangaListWriter {
-    private val list = MalMangaList(http, session)
+    private val list = MalMangaList(http, session, retired)
 
     override suspend fun patch(
         owner: SignInId,
         id: MangaId,
         changes: MangaListEdit,
-    ): Outcome<Unit> =
-        when (val answer = list.patch(id, changes, owner)) {
-            is Outcome.Failure -> answer
-            is Outcome.Success -> Outcome.Success(Unit)
+    ): MangaPatchResult {
+        var failedOnHttp = false
+        return when (val answer = list.patch(id, changes, owner) { failedOnHttp = true }) {
+            is Outcome.Failure ->
+                if (failedOnHttp && (answer.error == DataError.ServerError || answer.error == DataError.NoConnection)) {
+                    MangaPatchResult.Unknown(answer.error)
+                } else {
+                    MangaPatchResult.Refused(answer.error)
+                }
+            is Outcome.Success ->
+                if (answer.value.acknowledgesPatch()) MangaPatchResult.Accepted else MangaPatchResult.Unknown(DataError.ServerError)
         }
+    }
 
     override suspend fun fetch(
         owner: SignInId,
@@ -88,6 +101,7 @@ private fun MangaListRow.toEntry(repairs: MutableSet<String>): MangaListEntry {
         return parse(value).also { if (it == null) repairs += "list_status.$key" }
     }
     if (MangaListStatus.entries.none { it.readingStatus.code == statusCode }) repairs += "list_status.status"
+    val score = read("score") { it.number()?.takeIf { n -> n in 0..10 } }
     return MangaListEntry(
         id = id,
         titles = manga.titles.copy(synonyms = synonyms),
@@ -95,11 +109,22 @@ private fun MangaListRow.toEntry(repairs: MutableSet<String>): MangaListEntry {
         posterUrl = manga.posterUrl,
         chaptersRead = read("num_chapters_read") { it.number()?.takeIf { n -> n >= 0 } },
         volumesRead = read("num_volumes_read") { it.number()?.takeIf { n -> n >= 0 } },
-        score = read("score") { it.number()?.takeIf { n -> n in 0..10 } }?.takeIf { it > 0 },
+        score = score?.takeIf { it > 0 },
+        explicitlyUnrated = score == 0,
         updatedAt = read("updated_at") { it.text()?.let(::updatedAtOf) },
     )
 }
 
 private fun JsonElement.text(): String? = (this as? JsonPrimitive)?.takeIf { it.isString }?.content
 
-private fun JsonElement.number(): Int? = (this as? JsonPrimitive)?.intOrNull
+private fun JsonElement.number(): Int? = (this as? JsonPrimitive)?.takeUnless { it.isString }?.intOrNull
+
+private fun MangaListWriteAnswer.acknowledgesPatch(): Boolean {
+    if (status != 200 || mediaType?.toMediaTypeOrNull()?.subtype?.equals("json", ignoreCase = true) != true) return false
+    return try {
+        val document = body?.let(MalJson::parseToJsonElement) as? JsonObject
+        document != null && document.isNotEmpty() && "error" !in document
+    } catch (_: SerializationException) {
+        false
+    }
+}

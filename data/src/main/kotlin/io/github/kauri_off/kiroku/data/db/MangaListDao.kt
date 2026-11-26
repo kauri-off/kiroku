@@ -55,7 +55,8 @@ internal data class MangaListEntryRow(
             posterUrl = poster,
             chaptersRead = chaptersRead,
             volumesRead = volumesRead,
-            score = score,
+            score = score?.takeUnless { it == 0 },
+            explicitlyUnrated = score == 0,
             updatedAt = updatedAt?.let(::instantOf),
         )
 }
@@ -72,7 +73,7 @@ internal fun MangaListEntry.toRow(owner: SignInId): MangaListEntryRow =
         status = status.code,
         chaptersRead = chaptersRead,
         volumesRead = volumesRead,
-        score = score,
+        score = recordedScore,
         updatedAt = updatedAt?.toColumn(),
     )
 

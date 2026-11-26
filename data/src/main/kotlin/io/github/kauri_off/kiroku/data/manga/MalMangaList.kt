@@ -36,6 +36,7 @@ import retrofit2.http.QueryMap
 internal class MalMangaList(
     private val http: MalHttp,
     private val session: MalSession,
+    private val retired: (SignInId) -> Boolean = { false },
 ) {
     private val api by http.api(MangaListApi::class)
 
@@ -64,11 +65,12 @@ internal class MalMangaList(
         id: MangaId,
         patch: MangaListEdit,
         expectedOwner: SignInId,
+        onHttpFailure: (DataError) -> Unit = {},
     ): Outcome<MangaListWriteAnswer> {
         if (id.value <= 0) return Outcome.Failure(DataError.NotFound)
         val form = patch.form()
         if (form.isEmpty()) return Outcome.Failure(DataError.InvalidRequest)
-        return request(expectedOwner, write = true) { api.patch(id.value, form, it).writeAnswer() }
+        return request(expectedOwner, write = true, onHttpFailure = onHttpFailure) { api.patch(id.value, form, it).writeAnswer() }
     }
 
     suspend fun delete(
@@ -106,9 +108,11 @@ internal class MalMangaList(
         expectedOwner: SignInId,
         firstRead: (() -> ReadAdmission)? = null,
         write: Boolean = false,
+        onHttpFailure: (DataError) -> Unit = {},
         send: suspend (String) -> T,
     ): Outcome<T> {
-        val answer = session.authorised(http, expectedOwner, firstRead, guardWrite = write, request = send)
+        val writeAllowed: (() -> Boolean)? = if (write) ({ !retired(expectedOwner) }) else null
+        val answer = session.authorised(http, expectedOwner, firstRead, writeAllowed, onHttpFailure, send)
         val current = session.currentSession()
         return when {
             current != null && current.owner != expectedOwner -> Outcome.Failure(DataError.ListEnded)

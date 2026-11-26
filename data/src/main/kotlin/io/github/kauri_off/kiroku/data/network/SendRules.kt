@@ -114,10 +114,13 @@ internal class ReadDeferred : ProtocolException()
 
 internal class RequestOwnerEnded : ProtocolException()
 
-private fun Request.checkOwner() {
+private fun Request.checkOwner(wire: Wire? = null) {
     val sends = tag(Sends::class.java) ?: return
     val maySend = if (isRead) sends.maySendRead else sends.maySendWrite
-    if (maySend?.invoke() == false) throw RequestOwnerEnded()
+    if (maySend?.invoke() == false) {
+        if (wire != null && wire.written.get()) throw NotSentAgain(wire.status, wire.failure)
+        throw RequestOwnerEnded()
+    }
 }
 
 internal object MarkSends : Interceptor {
@@ -135,7 +138,7 @@ internal object SendLimits : Interceptor {
     override fun intercept(chain: Interceptor.Chain): Response {
         val request = chain.request()
         val wire = request.tag(Wire::class.java) ?: return chain.proceed(request)
-        request.checkOwner()
+        request.checkOwner(wire)
         val sends = request.tag(Sends::class.java)
         if (request.isRead) sends?.checkFirstRead(admit = true)
         val allowed =

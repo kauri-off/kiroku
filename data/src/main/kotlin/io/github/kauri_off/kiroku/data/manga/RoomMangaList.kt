@@ -53,7 +53,19 @@ internal fun interface MangaListWriter {
         owner: SignInId,
         id: MangaId,
         changes: MangaListEdit,
-    ): Outcome<Unit>
+    ): MangaPatchResult
+}
+
+internal sealed interface MangaPatchResult {
+    data object Accepted : MangaPatchResult
+
+    data class Refused(
+        val error: DataError,
+    ) : MangaPatchResult
+
+    data class Unknown(
+        val error: DataError,
+    ) : MangaPatchResult
 }
 
 class RoomMangaList internal constructor(
@@ -80,7 +92,7 @@ class RoomMangaList internal constructor(
         http: MalHttp,
         clock: Clock,
         retired: (SignInId) -> Boolean,
-    ) : this(database, session, MalMangaListSource(http, session), clock, http.unexpected, retired)
+    ) : this(database, session, MalMangaListSource(http, session, retired), clock, http.unexpected, retired)
 
     private val database by lazy(database)
     private val dao get() = database.mangaList()
@@ -121,8 +133,10 @@ class RoomMangaList internal constructor(
                 if (it !is Exception || it is CancellationException) throw it
                 unexpected(UnreadableRow(it))
                 emit(Outcome.Failure(DataError.StorageError))
+            }.flowOn(Dispatchers.IO)
+            .map {
+                if (it is Outcome.Success && session.currentSession()?.owner != owner) Outcome.Failure(DataError.ListEnded) else it
             }.distinctUntilChanged()
-            .flowOn(Dispatchers.IO)
 
     override suspend fun refresh(
         owner: SignInId,
@@ -187,37 +201,40 @@ class RoomMangaList internal constructor(
             }
         if (patch.isEmpty) return MangaListEditResult.Discarded
 
-        val sent = checkNotNull(remote { writer.patch(owner, id, patch) })
-        val error = (sent as? Outcome.Failure)?.error
-        if (error != null && !error.mayHaveSaved()) {
+        val sent =
+            when (val answer = remote { Outcome.Success(writer.patch(owner, id, patch)) }) {
+                is Outcome.Success -> answer.value
+                is Outcome.Failure -> MangaPatchResult.Unknown(answer.error)
+                null -> error("A manga edit cannot be deferred")
+            }
+        if (sent is MangaPatchResult.Refused) {
             val cleared =
                 whileOwner(owner) {
                     dao.requireRefresh(owner.value, false)
                     Outcome.Success(Unit)
                 }
-            return when ((cleared as? Outcome.Failure)?.error) {
-                DataError.ListEnded -> MangaListEditResult.Failed(DataError.ListEnded)
-                DataError.StorageError -> MangaListEditResult.Uncertain(error, needsRefresh = true)
-                else -> MangaListEditResult.Failed(error)
-            }
+            val ended = cleared == Outcome.Failure(DataError.ListEnded)
+            return MangaListEditResult.Failed(if (ended) DataError.ListEnded else sent.error)
         }
 
-        return when (val readBack = checkNotNull(download(owner) { true })) {
-            is Outcome.Failure ->
-                if (readBack.error == DataError.ListEnded) {
-                    MangaListEditResult.Failed(readBack.error)
-                } else {
-                    MangaListEditResult.Uncertain(error ?: readBack.error, needsRefresh = true)
-                }
-            is Outcome.Success -> {
-                val entry = readBack.value.entries.firstOrNull { it.id == id }
-                when {
-                    error != null -> MangaListEditResult.Uncertain(error, needsRefresh = false)
-                    entry == null -> MangaListEditResult.Failed(DataError.NotFound)
-                    else -> MangaListEditResult.Confirmed(entry)
+        val readBack = checkNotNull(download(owner) { true })
+        if (readBack == Outcome.Failure(DataError.ListEnded)) return MangaListEditResult.Failed(DataError.ListEnded)
+        val entry =
+            when (readBack) {
+                is Outcome.Failure -> readBack
+                is Outcome.Success -> {
+                    val returned = readBack.value.entries.firstOrNull { it.id == id }
+                    when {
+                        returned == null -> Outcome.Failure(DataError.NotFound)
+                        !patch.hasEvidenceIn(returned) -> Outcome.Failure(DataError.ServerError)
+                        else -> Outcome.Success(returned)
+                    }
                 }
             }
-        }
+        if (entry is Outcome.Success && patch.isPresentIn(entry.value)) return MangaListEditResult.Confirmed(entry.value)
+        if (sent == MangaPatchResult.Accepted) return MangaListEditResult.Accepted(entry)
+        check(sent is MangaPatchResult.Unknown)
+        return MangaListEditResult.Uncertain(sent.error, needsRefresh = entry is Outcome.Failure && entry.error != DataError.NotFound)
     }
 
     private suspend fun download(
@@ -319,6 +336,3 @@ class RoomMangaList internal constructor(
             }
         }
 }
-
-private fun DataError.mayHaveSaved(): Boolean =
-    this == DataError.ServerError || this == DataError.NoConnection || this == DataError.StorageError

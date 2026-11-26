@@ -21,6 +21,7 @@ import io.github.kauri_off.kiroku.data.recorder.mangaCaptureFiles
 import io.github.kauri_off.kiroku.data.session.SessionFixture
 import io.github.kauri_off.kiroku.data.session.TokenGrant
 import io.github.kauri_off.kiroku.data.session.granted
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.delay
@@ -554,6 +555,53 @@ class MalMangaListTest {
             occupying.await()
             assertEquals(Outcome.Failure(DataError.ListEnded), queued.await())
             assertEquals(1, network.api.requestCount)
+        }
+
+    @Test
+    fun `a queued patch is blocked while sign out is still in local cleanup`() =
+        runBlocking {
+            val dispatcher = Dispatcher().apply { maxRequests = 1 }
+            network.calls = dispatcher
+            network.repeatReadsAfter = emptyList()
+            val owner = signIn("first")
+            val wireFree = CountDownLatch(1)
+            val cleanup = CompletableDeferred<Unit>()
+            val finishSignOut = CompletableDeferred<Unit>()
+            network.answers {
+                check(wireFree.await(5, TimeUnit.SECONDS))
+                answer(400, "")
+            }
+            val occupying = async(Dispatchers.Default) { network.http.call { network.things.value.read() } }
+            try {
+                assertEquals(
+                    "/v2/thing",
+                    network.api
+                        .received()
+                        .url.encodedPath,
+                )
+                val queued = async(Dispatchers.Default) { list.patch(id, MangaListEdit(score = 3), owner) }
+                withTimeout(5_000) {
+                    while (dispatcher.queuedCallsCount() == 0) delay(1)
+                }
+                val leaving =
+                    async {
+                        session.signOutIfCurrent(owner) {
+                            cleanup.complete(Unit)
+                            finishSignOut.await()
+                        }
+                    }
+                withTimeout(5_000) { cleanup.await() }
+                assertEquals(owner, session.currentSession()?.owner)
+                wireFree.countDown()
+                occupying.await()
+                assertEquals(Outcome.Failure(DataError.ListEnded), queued.await())
+                assertEquals(1, network.api.requestCount)
+                finishSignOut.complete(Unit)
+                assertTrue(leaving.await())
+            } finally {
+                wireFree.countDown()
+                finishSignOut.complete(Unit)
+            }
         }
 
     @Test
