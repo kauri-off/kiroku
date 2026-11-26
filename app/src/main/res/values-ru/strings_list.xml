@@ -1,5 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <string name="list_mode_anime">Аниме</string>
+    <string name="list_mode_manga">Манга</string>
     <string name="list_title">Мой список</string>
     <string name="list_title_other">Список %1$s</string>
     <string name="list_filter">Фильтр по названию</string>

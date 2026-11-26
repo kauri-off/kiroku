@@ -35,6 +35,9 @@ import androidx.compose.ui.test.performTouchInput
 import androidx.lifecycle.ViewModelStore
 import androidx.lifecycle.ViewModelStoreOwner
 import androidx.lifecycle.viewmodel.compose.LocalViewModelStoreOwner
+import androidx.navigation3.runtime.NavBackStack
+import androidx.navigation3.runtime.NavKey
+import androidx.savedstate.serialization.encodeToSavedState
 import androidx.test.core.app.ApplicationProvider
 import io.github.kauri_off.kiroku.core.demo.Demo
 import io.github.kauri_off.kiroku.core.demo.DemoUserLists
@@ -49,6 +52,9 @@ import io.github.kauri_off.kiroku.core.statistics.statisticsOf
 import io.github.kauri_off.kiroku.design.composeRule
 import io.github.kauri_off.kiroku.design.registered
 import io.github.kauri_off.kiroku.design.theme.KirokuTheme
+import io.github.kauri_off.kiroku.list.ListMode
+import io.github.kauri_off.kiroku.manga.MangaListKey
+import io.github.kauri_off.kiroku.manga.MangaTitleKey
 import io.github.kauri_off.kiroku.profile.OtherProfileKey
 import io.github.kauri_off.kiroku.profile.ProfileTags
 import io.github.kauri_off.kiroku.search.BrowseKey
@@ -60,6 +66,7 @@ import io.github.kauri_off.kiroku.shell.NotBuiltKey
 import io.github.kauri_off.kiroku.shell.SearchRoot
 import io.github.kauri_off.kiroku.shell.ShellNavigator
 import io.github.kauri_off.kiroku.shell.discardUnreadableComposeState
+import io.github.kauri_off.kiroku.shell.navSerializer
 import io.github.kauri_off.kiroku.shell.rememberShellNavigator
 import io.github.kauri_off.kiroku.text.named
 import io.github.kauri_off.kiroku.title.TitleKey
@@ -151,6 +158,34 @@ class ProcessDeathTest {
         val dedicated = checkNotNull(ActivityNavigation(recreated.get().savedStateRegistry).restored)
         assertEquals(listOf(Destination.List.root, title), dedicated.stack)
         assertEquals(listOf(Destination.Search.root, searchTitle), dedicated.stackOf(Destination.Search))
+        activity.destroy()
+        recreated.destroy()
+    }
+
+    @Test
+    fun `a legacy saved manga list becomes the List root while its title stays open`() {
+        val title = MangaTitleKey(1)
+        val activity = Robolectric.buildActivity(ComponentActivity::class.java).create()
+        ActivityNavigation(activity.get().savedStateRegistry).navigator = ShellNavigator.inMemory()
+        val state = Bundle()
+        activity.saveInstanceState(state)
+        val registry = checkNotNull(state.getBundle("androidx.lifecycle.BundlableSavedStateRegistry.key"))
+        val saved = checkNotNull(registry.getBundle("kiroku.shell.navigation"))
+        val stack = NavBackStack<NavKey>(Destination.List.root, MangaListKey, title)
+        saved.putBundle("List", encodeToSavedState(navSerializer, stack))
+
+        val recreated = Robolectric.buildActivity(ComponentActivity::class.java).create(parcelled(state))
+        val restored = checkNotNull(ActivityNavigation(recreated.get().savedStateRegistry).restored)
+        assertEquals(listOf(Destination.List.root, title), restored.stack)
+        assertEquals(ListMode.Manga, restored.listMode)
+        assertTrue(restored.back())
+        assertEquals(listOf(Destination.List.root), restored.stack)
+        assertEquals(ListMode.Manga, restored.listMode)
+
+        compose.setContent { KirokuTheme(dark = false, dynamicColor = false) { AppRoute(graph, restored) } }
+        compose.onNodeWithText("My list").assertExists()
+        compose.onNodeWithText("Manga").assertDoesNotExist()
+        compose.onNodeWithText(FixtureAnime.exactToWatch.titles.romaji).assertExists()
         activity.destroy()
         recreated.destroy()
     }

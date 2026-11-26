@@ -1,5 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <string name="list_mode_anime">Anime</string>
+    <string name="list_mode_manga">Manga</string>
     <string name="list_title">My list</string>
     <string name="list_title_other">%1$s\'s list</string>
     <string name="list_filter">Filter by title</string>

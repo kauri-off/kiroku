@@ -2,12 +2,14 @@ package io.github.kauri_off.kiroku.manga
 
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.ListItem
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
+import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.painterResource
@@ -24,11 +26,13 @@ import io.github.kauri_off.kiroku.design.component.PosterSize
 import io.github.kauri_off.kiroku.design.component.ScreenState
 import io.github.kauri_off.kiroku.design.component.StateAction
 import io.github.kauri_off.kiroku.design.component.TitleText
+import io.github.kauri_off.kiroku.list.ListFrame
+import io.github.kauri_off.kiroku.list.ListMode
 import io.github.kauri_off.kiroku.notShown
 import io.github.kauri_off.kiroku.title.countText
 import io.github.kauri_off.kiroku.title.message
-import io.github.kauri_off.kiroku.titlesub.SubScreen
 import io.github.kauri_off.kiroku.titlesub.SubScreenBody
+import io.github.kauri_off.kiroku.titlesub.SubScreenContent
 import io.github.kauri_off.kiroku.titlesub.errorState
 
 internal data class MangaListState(
@@ -54,8 +58,6 @@ internal sealed interface MangaListContent {
 }
 
 internal sealed interface MangaListEvent {
-    data object Back : MangaListEvent
-
     data object SignIn : MangaListEvent
 
     data object Refresh : MangaListEvent
@@ -65,20 +67,25 @@ internal sealed interface MangaListEvent {
     ) : MangaListEvent
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 internal fun MangaListScreen(
     state: MangaListState,
     onEvent: (MangaListEvent) -> Unit,
     snackbars: SnackbarHostState,
+    onMode: (ListMode) -> Unit,
 ) {
     val refresh = { onEvent(MangaListEvent.Refresh) }
-    SubScreen(
-        title = stringResource(R.string.manga_list_title),
-        sessionExpired = state.sessionExpired,
-        onBack = { onEvent(MangaListEvent.Back) },
+    val scroll = rememberLazyListState()
+    ListFrame(
+        ListMode.Manga,
+        onMode,
+        state.sessionExpired,
         onSignIn = { onEvent(MangaListEvent.SignIn) },
-        snackbars = snackbars,
-        body =
+        snackbars,
+        topBar = { TopAppBar(title = { Text(stringResource(R.string.list_title)) }) },
+    ) { padding ->
+        val body =
             when (val content = state.content) {
                 MangaListContent.Loading -> SubScreenBody.State(ScreenState.Loading)
                 MangaListContent.SignedOut ->
@@ -97,7 +104,7 @@ internal fun MangaListScreen(
                         },
                     )
                 is MangaListContent.Ready ->
-                    SubScreenBody.List(content.refreshing, onRefresh = refresh.takeUnless { state.sessionExpired }) {
+                    SubScreenBody.List(content.refreshing, onRefresh = refresh.takeUnless { state.sessionExpired }, scroll = scroll) {
                         if (content.entries.isEmpty()) {
                             item {
                                 Box(Modifier.fillParentMaxSize()) {
@@ -110,8 +117,9 @@ internal fun MangaListScreen(
                             }
                         }
                     }
-            },
-    )
+            }
+        SubScreenContent(body, padding)
+    }
 }
 
 @OptIn(ExperimentalMaterial3Api::class)

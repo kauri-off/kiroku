@@ -12,6 +12,7 @@ import androidx.savedstate.SavedStateRegistry
 import androidx.savedstate.serialization.decodeFromSavedState
 import androidx.savedstate.serialization.encodeToSavedState
 import io.github.kauri_off.kiroku.core.model.SignInId
+import io.github.kauri_off.kiroku.list.ListMode
 import io.github.kauri_off.kiroku.notShown
 
 private val registryKey = notShown("androidx.lifecycle.BundlableSavedStateRegistry.key")
@@ -57,8 +58,11 @@ internal fun decodeStack(
 private val navigationKey = notShown("kiroku.shell.navigation")
 private val selectionKey = notShown("selected")
 private val restartsKey = notShown("restarts")
+private val listModeKey = notShown("listMode")
 private val hadSessionKey = notShown("hadSession")
 private val sessionOwnerKey = notShown("sessionOwner")
+
+internal fun listModeOf(name: String?): ListMode? = ListMode.entries.firstOrNull { it.name == name }
 
 internal class ActivityNavigation(
     registry: SavedStateRegistry,
@@ -70,6 +74,7 @@ internal class ActivityNavigation(
             ShellNavigator(stacks, mutableStateOf(selected), mutableIntStateOf(saved.getInt(restartsKey))).apply {
                 if (saved.containsKey(hadSessionKey)) hadSession = saved.getBoolean(hadSessionKey)
                 sessionOwner = saved.getString(sessionOwnerKey)?.let(::SignInId)
+                listModeOf(saved.getString(listModeKey))?.let { listMode = it }
                 restoredNavigation = true
             }
         }
@@ -82,6 +87,7 @@ internal class ActivityNavigation(
                 navigator?.let { current ->
                     putString(selectionKey, current.current.name)
                     putInt(restartsKey, current.restarts)
+                    if (current.listMode != ListMode.Anime) putString(listModeKey, current.listMode.name)
                     current.hadSession?.let { putBoolean(hadSessionKey, it) }
                     current.sessionOwner?.let { putString(sessionOwnerKey, it.value) }
                     for (destination in Destination.entries) {

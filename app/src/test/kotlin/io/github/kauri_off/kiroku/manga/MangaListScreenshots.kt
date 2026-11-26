@@ -14,6 +14,9 @@ import io.github.kauri_off.kiroku.screenshots.WindowSize
 import io.github.kauri_off.kiroku.screenshots.case
 import io.github.kauri_off.kiroku.screenshots.contentCase
 import io.github.kauri_off.kiroku.screenshots.shown
+import io.github.kauri_off.kiroku.shell.Destination
+import io.github.kauri_off.kiroku.shell.ShellScreen
+import io.github.kauri_off.kiroku.shell.ShellState
 
 class MangaListScreenshots : ScreenshotRegistry() {
     override val content = contentCase { Screen(rows()) }
@@ -67,5 +70,7 @@ private fun Screen(
     content: MangaListContent,
     expired: Boolean = false,
 ) {
-    MangaListScreen(MangaListState(content = content, sessionExpired = expired), {}, remember { SnackbarHostState() })
+    ShellScreen(ShellState(Destination.List), {}) {
+        MangaListScreen(MangaListState(content = content, sessionExpired = expired), {}, remember { SnackbarHostState() }, onMode = {})
+    }
 }

@@ -40,7 +40,6 @@ import androidx.compose.material3.RadioButton
 import androidx.compose.material3.SheetValue
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.material3.TextField
 import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.material3.TopAppBar
@@ -96,10 +95,7 @@ import io.github.kauri_off.kiroku.design.component.RefreshBox
 import io.github.kauri_off.kiroku.design.component.RowLine
 import io.github.kauri_off.kiroku.design.component.RowLongPress
 import io.github.kauri_off.kiroku.design.component.RowTrailing
-import io.github.kauri_off.kiroku.design.component.ScreenScaffold
-import io.github.kauri_off.kiroku.design.component.ScreenSnackbarHost
 import io.github.kauri_off.kiroku.design.component.ScreenState
-import io.github.kauri_off.kiroku.design.component.SessionBanner
 import io.github.kauri_off.kiroku.design.component.StateAction
 import io.github.kauri_off.kiroku.design.component.WaitIndicator
 import io.github.kauri_off.kiroku.design.component.WindowWithoutAutofill
@@ -117,11 +113,12 @@ import kotlin.math.roundToInt
 // The screen owns the pager, so the tab row follows the finger; the tab the pager settles on is sent as SelectTab.
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun ListScreen(
+internal fun ListScreen(
     state: ListState,
     onEvent: (ListEvent) -> Unit,
     snackbars: SnackbarHostState,
     modifier: Modifier = Modifier,
+    onMode: ((ListMode) -> Unit)? = null,
 ) {
     val filtering = state.filterText != null
     BackHandler(enabled = filtering) { onEvent(ListEvent.EndFilter) }
@@ -135,8 +132,14 @@ fun ListScreen(
             null
         }
     val positions = rememberSaveableStateHolder()
-    ScreenScaffold(
+    ListFrame(
+        ListMode.Anime,
+        onMode,
+        state.sessionExpired,
+        onSignIn = { onEvent(ListEvent.SignIn) },
+        snackbars,
         modifier = modifier.withoutTravelledTaps(),
+        ime = WindowInsets.ime,
         topBar = {
             key(state.activeFilterSession) {
                 TopBar(
@@ -144,14 +147,11 @@ fun ListScreen(
                     state.owner,
                     subtitleOf(state),
                     showActions = tabs != null,
-                    mangaAvailable = state.mangaAvailable,
                     onEvent = onEvent,
                 )
             }
-            if (motion != null && tabs != null) ListTabs(motion, tabs.statuses, onEvent)
-            if (state.sessionExpired) SessionBanner(onSignIn = { onEvent(ListEvent.SignIn) })
         },
-        snackbarHost = { ScreenSnackbarHost(snackbars, ime = WindowInsets.ime) },
+        statusTabs = { if (motion != null && tabs != null) ListTabs(motion, tabs.statuses, onEvent) },
     ) { padding ->
         val body = Modifier.belowBars(padding)
         when (val content = state.content) {
@@ -432,7 +432,6 @@ private fun TopBar(
     owner: ListOwner,
     subtitle: String?,
     showActions: Boolean,
-    mangaAvailable: Boolean,
     onEvent: (ListEvent) -> Unit,
 ) {
     val title: @Composable () -> Unit = {
@@ -449,9 +448,6 @@ private fun TopBar(
         }
     }
     val actions: @Composable RowScope.() -> Unit = {
-        if (mangaAvailable && filter == null) {
-            TextButton(onClick = { onEvent(ListEvent.OpenManga) }) { Text(stringResource(R.string.manga_list_open)) }
-        }
         if (showActions && filter == null) {
             IconButton(onClick = { onEvent(ListEvent.StartFilter) }, shapes = IconButtonDefaults.shapes()) {
                 Icon(painterResource(R.drawable.ic_filter), contentDescription = stringResource(R.string.list_filter))

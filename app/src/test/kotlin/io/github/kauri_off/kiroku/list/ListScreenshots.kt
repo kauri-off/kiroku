@@ -21,6 +21,7 @@ import io.github.kauri_off.kiroku.shell.Destination
 import io.github.kauri_off.kiroku.shell.ShellMessage
 import io.github.kauri_off.kiroku.shell.ShellScreen
 import io.github.kauri_off.kiroku.shell.ShellState
+import io.github.kauri_off.kiroku.shell.rememberHostShowing
 
 // The page and the indicator on it end within a component's entrance.
 private const val TAB_SWITCH = MotionBounds.ENTER
@@ -47,7 +48,9 @@ class ListScreenshots : ScreenshotRegistry() {
 
     override val cases =
         listOf(
-            case("manga", largeText = true, content = screen(ListFixtureStates.watching.copy(mangaAvailable = true))),
+            case("anime-mode", largeText = true) { AnimeMode(ListFixtureStates.watching) },
+            case("anime-mode-wide", window = WindowSize(840, 600)) { AnimeMode(ListFixtureStates.watching) },
+            case("anime-mode-filtering", keyboard = true) { AnimeMode(ListFixtureStates.filtering) },
             case("planned", content = screen(ListFixtureStates.planned)),
             case("completed", content = screen(ListFixtureStates.completed)),
             case("on-hold", content = screen(ListFixtureStates.onHold)),
@@ -155,3 +158,10 @@ private fun SemanticsNode.all(): Sequence<SemanticsNode> = sequenceOf(this) + ch
 private fun SemanticsNode.isTab() = config.getOrNull(SemanticsProperties.Role) == Role.Tab
 
 private const val LAYOUT_FRAMES = 10
+
+@Composable
+private fun AnimeMode(state: ListState) {
+    ShellScreen(ShellState(Destination.List), {}) {
+        ListScreen(state, {}, rememberHostShowing(null), onMode = {})
+    }
+}

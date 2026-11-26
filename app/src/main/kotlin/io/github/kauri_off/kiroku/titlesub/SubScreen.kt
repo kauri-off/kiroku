@@ -80,10 +80,19 @@ internal fun SubScreen(
         },
         snackbarHost = { ScreenSnackbarHost(snackbars) },
     ) { padding ->
-        when (body) {
-            is SubScreenBody.State -> ScreenState(body.state, Modifier.padding(padding))
-            is SubScreenBody.List -> SubScreenList(body, padding, Modifier.nestedScroll(scrollBehavior.nestedScrollConnection))
-        }
+        SubScreenContent(body, padding, Modifier.nestedScroll(scrollBehavior.nestedScrollConnection))
+    }
+}
+
+@Composable
+internal fun SubScreenContent(
+    body: SubScreenBody,
+    padding: PaddingValues,
+    listModifier: Modifier = Modifier,
+) {
+    when (body) {
+        is SubScreenBody.State -> ScreenState(body.state, Modifier.padding(padding))
+        is SubScreenBody.List -> SubScreenList(body, padding, listModifier)
     }
 }
 

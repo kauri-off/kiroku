@@ -38,7 +38,6 @@ data class ListState(
     val listSize: Int? = null,
     val matches: List<ListRow>? = null,
     val filterSession: Int = 0,
-    val mangaAvailable: Boolean = false,
 ) {
     init {
         require(reading == null || owner is ListOwner.Other)
@@ -193,8 +192,6 @@ sealed interface ListEvent {
     data object EndFilter : ListEvent
 
     data object OpenSort : ListEvent
-
-    data object OpenManga : ListEvent
 
     data class SelectSort(
         val sort: ListSort,
