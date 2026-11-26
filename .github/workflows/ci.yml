@@ -203,7 +203,7 @@ jobs:
       - name: Format, lint, the screenshots and the debug build
         env:
           DEBUG_BUILD: ${{ github.event_name == 'pull_request' && 'assembleDebug :app:assembleDebugAndroidTest' || '' }}
-        run: .github/scripts/gradle --continue ktlintCheck lint $DEBUG_BUILD :app:testDebugUnitTest -Proborazzi.test.record=true --tests '*Screenshots'
+        run: .github/scripts/gradle --continue :app:testDebugUnitTest --tests '*Screenshots' -Proborazzi.test.record=true ktlintCheck lint $DEBUG_BUILD
 
       - name: Name the runner image of the screenshots
         if: success() || failure()
