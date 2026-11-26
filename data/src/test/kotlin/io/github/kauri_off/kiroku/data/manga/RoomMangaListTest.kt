@@ -498,6 +498,35 @@ class RoomMangaListTest {
         }
 
     @Test
+    fun `cancelling an admitted delete keeps the row stale after reopening`() =
+        runBlocking {
+            val owner = signIn("a")
+            val list = repository()
+            val initial = entry()
+            response = { Outcome.Success(listOf(initial)) }
+            list.refresh(owner)
+            val sent = CompletableDeferred<Unit>()
+            delete = { _, _ ->
+                sent.complete(Unit)
+                awaitCancellation()
+            }
+            val pending = async { list.remove(owner, initial) }
+            withTimeout(5_000) { sent.await() }
+            pending.cancelAndJoin()
+
+            database.close()
+            database = KirokuDatabase.open(context, name)
+            val reopened = repository()
+            assertEquals(Outcome.Success(MangaListSnapshot(owner, listOf(initial), null)), reopened.stored(owner))
+            delete = { _, _ -> error("DELETE must wait for refresh") }
+            assertEquals(MangaListRemovalResult.RefreshRequired, reopened.remove(owner, initial, retry = true))
+            response = { Outcome.Success(emptyList()) }
+            val settled = Outcome.Success(MangaListSnapshot(owner, emptyList(), clock.now))
+            assertEquals(settled, reopened.refresh(owner))
+            assertEquals(settled, reopened.stored(owner))
+        }
+
+    @Test
     fun `late patch success cannot read back or overwrite a replacement sign in`() =
         runBlocking {
             val old = signIn("a")

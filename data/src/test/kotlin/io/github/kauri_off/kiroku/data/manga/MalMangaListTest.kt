@@ -524,6 +524,13 @@ class MalMangaListTest {
 
     @Test
     fun `a patch waiting for OkHttp cannot send after replacement sign in`() =
+        assertQueuedWriteStopsAfterReplacement { list.patch(id, MangaListEdit(score = 3), it) }
+
+    @Test
+    fun `a delete waiting for OkHttp cannot send after replacement sign in`() =
+        assertQueuedWriteStopsAfterReplacement { list.delete(id, it) }
+
+    private fun assertQueuedWriteStopsAfterReplacement(mutate: suspend (SignInId) -> Outcome<*>) =
         runBlocking {
             val dispatcher = Dispatcher().apply { maxRequests = 1 }
             network.calls = dispatcher
@@ -543,7 +550,7 @@ class MalMangaListTest {
                             .received()
                             .url.encodedPath,
                     )
-                    val write = async(Dispatchers.Default) { list.patch(id, MangaListEdit(score = 3), owner) }
+                    val write = async(Dispatchers.Default) { mutate(owner) }
                     withTimeout(5_000) {
                         while (dispatcher.queuedCallsCount() == 0) delay(1)
                     }
@@ -582,6 +589,13 @@ class MalMangaListTest {
 
     @Test
     fun `a queued patch is blocked while sign out is still in local cleanup`() =
+        assertQueuedWriteStopsDuringSignOut { list.patch(id, MangaListEdit(score = 3), it) }
+
+    @Test
+    fun `a queued delete is blocked while sign out is still in local cleanup`() =
+        assertQueuedWriteStopsDuringSignOut { list.delete(id, it) }
+
+    private fun assertQueuedWriteStopsDuringSignOut(mutate: suspend (SignInId) -> Outcome<*>) =
         runBlocking {
             val dispatcher = Dispatcher().apply { maxRequests = 1 }
             network.calls = dispatcher
@@ -602,7 +616,7 @@ class MalMangaListTest {
                         .received()
                         .url.encodedPath,
                 )
-                val queued = async(Dispatchers.Default) { list.patch(id, MangaListEdit(score = 3), owner) }
+                val queued = async(Dispatchers.Default) { mutate(owner) }
                 withTimeout(5_000) {
                     while (dispatcher.queuedCallsCount() == 0) delay(1)
                 }
