@@ -201,7 +201,12 @@ internal class MangaEditing(
                 is Outcome.Success -> {
                     val snapshot = stored.value?.takeIf { it.owner == owner }
                     mutable.value = mutable.value.copy(snapshot = snapshot, observed = true, snapshotReadable = true)
-                    if (session is Session.SignedIn && snapshot != null) settleRecoveries(snapshot)
+                    if (session is Session.SignedIn && snapshot != null) {
+                        if (snapshot.syncedAt != null) {
+                            messages.retireMangaChanges(owner) { id -> snapshot.entries.none { it.id == id } }
+                        }
+                        settleRecoveries(snapshot)
+                    }
                 }
                 is Outcome.Failure -> {
                     if (stored.error == DataError.ListEnded) {

@@ -282,16 +282,46 @@ class MangaEditingTest {
         }
 
     @Test
+    fun onlyCompleteAbsenceRetiresAnObservedTitlesChange() =
+        runTest {
+            for (requested in listOf(false, true)) {
+                val backend = Backend()
+                val subject = start(backend)
+                val change = MangaChange(entry.id, owner, entry.titles.romaji, MangaEditTotals())
+                subject.messages.post(ShellMessage(ShellMessage.Text.AddedToPlanned, change, mangaOwner = owner))
+                val posted = checkNotNull(subject.messages.current.value)
+                if (requested) subject.messages.ended(posted, actionPerformed = true)
+
+                backend.cache.value = MangaListSnapshot(owner, emptyList(), null)
+                runCurrent()
+                if (requested) {
+                    assertEquals(change, subject.messages.mangaEditRequest.value)
+                } else {
+                    assertEquals(posted, subject.messages.current.value)
+                }
+
+                backend.cache.value = backend.cache.value.copy(syncedAt = Instant.EPOCH)
+                runCurrent()
+                assertNull(subject.messages.current.value)
+                assertNull(subject.messages.mangaEditRequest.value)
+                subject.messages.ended(posted, actionPerformed = true)
+                assertNull(subject.messages.mangaEditRequest.value)
+            }
+        }
+
+    @Test
     fun confirmedRemovalLeavesAnotherTitlesAddChangeAvailable() =
         runTest {
             val backend = Backend()
             val subject = start(backend)
-            val otherId = MangaId(entry.id.value + 1)
-            val change = MangaChange(otherId, owner, entry.titles.romaji, MangaEditTotals())
+            val other = entry.copy(id = MangaId(entry.id.value + 1))
+            backend.cache.value = backend.cache.value.copy(entries = listOf(entry, other))
+            runCurrent()
+            val change = MangaChange(other.id, owner, other.titles.romaji, MangaEditTotals())
             subject.messages.post(ShellMessage(ShellMessage.Text.AddedToPlanned, change, mangaOwner = owner))
             subject.confirmRemove()
             runCurrent()
-            backend.cache.value = MangaListSnapshot(owner, emptyList(), Instant.EPOCH)
+            backend.cache.value = MangaListSnapshot(owner, listOf(other), Instant.EPOCH)
             backend.removalAnswer.complete(MangaListRemovalResult.Removed)
             runCurrent()
             assertEquals(

@@ -228,8 +228,13 @@ class ShellMessages(
     internal fun retireMangaChange(
         owner: SignInId,
         id: MangaId,
+    ) = retireMangaChanges(owner) { it == id }
+
+    internal fun retireMangaChanges(
+        owner: SignInId,
+        shouldRetire: (MangaId) -> Boolean,
     ) {
-        fun matches(change: MangaChange?) = change?.owner == owner && change.id == id
+        fun matches(change: MangaChange?) = change?.owner == owner && shouldRetire(change.id)
 
         mangaRequested.value?.takeIf(::matches)?.let(::editTaken)
         if (matches(shown.value?.message?.action as? MangaChange)) showNext()
