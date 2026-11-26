@@ -18,6 +18,7 @@ import io.github.kauri_off.kiroku.core.model.AnimeDetails
 import io.github.kauri_off.kiroku.core.model.AnimeId
 import io.github.kauri_off.kiroku.core.model.ListEntry
 import io.github.kauri_off.kiroku.core.model.ListStatus
+import io.github.kauri_off.kiroku.core.model.MangaReadingStatus
 import io.github.kauri_off.kiroku.core.model.Session
 import io.github.kauri_off.kiroku.core.model.SignInId
 import io.github.kauri_off.kiroku.core.repository.AnimeRepository
@@ -33,6 +34,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancelAndJoin
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.first
@@ -44,6 +46,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
+import kotlinx.coroutines.withTimeout
 import okhttp3.Interceptor
 import okhttp3.Protocol
 import okhttp3.Request
@@ -202,7 +205,11 @@ class LiveGraphTest {
             val signIn = "0f8fad5b-d9cb-469f-a165-70867728950e"
             parts.file("tokens").writeBytes(byteArrayOf(0) + signIn.encodeToByteArray())
             val graph = LiveGraph(parts, listStore = { store() })
-            assertEquals(Session.Expired(SignInId(signIn)), graph.session.observeSession().first())
+            val owner = SignInId(signIn)
+            val reading = MangaReadingStatus("reading")
+            assertEquals(Session.Expired(owner), graph.session.observeSession().first())
+            graph.preferences.setMangaListSort(owner, reading, TabSort(ListSort.Title))
+            assertEquals(mapOf(reading to TabSort(ListSort.Title)), graph.preferences.mangaSorts(owner))
             graph.anime.observeAnime(AnimeId(1)).first()
             val file = context.getDatabasePath("account.db").path
             SQLiteDatabase.openDatabase(file, null, SQLiteDatabase.OPEN_READWRITE).use {
@@ -219,6 +226,11 @@ class LiveGraphTest {
             assertEquals(1L, profiles())
 
             graph.session.signOut()
+            assertTrue(
+                graph.preferences
+                    .mangaSorts(owner)
+                    .isEmpty(),
+            )
             assertEquals(Session.SignedOut, graph.session.observeSession().first())
             assertEquals(0L, profiles())
             assertEquals(emptyList<Throwable>(), unexpected)
@@ -299,6 +311,41 @@ class LiveGraphTest {
             second.coroutineContext.job.cancelAndJoin()
             assertEquals(0, stores.get())
             assertEquals(emptyList<Throwable>(), unexpected)
+        }
+
+    @Test
+    fun `startup removes retired Manga preferences before either list is opened`() =
+        runBlocking {
+            val retired = SignInId("retired-manga-sort-owner")
+            val replacement = SignInId("0f8fad5b-d9cb-469f-a165-70867728950e")
+            val reading = MangaReadingStatus("reading")
+            val retained = TabSort(ListSort.Score, SortDirection.Ascending)
+            val first = CoroutineScope(SupervisorJob())
+            try {
+                val preferences = livePreferences(parts(first))
+                preferences.setMangaListSort(retired, reading, TabSort(ListSort.Title))
+                preferences.setMangaListSort(replacement, reading, retained)
+            } finally {
+                first.coroutineContext.job.cancelAndJoin()
+            }
+
+            val second = CoroutineScope(SupervisorJob())
+            try {
+                val parts = parts(second)
+                parts.file("tokens").writeBytes(byteArrayOf(0) + replacement.value.encodeToByteArray())
+                val file = File(context.noBackupFilesDir, "account.preferences_pb")
+                assertTrue(file.readBytes().decodeToString().contains(retired.value))
+                val graph = LiveGraph(parts, listStore = { error("Startup opened the Anime list") })
+                withTimeout(5_000) {
+                    while (file.readBytes().decodeToString().contains(retired.value)) delay(10)
+                }
+                assertEquals(mapOf(reading to retained), graph.preferences.mangaSorts(replacement))
+                assertTrue(graph.preferences.mangaSorts(retired).isEmpty())
+                assertFalse(context.getDatabasePath(parts.databaseName).exists())
+                assertEquals(emptyList<Throwable>(), unexpected)
+            } finally {
+                second.coroutineContext.job.cancelAndJoin()
+            }
         }
 
     // Section 7.1: a title page shows what the source's own database holds and asks MAL nothing while it is fresh.

@@ -23,6 +23,7 @@ import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.PagerDefaults
+import androidx.compose.foundation.pager.PagerScope
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.selectableGroup
@@ -86,6 +87,10 @@ import androidx.compose.ui.unit.offset
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import io.github.kauri_off.kiroku.R
+import io.github.kauri_off.kiroku.core.list.ListSort
+import io.github.kauri_off.kiroku.core.list.SortDirection
+import io.github.kauri_off.kiroku.core.list.TabSort
+import io.github.kauri_off.kiroku.core.list.mangaListSorts
 import io.github.kauri_off.kiroku.core.model.EntryStatus
 import io.github.kauri_off.kiroku.core.model.ListStatus
 import io.github.kauri_off.kiroku.design.component.AnimeRow
@@ -104,8 +109,11 @@ import io.github.kauri_off.kiroku.design.theme.Sizes
 import io.github.kauri_off.kiroku.design.theme.Spacing
 import io.github.kauri_off.kiroku.design.theme.settleMillis
 import io.github.kauri_off.kiroku.manga.MangaListBody
+import io.github.kauri_off.kiroku.manga.MangaListContent
 import io.github.kauri_off.kiroku.manga.MangaListEvent
 import io.github.kauri_off.kiroku.manga.MangaListState
+import io.github.kauri_off.kiroku.manga.MangaListTabs
+import io.github.kauri_off.kiroku.manga.rememberMangaListMotion
 import io.github.kauri_off.kiroku.notShown
 import io.github.kauri_off.kiroku.text.statusName
 import io.github.kauri_off.kiroku.title.countText
@@ -145,13 +153,26 @@ internal fun ListScreen(
     val manga = pane as? ListPane.Manga
     val mode = if (anime != null) ListMode.Anime else ListMode.Manga
     val state = anime?.state
-    val filtering = state?.filterText != null
-    BackHandler(enabled = filtering) { anime?.onEvent?.invoke(ListEvent.EndFilter) }
+    val filtering = state?.filterText != null || manga?.state?.filterText != null
+    val closeFilter: () -> Unit = {
+        when (pane) {
+            is ListPane.Anime -> pane.onEvent(ListEvent.EndFilter)
+            is ListPane.Manga -> pane.onEvent(MangaListEvent.EndFilter)
+        }
+    }
+    BackHandler(enabled = filtering, onBack = closeFilter)
     val tabs = state?.content as? ListContent.Tabs
     val motion =
         if (state != null && !filtering) {
             val statuses = tabs?.statuses ?: tabOrder(listOf(state.tab))
             rememberListTabMotion(rememberPagerState(initialPage = statuses.indexOf(state.tab)) { statuses.size })
+        } else {
+            null
+        }
+    val mangaContent = manga?.state?.content as? MangaListContent.Ready
+    val mangaMotion =
+        if (manga != null && mangaContent != null && !filtering) {
+            key(manga.state.owner) { rememberMangaListMotion(mangaContent, manga.state.tab) }
         } else {
             null
         }
@@ -165,20 +186,48 @@ internal fun ListScreen(
             }
         },
         snackbars,
-        modifier = if (anime != null) modifier.withoutTravelledTaps() else modifier,
-        ime = if (anime != null) WindowInsets.ime else null,
-        topBar = { ListTopBar(anime, mode, onMode) },
-        statusTabs = { if (anime != null && motion != null && tabs != null) ListTabs(motion, tabs.statuses, anime.onEvent) },
+        modifier = if (anime != null || mangaContent != null) modifier.withoutTravelledTaps() else modifier,
+        ime = if (anime != null || filtering) WindowInsets.ime else null,
+        topBar = {
+            ListTopBar(anime, manga, mode, onMode, closeFilter) {
+                val status = mangaMotion?.selected?.let { mangaContent?.statuses?.getOrNull(it) }
+                if (status != null) manga?.onEvent?.invoke(MangaListEvent.OpenSort(status))
+            }
+        },
+        statusTabs = {
+            if (anime != null && motion != null && tabs != null) ListTabs(motion, tabs.statuses, anime.onEvent)
+            if (manga != null && mangaMotion != null && mangaContent != null) {
+                MangaListTabs(mangaMotion, mangaContent.statuses)
+            }
+        },
     ) { padding ->
         positions.SaveableStateProvider(mode.name) {
             when (pane) {
                 is ListPane.Anime -> AnimeListBody(pane.state, pane.onEvent, motion, padding)
-                is ListPane.Manga -> key(pane.state.owner) { MangaListBody(pane.state, pane.onEvent, padding) }
+                is ListPane.Manga -> key(pane.state.owner) { MangaListBody(pane.state, pane.onEvent, mangaMotion, padding) }
             }
         }
     }
     val page = state?.page
-    if (anime != null && !filtering && anime.state.sortSheetOpen && page != null) SortSheet(page, anime.onEvent)
+    if (anime != null && !filtering && anime.state.sortSheetOpen && page != null) {
+        SortSheet(
+            TabSort(page.sort, page.direction),
+            page.sorts,
+            onDismiss = { anime.onEvent(ListEvent.DismissSort) },
+            onSort = { anime.onEvent(ListEvent.SelectSort(it)) },
+            onDirection = { anime.onEvent(ListEvent.SelectDirection(it)) },
+        )
+    }
+    val mangaSortTab = manga?.state?.sortTab
+    if (manga != null && !filtering && mangaSortTab != null && mangaContent != null) {
+        SortSheet(
+            manga.state.sortFor(mangaSortTab),
+            mangaListSorts,
+            onDismiss = { manga.onEvent(MangaListEvent.DismissSort) },
+            onSort = { manga.onEvent(MangaListEvent.SelectSort(it)) },
+            onDirection = { manga.onEvent(MangaListEvent.SelectDirection(it)) },
+        )
+    }
 }
 
 @Composable
@@ -216,7 +265,9 @@ private fun AnimeListBody(
                     val matches = state.matches.takeIf { state.activeFilterSession == state.filterSession }
                     val waitingForMatches = matches.isNullOrEmpty() && state.reading != null && !state.readingAgain
                     key(state.activeFilterSession, state.filter) {
-                        FilterResults(matches.takeUnless { waitingForMatches }, state.owner, state.now, bottomPadding, onEvent)
+                        FilterResults(matches.takeUnless { waitingForMatches }?.isNotEmpty(), bottomPadding) { bottom ->
+                            Rows(checkNotNull(matches), state.owner, state.now, bottom, onEvent, showStatus = true)
+                        }
                     }
                 }
             }
@@ -241,7 +292,6 @@ private fun Pages(
     padding: PaddingValues,
     onEvent: (ListEvent) -> Unit,
 ) {
-    val pager = motion.pager
     val events = rememberUpdatedState(onEvent)
     val selected = rememberUpdatedState(tab)
     val tabs = rememberUpdatedState(statuses)
@@ -253,6 +303,25 @@ private fun Pages(
     }
     val index = statuses.indexOf(tab)
     LaunchedEffect(index) { if (index >= 0) motion.show(index) }
+    ListStatusPager(motion, key = { statuses[it].pageKey }) { index ->
+        Page(
+            statuses[index],
+            shown.tabs.pages.getValue(statuses[index]),
+            shown.owner,
+            shown.now,
+            padding,
+            onEvent,
+        )
+    }
+}
+
+@Composable
+internal fun ListStatusPager(
+    motion: ListTabMotion,
+    key: (Int) -> Any,
+    content: @Composable PagerScope.(Int) -> Unit,
+) {
+    val pager = motion.pager
     val lifecycle = LocalLifecycleOwner.current.lifecycle
     LaunchedEffect(motion) {
         lifecycle.currentStateFlow.first { it.isAtLeast(Lifecycle.State.RESUMED) }
@@ -277,23 +346,15 @@ private fun Pages(
                 }
             }.nestedScroll(motion.gate),
         beyondViewportPageCount = motion.ahead,
-        key = { statuses[it].pageKey },
+        key = key,
         flingBehavior =
             PagerDefaults.flingBehavior(
                 pager,
                 snapAnimationSpec = motion.settleSpec,
                 snapPositionalThreshold = PAGE_TURN,
             ),
-    ) { index ->
-        Page(
-            statuses[index],
-            shown.tabs.pages.getValue(statuses[index]),
-            shown.owner,
-            shown.now,
-            padding,
-            onEvent,
-        )
-    }
+        pageContent = content,
+    )
 }
 
 // A page's key is saved in a Bundle, which takes MAL's code but not the status that holds it.
@@ -305,7 +366,7 @@ private val EntryStatus.pageKey: Any
         }
 
 // The bars' height read in layout, since the tab row arrives in the frame that composes the rows.
-private fun Modifier.belowBars(padding: PaddingValues): Modifier =
+internal fun Modifier.belowBars(padding: PaddingValues): Modifier =
     layout { measurable, constraints ->
         val top = padding.calculateTopPadding().roundToPx()
         val placeable = measurable.measure(constraints.offset(vertical = -top))
@@ -358,12 +419,10 @@ private fun Page(
 }
 
 @Composable
-private fun FilterResults(
-    matches: List<ListRow>?,
-    owner: ListOwner,
-    now: Instant,
+internal fun FilterResults(
+    hasMatches: Boolean?,
     padding: PaddingValues,
-    onEvent: (ListEvent) -> Unit,
+    results: @Composable (PaddingValues) -> Unit,
 ) {
     val belowResults = remember { mutableIntStateOf(0) }
     val insets =
@@ -384,17 +443,17 @@ private fun FilterResults(
     ) {
         val keyboardPadding = overlap.asPaddingValues()
         when {
-            matches == null -> {
+            hasMatches == null -> {
                 val loading = stringResource(R.string.design_loading)
                 Box(Modifier.fillMaxSize().padding(keyboardPadding), contentAlignment = Alignment.Center) {
                     WaitIndicator(Modifier.semantics { contentDescription = loading })
                 }
             }
-            matches.isEmpty() -> EmptyRows(ScreenState.Empty(stringResource(R.string.list_no_matches)), keyboardPadding)
+            !hasMatches -> EmptyRows(ScreenState.Empty(stringResource(R.string.list_no_matches)), keyboardPadding)
             else -> {
                 val bottom = WindowInsets(bottom = padding.calculateBottomPadding()).exclude(overlap).asPaddingValues()
                 Box(Modifier.padding(keyboardPadding)) {
-                    Rows(matches, owner, now, bottom, onEvent, showStatus = true)
+                    results(bottom)
                 }
             }
         }
@@ -462,15 +521,25 @@ private const val LONGEST_COUNT = 99_999
 @Composable
 private fun ListTopBar(
     anime: ListPane.Anime?,
+    manga: ListPane.Manga?,
     mode: ListMode,
     onMode: ((ListMode) -> Unit)?,
+    closeFilter: () -> Unit,
+    openMangaSort: () -> Unit,
 ) {
     val state = anime?.state
+    val filter = state?.filterText ?: manga?.state?.filterText
     val title: @Composable () -> Unit = {
-        val filter = state?.filterText
         val owner = state?.owner
         when {
-            filter != null -> key(state.activeFilterSession) { FilterField(filter, anime.onEvent) }
+            filter != null && anime != null ->
+                key(anime.state.activeFilterSession) {
+                    FilterField(filter, onChange = { anime.onEvent(ListEvent.FilterChanged(it)) }, onClose = closeFilter)
+                }
+            filter != null && manga != null ->
+                key(manga.state.owner, manga.state.activeFilterSession) {
+                    FilterField(filter, onChange = { manga.onEvent(MangaListEvent.FilterChanged(it)) }, onClose = closeFilter)
+                }
             owner is ListOwner.Other -> Text(stringResource(R.string.list_title_other, owner.name))
             onMode != null -> ListModeSwitch(mode, onMode)
             else -> Text(stringResource(R.string.list_title))
@@ -478,17 +547,23 @@ private fun ListTopBar(
     }
     val navigationIcon: @Composable () -> Unit = {
         when {
-            state?.filterText != null -> BackButton { anime.onEvent(ListEvent.EndFilter) }
+            filter != null -> BackButton(closeFilter)
             state?.owner is ListOwner.Other -> BackButton { anime.onEvent(ListEvent.Back) }
         }
     }
     val actions: @Composable RowScope.() -> Unit = {
-        if (state?.content is ListContent.Tabs && state.filterText == null) {
-            IconButton(onClick = { anime.onEvent(ListEvent.StartFilter) }, shapes = IconButtonDefaults.shapes()) {
-                Icon(painterResource(R.drawable.ic_filter), contentDescription = stringResource(R.string.list_filter))
-            }
-            IconButton(onClick = { anime.onEvent(ListEvent.OpenSort) }, shapes = IconButtonDefaults.shapes()) {
-                Icon(painterResource(R.drawable.ic_sort), contentDescription = stringResource(R.string.list_sort))
+        if (filter == null) {
+            when {
+                anime != null && state?.content is ListContent.Tabs ->
+                    ListToolbarActions(
+                        onFilter = { anime.onEvent(ListEvent.StartFilter) },
+                        onSort = { anime.onEvent(ListEvent.OpenSort) },
+                    )
+                manga != null && manga.state.content is MangaListContent.Ready ->
+                    ListToolbarActions(
+                        onFilter = { manga.onEvent(MangaListEvent.StartFilter) },
+                        onSort = openMangaSort,
+                    )
             }
         }
     }
@@ -497,6 +572,19 @@ private fun ListTopBar(
         TopAppBar(title = title, subtitle = { Subtitle(subtitle) }, navigationIcon = navigationIcon, actions = actions)
     } else {
         TopAppBar(title = title, navigationIcon = navigationIcon, actions = actions)
+    }
+}
+
+@Composable
+private fun ListToolbarActions(
+    onFilter: () -> Unit,
+    onSort: () -> Unit,
+) {
+    IconButton(onClick = onFilter, shapes = IconButtonDefaults.shapes()) {
+        Icon(painterResource(R.drawable.ic_filter), contentDescription = stringResource(R.string.list_filter))
+    }
+    IconButton(onClick = onSort, shapes = IconButtonDefaults.shapes()) {
+        Icon(painterResource(R.drawable.ic_sort), contentDescription = stringResource(R.string.list_sort))
     }
 }
 
@@ -511,19 +599,20 @@ private fun BackButton(onClick: () -> Unit) {
 @Composable
 private fun FilterField(
     text: String,
-    onEvent: (ListEvent) -> Unit,
+    onChange: (String) -> Unit,
+    onClose: () -> Unit,
 ) {
     val focus = remember { FocusRequester() }
     val surface = MaterialTheme.colorScheme.surface
     TextField(
         value = text,
-        onValueChange = { onEvent(ListEvent.FilterChanged(it)) },
+        onValueChange = onChange,
         placeholder = { Text(stringResource(R.string.list_filter)) },
         singleLine = true,
         trailingIcon =
             if (text.isNotEmpty()) {
                 {
-                    IconButton(onClick = { onEvent(ListEvent.EndFilter) }) {
+                    IconButton(onClick = onClose) {
                         Icon(painterResource(R.drawable.ic_close), contentDescription = stringResource(R.string.list_filter_clear))
                     }
                 }
@@ -619,38 +708,44 @@ private fun Rows(
     }
 }
 
-private fun rowScrollSaver(rows: List<ListRow>) =
-    listSaver<LazyListState, Long>(
-        save = { state ->
-            val first = state.firstVisibleItemIndex
-            val title =
-                state.layoutInfo.visibleItemsInfo
-                    .firstOrNull { it.index == first }
-                    ?.key as? Long
-            listOfNotNull(first.toLong(), state.firstVisibleItemScrollOffset.toLong(), title)
-        },
-        restore = { saved ->
-            val title = saved.getOrNull(2)
-            val index = title?.let { id -> rows.indexOfFirst { it.id.value == id } } ?: -1
-            val fallback = saved[0].toInt().coerceAtMost(rows.lastIndex)
-            LazyListState(if (index >= 0) index else fallback, saved[1].toInt())
-        },
-    )
+private fun rowScrollSaver(rows: List<ListRow>) = listScrollSaver(rows.lastIndex) { id -> rows.indexOfFirst { it.id.value == id } }
+
+internal fun listScrollSaver(
+    lastIndex: Int,
+    indexOfId: (Long) -> Int,
+) = listSaver<LazyListState, Long>(
+    save = { it.listScrollAnchor() },
+    restore = { saved ->
+        val title = saved.getOrNull(2)
+        val index = title?.let(indexOfId) ?: -1
+        val fallback = saved[0].toInt().coerceIn(0, lastIndex.coerceAtLeast(0))
+        LazyListState(if (index >= 0) index else fallback, saved[1].toInt())
+    },
+)
+
+internal fun LazyListState.listScrollAnchor(): List<Long> {
+    val first = firstVisibleItemIndex
+    val title = layoutInfo.visibleItemsInfo.firstOrNull { it.index == first }?.key as? Long
+    return listOfNotNull(first.toLong(), firstVisibleItemScrollOffset.toLong(), title)
+}
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun SortSheet(
-    page: ListPage,
-    onEvent: (ListEvent) -> Unit,
+    choice: TabSort,
+    sorts: List<ListSort>,
+    onDismiss: () -> Unit,
+    onSort: (ListSort) -> Unit,
+    onDirection: (SortDirection) -> Unit,
 ) {
     CoversMessages()
     ModalBottomSheet(
-        onDismissRequest = { onEvent(ListEvent.DismissSort) },
+        onDismissRequest = onDismiss,
         sheetState = rememberBottomSheetState(SheetValue.Hidden, enabledValues = setOf(SheetValue.Hidden, SheetValue.Expanded)),
     ) {
         WindowWithoutAutofill()
         Column(Modifier.weight(1f, fill = false).verticalScroll(rememberScrollState())) {
-            SortChoices(page, onEvent)
+            SortChoices(choice, sorts, onSort, onDirection)
         }
     }
 }
@@ -658,20 +753,22 @@ private fun SortSheet(
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun SortChoices(
-    page: ListPage,
-    onEvent: (ListEvent) -> Unit,
+    choice: TabSort,
+    sorts: List<ListSort>,
+    onSort: (ListSort) -> Unit,
+    onDirection: (SortDirection) -> Unit,
 ) {
-    val selected = page.sort
+    val selected = choice.sort
     Text(
         stringResource(R.string.list_sort_by),
         style = MaterialTheme.typography.titleMedium,
         modifier = Modifier.padding(horizontal = Spacing.l, vertical = Spacing.s).semantics { heading() },
     )
     Column(Modifier.selectableGroup().padding(bottom = Spacing.s)) {
-        page.sorts.forEach { sort ->
+        sorts.forEach { sort ->
             ListItem(
                 selected = sort == selected,
-                onClick = { onEvent(ListEvent.SelectSort(sort)) },
+                onClick = { onSort(sort) },
                 leadingContent = { RadioButton(selected = sort == selected, onClick = null) },
                 // The radio button states the choice; the row keeps the sheet's colour.
                 colors =
@@ -689,8 +786,8 @@ private fun SortChoices(
     if (directions.isNotEmpty()) {
         ConnectedChoice(
             labels = directions.map { stringResource(it.second) },
-            chosen = directions.indexOfFirst { it.first == page.direction },
-            onChoose = { onEvent(ListEvent.SelectDirection(directions[it].first)) },
+            chosen = directions.indexOfFirst { it.first == choice.direction },
+            onChoose = { onDirection(directions[it].first) },
             modifier = Modifier.padding(start = Spacing.l, end = Spacing.l, bottom = Spacing.l),
         )
     }

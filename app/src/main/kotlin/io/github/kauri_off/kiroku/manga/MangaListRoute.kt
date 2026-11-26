@@ -3,6 +3,7 @@ package io.github.kauri_off.kiroku.manga
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.lifecycle.createSavedStateHandle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation3.runtime.NavKey
 import io.github.kauri_off.kiroku.CountAsShown
@@ -16,6 +17,7 @@ import io.github.kauri_off.kiroku.list.ListPane
 import io.github.kauri_off.kiroku.shell.ShellMessage
 import io.github.kauri_off.kiroku.shell.ShellMessages
 import io.github.kauri_off.kiroku.wiring.AppGraph
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.serialization.Serializable
 
 @Serializable
@@ -39,6 +41,9 @@ internal fun mangaListPane(
                 graph.connection,
                 graph.session.observeSession(),
                 graph.titleLanguage,
+                graph.preferences,
+                createSavedStateHandle(),
+                edits = editor?.state ?: flowOf(MangaEditingState()),
                 onRefreshed = { editor?.listRefreshed(it) },
             ) {
                 messages.post(ShellMessage(ShellMessage.Text.RefreshFailed(it)))
@@ -46,27 +51,8 @@ internal fun mangaListPane(
         }
     val loaded by list.state.collectAsScreenState()
     LaunchedEffect(editor) { editor?.watch() }
-    val editing =
-        editor
-            ?.state
-            ?.collectAsScreenState()
-            ?.value
-            ?.takeIf { it.owner == loaded.owner }
-    val ready = loaded.content as? MangaListContent.Ready
-    val snapshot = editing?.snapshot
-    val state =
-        if (ready != null && snapshot != null) {
-            loaded.copy(
-                content =
-                    ready.copy(
-                        entries = snapshot.entries.map(editing::displayed),
-                        canEdit =
-                            editing.signedIn && !loaded.sessionExpired,
-                    ),
-            )
-        } else {
-            loaded
-        }
+    val state = list.forDisplay(loaded)
+    val ready = state.content as? MangaListContent.Ready
     CountAsShown(list.shown)
     return ListPane.Manga(state) {
         when (it) {
@@ -77,10 +63,10 @@ internal fun mangaListPane(
                     if (ready != null) editor?.open(owner, it.entry.id, it.entry.titles.preferred(ready.language), origin)
                 }
             is MangaListEvent.Open -> {
-                val content = state.content as? MangaListContent.Ready
                 val owner = state.owner
-                if (content != null && owner != null) onOpen(MangaTitleKey(it.entry.summary(owner, content.language)))
+                if (ready != null && owner != null) onOpen(MangaTitleKey(it.entry.summary(owner, ready.language)))
             }
+            else -> state.owner?.let { owner -> list.control(owner, it) }
         }
     }
 }

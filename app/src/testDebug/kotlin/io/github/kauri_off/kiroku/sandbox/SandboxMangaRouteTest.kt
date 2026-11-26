@@ -1,14 +1,17 @@
 package io.github.kauri_off.kiroku.sandbox
 
 import android.os.Looper
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.SemanticsActions
+import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.SemanticsMatcher
+import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsSelected
 import androidx.compose.ui.test.hasAnyDescendant
 import androidx.compose.ui.test.hasClickAction
-import androidx.compose.ui.test.hasScrollAction
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.isHeading
+import androidx.compose.ui.test.isSelectable
 import androidx.compose.ui.test.junit4.v2.createAndroidComposeRule
 import androidx.compose.ui.test.onAllNodesWithContentDescription
 import androidx.compose.ui.test.onAllNodesWithText
@@ -147,7 +150,11 @@ class SandboxMangaRouteTest {
         val afterTitleRefresh = waited { manga.stored(account.signIn) }
         assertEquals((before as Outcome.Success).value?.entries, (afterTitleRefresh as Outcome.Success).value?.entries)
         graph.scenarios.set(Scenario(offline = true))
-        val list = compose.onNode(hasScrollAction() and hasAnyDescendant(hasText("The Lantern District")))
+        val list =
+            compose.onNode(
+                SemanticsMatcher.keyIsDefined(SemanticsProperties.VerticalScrollAxisRange) and
+                    hasAnyDescendant(hasText("Paper Observatory")),
+            )
         list.performTouchInput { swipeDown(startY = centerY, endY = bottom) }
         shows("No connection")
         shows("Paper Observatory")
@@ -190,7 +197,11 @@ class SandboxMangaRouteTest {
         val before = waited { manga.stored(account.signIn) }
 
         graph.scenarios.set(Scenario(sessionExpired = true))
-        val list = compose.onNode(hasScrollAction() and hasAnyDescendant(hasText("The Lantern District")))
+        val list =
+            compose.onNode(
+                SemanticsMatcher.keyIsDefined(SemanticsProperties.VerticalScrollAxisRange) and
+                    hasAnyDescendant(hasText("Paper Observatory")),
+            )
         list.performTouchInput { swipeDown(startY = centerY, endY = bottom) }
         shows("Session expired")
         assertEquals(Session.Expired(account.signIn), waited { graph.session.observeSession().first() })
@@ -233,6 +244,35 @@ class SandboxMangaRouteTest {
         shows("Manga")
         compose.onNodeWithText("Manga").assertIsSelected()
         shows("24\u00A0chapters", substring = true)
+    }
+
+    @Test
+    fun `a saved status moves the row and Back stays on the destination tab`() {
+        val first = signIn()
+        openList()
+        shows("Paper Observatory")
+        compose
+            .onNode(hasText("Paper Observatory") and SemanticsMatcher.keyIsDefined(SemanticsActions.OnLongClick))
+            .performSemanticsAction(SemanticsActions.OnLongClick)
+        val editor = compose.onNodeWithContentDescription("Chapters read")
+        editor.assertExists()
+        compose.onNode(hasText("Dropped") and SemanticsMatcher.expectValue(SemanticsProperties.Role, Role.RadioButton)).performClick()
+        compose.onNodeWithText("Save").performClick()
+        awaitEditClosed()
+        shows("No titles in Reading")
+        compose.onNodeWithText("Reading").assertIsSelected()
+        compose.onNode(hasText("Dropped") and isSelectable()).performClick()
+        compose.onNodeWithText("Paper Observatory").assertIsDisplayed().performClick()
+        shows("Manga\u00A0· Finished")
+        compose.runOnUiThread { compose.activity.onBackPressedDispatcher.onBackPressed() }
+        compose.onNodeWithText("Dropped").assertIsSelected()
+        compose.onNodeWithText("Paper Observatory").assertIsDisplayed()
+
+        signOut(first)
+        signIn()
+        openList()
+        shows("Paper Observatory")
+        compose.onNodeWithText("Reading").assertIsSelected()
     }
 
     @Test

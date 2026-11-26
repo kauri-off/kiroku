@@ -8,6 +8,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.layout.boundsInWindow
 import androidx.compose.ui.layout.onGloballyPositioned
 import io.github.kauri_off.kiroku.core.fixtures.FixtureAnime
+import io.github.kauri_off.kiroku.manga.MangaListState
+import io.github.kauri_off.kiroku.manga.mangaListFixture
 import io.github.kauri_off.kiroku.screenshots.ScreenshotRunner
 import io.github.kauri_off.kiroku.screenshots.Shot
 import io.github.kauri_off.kiroku.screenshots.SystemBars
@@ -65,6 +67,23 @@ class ListFilterKeyboardTest {
                 val keyboardTop = shot.windowHeightPx - shot.dpToPx(SystemBars.KEYBOARD_DP)
                 assertTrue("Message $message overlaps the keyboard at $keyboardTop px", message.bottom <= keyboardTop)
             }
+    }
+
+    @Test
+    fun theMangaEmptyFilterClearsTheKeyboardInCompactAndWideWindows() {
+        val state = MangaListState(content = mangaListFixture(), filter = ListState.Typed("xyz"), matches = emptyList())
+        for ((width, height) in listOf(360 to 550, 840 to 600)) {
+            Shot
+                .launch(Variant.RuLight, heightDp = height, widthDp = width, keyboard = true) {
+                    ShellScreen(ShellState(Destination.List), {}) {
+                        ListScreen(ListPane.Manga(state, {}), SnackbarHostState(), onMode = {})
+                    }
+                }.use { shot ->
+                    val message = shot.visibleTextBounds("Нет тайтлов с таким названием")
+                    val keyboardTop = shot.windowHeightPx - shot.dpToPx(SystemBars.KEYBOARD_DP)
+                    assertTrue("Message $message overlaps the keyboard at $keyboardTop px", message.bottom <= keyboardTop)
+                }
+        }
     }
 
     @Test

@@ -14,10 +14,14 @@ import io.github.kauri_off.kiroku.core.list.ListSort
 import io.github.kauri_off.kiroku.core.list.SortDirection
 import io.github.kauri_off.kiroku.core.list.TabSort
 import io.github.kauri_off.kiroku.core.model.ListStatus
+import io.github.kauri_off.kiroku.core.model.MangaReadingStatus
+import io.github.kauri_off.kiroku.core.model.SignInId
 import io.github.kauri_off.kiroku.core.model.TitleLanguage
 import io.github.kauri_off.kiroku.core.notify.NotificationDelay
 import io.github.kauri_off.kiroku.core.notify.NotificationSettings
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.async
@@ -58,6 +62,8 @@ class StoredPreferencesTest {
     @Volatile private var writesFail = false
 
     // The file's own format, noting the threads the file is read and written on.
+    private var beforeWrite: suspend () -> Unit = {}
+
     private val format =
         object : Serializer<Preferences> by PreferencesFileSerializer {
             override suspend fun readFrom(input: InputStream): Preferences {
@@ -71,6 +77,7 @@ class StoredPreferencesTest {
                 output: OutputStream,
             ) {
                 threads += Thread.currentThread()
+                beforeWrite()
                 if (writesFail) throw IOException("write")
                 PreferencesFileSerializer.writeTo(t, output)
             }
@@ -191,6 +198,84 @@ class StoredPreferencesTest {
     }
 
     private val opened = stringPreferencesKey("opened_profiles")
+
+    @Test
+    fun `Manga sorts survive reopening the file and stay separate by status media and sign-in`() {
+        val owner = SignInId("first")
+        val replacement = SignInId("first_other")
+        val planned = MangaReadingStatus("plan_to_read")
+        val unfamiliar = MangaReadingStatus("__")
+        val mangaScore = TabSort(ListSort.Score, SortDirection.Ascending)
+        val mangaTitle = TabSort(ListSort.Title, SortDirection.Descending)
+        val anime = TabSort(ListSort.StartDate, SortDirection.Descending)
+        process {
+            it.setListSort(ListStatus.Planned, anime)
+            it.setMangaListSort(owner, planned, mangaScore)
+            it.setMangaListSort(owner, unfamiliar, mangaTitle)
+            it.setMangaListSort(replacement, planned, mangaTitle)
+        }
+        process {
+            assertEquals(anime, it.observeListSorts().first()[ListStatus.Planned])
+            assertEquals(mapOf(planned to mangaScore, unfamiliar to mangaTitle), it.mangaSorts(owner))
+            assertEquals(mapOf(planned to mangaTitle), it.mangaSorts(replacement))
+            assertEquals(Outcome.Success(Unit), it.reconcileMangaListSorts(replacement))
+            assertTrue(it.mangaSorts(owner).isEmpty())
+            it.forgetUsersChoices()
+            assertEquals(TabSort.defaultFor(ListStatus.Planned), it.observeListSorts().first()[ListStatus.Planned])
+            assertEquals(mapOf(planned to mangaTitle), it.mangaSorts(replacement))
+        }
+    }
+
+    @Test
+    fun `a recreated task waits for the pending Manga sort instead of loading the old committed choice`() =
+        process { preferences ->
+            val owner = SignInId("reader")
+            val reading = MangaReadingStatus("reading")
+            val pending = TabSort(ListSort.Score)
+            val latest = TabSort(ListSort.Score, SortDirection.Ascending)
+            preferences.setMangaListSort(owner, reading, TabSort(ListSort.Title))
+            val writing = CompletableDeferred<Unit>()
+            val finish = CompletableDeferred<Unit>()
+            beforeWrite = {
+                writing.complete(Unit)
+                finish.await()
+            }
+            coroutineScope {
+                val write = async { preferences.setMangaListSort(owner, reading, pending) }
+                writing.await()
+                val direction = async(start = CoroutineStart.UNDISPATCHED) { preferences.setMangaListSort(owner, reading, latest) }
+                val recreated = async(start = CoroutineStart.UNDISPATCHED) { preferences.mangaSorts(owner) }
+                try {
+                    assertFalse(recreated.isCompleted)
+                } finally {
+                    finish.complete(Unit)
+                }
+                write.await()
+                direction.await()
+                assertEquals(mapOf(reading to latest), recreated.await())
+            }
+        }
+
+    @Test
+    fun `startup reconciles retired Manga sorts after a failed deletion and preserves the replacement`() {
+        val retired = SignInId("retired")
+        val replacement = SignInId("replacement")
+        val reading = MangaReadingStatus("reading")
+        val sort = TabSort(ListSort.Score, SortDirection.Ascending)
+        process {
+            it.setMangaListSort(retired, reading, TabSort(ListSort.Title))
+            it.setMangaListSort(replacement, reading, sort)
+            writesFail = true
+            assertEquals(Outcome.Failure(DataError.StorageError), it.reconcileMangaListSorts(replacement))
+            assertEquals(mapOf(reading to TabSort(ListSort.Title)), it.mangaSorts(retired))
+        }
+        writesFail = false
+        process {
+            assertEquals(Outcome.Success(Unit), it.reconcileMangaListSorts(replacement))
+            assertTrue(it.mangaSorts(retired).isEmpty())
+            assertEquals(mapOf(reading to sort), it.mangaSorts(replacement))
+        }
+    }
 
     private fun sort(status: String) = stringPreferencesKey("list_sort_$status")
 
