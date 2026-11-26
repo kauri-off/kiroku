@@ -49,6 +49,7 @@ import io.github.kauri_off.kiroku.core.repository.SessionRepository
 import io.github.kauri_off.kiroku.design.composeRule
 import io.github.kauri_off.kiroku.design.registered
 import io.github.kauri_off.kiroku.design.theme.KirokuTheme
+import io.github.kauri_off.kiroku.list.ListMode
 import io.github.kauri_off.kiroku.profile.OtherProfileKey
 import io.github.kauri_off.kiroku.profile.ProfileTags
 import io.github.kauri_off.kiroku.search.BrowseKey
@@ -885,7 +886,17 @@ class AppRouteTest {
 
     @Test
     fun `Change tapped on the List after Back opens the added title's edit sheet there`() {
+        changeOnList(ListMode.Anime)
+    }
+
+    @Test
+    fun `Change opens in Anime when the restored Manga mode is unavailable`() {
+        changeOnList(ListMode.Manga)
+    }
+
+    private fun changeOnList(mode: ListMode) {
         app()
+        compose.runOnUiThread { navigator.listMode = mode }
         val added = FixtureAnime.notOnListAiring
         compose.runOnUiThread { navigator.open(TitleKey(added.id.value)) }
         compose.waitForIdle()
@@ -897,6 +908,7 @@ class AppRouteTest {
         compose.waitForIdle()
         shows("Save")
         shows(added.titles.romaji)
+        assertEquals(listOf(Destination.List.root), navigator.stack)
     }
 
     private fun addAndThen(open: (ShellNavigator) -> Unit) {

@@ -11,21 +11,43 @@ import io.github.kauri_off.kiroku.collectAsScreenState
 import io.github.kauri_off.kiroku.core.model.AnimeId
 import io.github.kauri_off.kiroku.edit.EditSheetRoute
 import io.github.kauri_off.kiroku.edit.editSheetViewModel
+import io.github.kauri_off.kiroku.manga.MangaTitleKey
+import io.github.kauri_off.kiroku.manga.mangaListPane
 import io.github.kauri_off.kiroku.shell.ShellMessages
 import io.github.kauri_off.kiroku.title.TitleSummary
 import io.github.kauri_off.kiroku.wiring.AppGraph
 
 // The List with its edit sheet; the only place that knows the List's view model and where its rows lead.
 @Composable
-fun ListRoute(
+internal fun ListRoute(
     graph: AppGraph,
     messages: ShellMessages,
     snackbars: SnackbarHostState,
     onOpenTitle: (AnimeId, TitleSummary?) -> Unit,
     onSearch: () -> Unit,
     onSignIn: () -> Unit,
-    onOpenManga: () -> Unit = {},
+    mode: ListMode,
+    onMode: (ListMode) -> Unit,
+    onOpenMangaTitle: (MangaTitleKey) -> Unit,
 ) {
+    val manga = graph.mangaList
+    val pane =
+        if (manga != null && mode == ListMode.Manga) {
+            mangaListPane(manga, graph, messages, onSignIn, onOpenMangaTitle)
+        } else {
+            animeListPane(graph, messages, onOpenTitle, onSearch, onSignIn)
+        }
+    ListScreen(pane, snackbars, onMode = onMode.takeIf { manga != null })
+}
+
+@Composable
+private fun animeListPane(
+    graph: AppGraph,
+    messages: ShellMessages,
+    onOpenTitle: (AnimeId, TitleSummary?) -> Unit,
+    onSearch: () -> Unit,
+    onSignIn: () -> Unit,
+): ListPane.Anime {
     val list =
         viewModel {
             ListViewModel(
@@ -46,19 +68,17 @@ fun ListRoute(
     val state by list.state.collectAsScreenState()
     CountAsShown(list.shown)
     if (state.content == ListContent.Loading) KeepSplash()
-    ListScreen(
-        state = state.copy(typed = list.filterInput, mangaAvailable = graph.mangaList != null),
+    EditSheetRoute(editor, messages)
+    return ListPane.Anime(
+        state = state.copy(typed = list.filterInput),
         onEvent = { event ->
             when (event) {
                 is ListEvent.Open -> onOpenTitle(event.id, list.summaryOf(event.id))
                 is ListEvent.Edit -> editor.open(event.id)
                 ListEvent.Search -> onSearch()
                 ListEvent.SignIn -> onSignIn()
-                ListEvent.OpenManga -> onOpenManga()
                 else -> list.onEvent(event)
             }
         },
-        snackbars = snackbars,
     )
-    EditSheetRoute(editor, messages)
 }

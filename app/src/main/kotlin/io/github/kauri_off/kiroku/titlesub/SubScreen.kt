@@ -88,10 +88,10 @@ internal fun SubScreen(
 }
 
 @Composable
-private fun SubScreenList(
+internal fun SubScreenList(
     body: SubScreenBody.List,
     padding: PaddingValues,
-    listModifier: Modifier,
+    listModifier: Modifier = Modifier,
 ) {
     val onRefresh = body.onRefresh
     if (onRefresh == null) {

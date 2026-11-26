@@ -1,6 +1,7 @@
 package io.github.kauri_off.kiroku.sandbox
 
 import android.os.Looper
+import androidx.compose.ui.test.assertIsSelected
 import androidx.compose.ui.test.hasAnyDescendant
 import androidx.compose.ui.test.hasScrollAction
 import androidx.compose.ui.test.hasText
@@ -84,7 +85,8 @@ class SandboxMangaRouteTest {
     private fun openList() {
         shows("Manga")
         compose.onNodeWithText("Manga").performClick()
-        shows("My manga list")
+        shows("Manga")
+        compose.onNodeWithText("Manga").assertIsSelected()
     }
 
     private fun signIn(): Session.SignedIn =
@@ -122,7 +124,8 @@ class SandboxMangaRouteTest {
         compose.activityRule.scenario.recreate()
         shows("Manga\u00A0· Finished")
         compose.runOnUiThread { compose.activity.onBackPressedDispatcher.onBackPressed() }
-        shows("My manga list")
+        shows("Manga")
+        compose.onNodeWithText("Manga").assertIsSelected()
         shows("Paper Observatory")
 
         assertEquals(before, waited { manga.stored(account.signIn) })
@@ -153,7 +156,8 @@ class SandboxMangaRouteTest {
             }
             signingOut.await()
         }
-        shows("My list")
+        shows("Anime")
+        compose.onNodeWithText("Anime").assertIsSelected()
         compose.onNodeWithText("Paper Observatory").assertDoesNotExist()
 
         val next = signIn()

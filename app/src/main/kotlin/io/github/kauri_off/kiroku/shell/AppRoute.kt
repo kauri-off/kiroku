@@ -17,10 +17,9 @@ import io.github.kauri_off.kiroku.core.repository.BrowseList
 import io.github.kauri_off.kiroku.design.component.LocalMessageCovers
 import io.github.kauri_off.kiroku.design.component.MessageCovers
 import io.github.kauri_off.kiroku.link.AppLinks
+import io.github.kauri_off.kiroku.list.ListMode
 import io.github.kauri_off.kiroku.list.ListRoute
 import io.github.kauri_off.kiroku.list.UserListRoute
-import io.github.kauri_off.kiroku.manga.MangaListKey
-import io.github.kauri_off.kiroku.manga.MangaListRoute
 import io.github.kauri_off.kiroku.manga.MangaTitleKey
 import io.github.kauri_off.kiroku.manga.MangaTitleRoute
 import io.github.kauri_off.kiroku.notifysettings.NotifySettingsKey
@@ -98,7 +97,7 @@ fun AppRoute(
                     return@let
                 }
             }
-            navigator.showEditorOf(request.id)
+            navigator.showEditorOf(request.id, graph.mangaList != null)
         }
     }
     SignInTurns(graph, navigator)
@@ -110,7 +109,10 @@ fun AppRoute(
     }
 }
 
-private fun ShellNavigator.showEditorOf(id: AnimeId) {
+private fun ShellNavigator.showEditorOf(
+    id: AnimeId,
+    mangaAvailable: Boolean,
+) {
     val stack = stackOf(visible.last())
     val page = TitleKey(id.value)
     val subScreen =
@@ -122,7 +124,7 @@ private fun ShellNavigator.showEditorOf(id: AnimeId) {
             else -> false
         }
     when {
-        stack.last() is ListRoot || stack.last() == page -> Unit
+        (stack.last() is ListRoot && (!mangaAvailable || listMode == ListMode.Anime)) || stack.last() == page -> Unit
         subScreen && stack.getOrNull(stack.lastIndex - 1) == page -> back()
         else -> open(page)
     }
@@ -176,8 +178,10 @@ fun appEntries(
                 snackbars,
                 onOpenTitle = openTitle,
                 onSearch = { navigator.select(Destination.Search) },
-                onOpenManga = { navigator.open(MangaListKey) },
                 onSignIn = signIn,
+                mode = navigator.listMode,
+                onMode = { navigator.listMode = it },
+                onOpenMangaTitle = navigator::open,
             )
         }
         entry<SearchRoot> {
@@ -248,9 +252,6 @@ fun appEntries(
             NotifySettingsRoute(graph, messages, snackbars, onBack = { back() }, onOpenTitle = { openTitle(it, null) }, onSignIn = signIn)
         }
         entry<AboutKey> { AboutRoute(snackbars, onBack = { back() }) }
-        entry<MangaListKey> {
-            MangaListRoute(graph, messages, snackbars, onBack = { back() }, onSignIn = signIn, onOpen = navigator::open)
-        }
         entry<MangaTitleKey> { key -> MangaTitleRoute(key, graph, messages, snackbars, onBack = { back() }, onSignIn = signIn) }
         entry<TitleKey> { key ->
             TitleRoute(

@@ -17,18 +17,24 @@ import androidx.savedstate.SavedState
 import androidx.savedstate.serialization.encodeToSavedState
 import io.github.kauri_off.kiroku.core.model.SignInId
 import io.github.kauri_off.kiroku.core.repository.BrowseList
+import io.github.kauri_off.kiroku.list.ListMode
+import io.github.kauri_off.kiroku.manga.MangaListKey
 import io.github.kauri_off.kiroku.notShown
 import io.github.kauri_off.kiroku.search.BrowseKey
 import io.github.kauri_off.kiroku.title.TitleKey
 
 // One back stack per destination (ARCHITECTURE section 6.3); each stack starts at its destination's root.
-class ShellNavigator(
+class ShellNavigator internal constructor(
     private val stacks: Map<Destination, MutableList<NavKey>>,
     private val selected: MutableState<Destination> = mutableStateOf(Destination.List),
     private val restartCount: MutableIntState = mutableIntStateOf(0),
+    private val mode: MutableState<ListMode> = mutableStateOf(ListMode.Anime),
 ) {
+    internal var listMode by mode
+
     init {
         require(Destination.entries.all { stacks[it]?.firstOrNull() == it.root }) { notShown("Every stack starts at its root") }
+        if (stacks.getValue(Destination.List).removeAll { it == MangaListKey }) listMode = ListMode.Manga
     }
 
     val current: Destination get() = selected.value
@@ -96,6 +102,7 @@ class ShellNavigator(
     fun restart() {
         way = Way.Across
         selected.value = Destination.List
+        listMode = ListMode.Anime
         stacks.values.forEach { it.popTo(1) }
         restartCount.intValue++
     }
@@ -158,12 +165,14 @@ internal fun rememberShellNavigator(
     val selected =
         rememberSaveable(saver = destinationSaver(saveWithCompose)) { mutableStateOf(start?.destination ?: Destination.List) }
     val restarts = rememberSaveable(saver = restartSaver(saveWithCompose)) { mutableIntStateOf(0) }
+    val mode = rememberSaveable(saver = listModeSaver(saveWithCompose)) { mutableStateOf(ListMode.Anime) }
     val navigator =
-        remember(list, search, profile, selected, restarts, activityNavigation) {
+        remember(list, search, profile, selected, restarts, mode, activityNavigation) {
             activityNavigation?.restored ?: ShellNavigator(
                 mapOf(Destination.List to list, Destination.Search to search, Destination.Profile to profile),
                 selected,
                 restarts,
+                mode,
             ).apply { restoredNavigation = restoredStack }
         }
     SideEffect { activityNavigation?.navigator = navigator }
@@ -177,6 +186,12 @@ private fun destinationSaver(save: Boolean) =
             val value = if (saved is MutableState<*>) saved.value else saved
             Destination.entries.firstOrNull { it.name == value || it == value }?.let { mutableStateOf(it) }
         },
+    )
+
+private fun listModeSaver(save: Boolean) =
+    Saver<MutableState<ListMode>, String>(
+        save = { it.value.name.takeIf { _ -> save && it.value != ListMode.Anime } },
+        restore = { listModeOf(it)?.let { mode -> mutableStateOf(mode) } },
     )
 
 private fun restartSaver(save: Boolean) =

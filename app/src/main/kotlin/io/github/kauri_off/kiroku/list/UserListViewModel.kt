@@ -166,7 +166,7 @@ class UserListViewModel(
             ListEvent.Retry -> refresh(Asked.Retry)
             // A row has no step and no edit, and the screen offers neither; one that arrived would change nothing.
             is ListEvent.PlusOne, is ListEvent.Edit -> Unit
-            is ListEvent.Open, ListEvent.Search, ListEvent.SignIn, ListEvent.Back, ListEvent.OpenManga -> Unit
+            is ListEvent.Open, ListEvent.Search, ListEvent.SignIn, ListEvent.Back -> Unit
         }
     }
 
