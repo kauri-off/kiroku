@@ -339,6 +339,30 @@ class MangaRecordingTest {
         }
 
     @Test
+    fun `a status only DELETE reply completes recording when the full list confirms absence`() =
+        runBlocking {
+            val recorder = recorder()
+            val title = checked(recorder)
+            override = { request ->
+                if (request.method == "DELETE") {
+                    values = null
+                    response(200, "null", "text/plain")
+                } else {
+                    null
+                }
+            }
+
+            recorder.record(title).join()
+
+            val complete = recorder.state.value as Recording.Recorded
+            assertEquals(ListAfter.Removed, complete.list)
+            assertEquals("200\n", complete.folder.resolve("$MANGA_REMOVED.200.txt").readText())
+            assertFalse(journal.exists())
+            assertEquals(listOf("PATCH", "PATCH", "DELETE"), writes.map { it.method })
+            validateMangaMutationCapture(complete.folder)
+        }
+
+    @Test
     fun `a successful DELETE reply still requires authoritative absence before clearing the journal`() =
         runBlocking {
             val recorder = recorder()
