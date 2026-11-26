@@ -17,6 +17,7 @@ import io.github.kauri_off.kiroku.data.session.SessionFixture
 import io.github.kauri_off.kiroku.data.session.TokenGrant
 import io.github.kauri_off.kiroku.data.session.granted
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.async
@@ -359,9 +360,10 @@ class MangaCaptureRecorderTest {
         }
 
     @Test
-    fun `authorization wins over a stale disarm before the completion marker is created`() =
+    fun `the completion marker is ordered with owner changes without blocking disarm`() =
         runBlocking {
             val owner = signIn()
+            val original = checkNotNull(session.signedInOwner())
             val baseline = load(owner)
             arm(MangaMutationMethod.Delete)
             val marking = CountDownLatch(1)
@@ -376,6 +378,8 @@ class MangaCaptureRecorderTest {
             val deleting = async { list.remove(owner, baseline) }
             try {
                 withContext(Dispatchers.IO) { assertTrue(marking.await(5, TimeUnit.SECONDS)) }
+                val ownerChange = async(start = CoroutineStart.UNDISPATCHED) { session.withOwner(original) { true } }
+                assertTrue(!ownerChange.isCompleted)
                 val state = recorder.state.value as MangaCaptureState.Capturing
                 assertEquals(false, state.canDisarm)
                 recorder.disarm(state.target)

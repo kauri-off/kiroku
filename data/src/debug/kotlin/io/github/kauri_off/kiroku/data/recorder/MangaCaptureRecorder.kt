@@ -288,10 +288,10 @@ class MangaCaptureRecorder internal constructor(
                         }
                     } == true
                 if (authorized && completed != null) {
-                    withContext(NonCancellable) marking@{
-                        if (!synchronized(lock) { current(run) }) return@marking
-                        val marked = storage { markComplete(completed) } != null
+                    withContext(NonCancellable) {
                         session.value.withOwner(run.owner) {
+                            if (!synchronized(lock) { current(run) }) return@withOwner
+                            val marked = storage { markComplete(completed) } != null
                             synchronized(lock) {
                                 if (current(run)) {
                                     if (marked) {
