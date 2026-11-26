@@ -43,6 +43,7 @@ internal data class MangaTitleState(
     val content: MangaTitleContent = MangaTitleContent.Loading,
     val sessionExpired: Boolean = false,
     val listEntry: MangaListEntry? = null,
+    val membershipError: DataError? = null,
 )
 
 internal sealed interface MangaTitleContent {
@@ -69,7 +70,7 @@ internal sealed interface MangaTitleProblem {
     ) : MangaTitleProblem
 }
 
-internal enum class MangaTitleEvent { Back, Retry, Refresh, SignIn, Edit }
+internal enum class MangaTitleEvent { Back, Retry, Refresh, SignIn, Edit, RetryMembership }
 
 @Composable
 internal fun MangaTitleScreen(
@@ -97,6 +98,20 @@ internal fun MangaTitleScreen(
                 is MangaTitleContent.Shown ->
                     SubScreenBody.List(content.refreshing, onRefresh = { onEvent(MangaTitleEvent.Refresh) }) {
                         item { MangaHeader(content, state.listEntry) { onEvent(MangaTitleEvent.Edit) } }
+                        state.membershipError?.let {
+                            item {
+                                Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
+                                    Text(
+                                        stringResource(R.string.manga_edit_membership_failed),
+                                        modifier = Modifier.padding(horizontal = Spacing.l),
+                                        textAlign = TextAlign.Center,
+                                    )
+                                    TextButton(onClick = { onEvent(MangaTitleEvent.RetryMembership) }) {
+                                        Text(stringResource(R.string.manga_edit_refresh_list))
+                                    }
+                                }
+                            }
+                        }
                         content.detailsError?.let { error ->
                             item {
                                 ScreenState(ScreenState.Error(stringResource(error.message())) { onEvent(MangaTitleEvent.Retry) })

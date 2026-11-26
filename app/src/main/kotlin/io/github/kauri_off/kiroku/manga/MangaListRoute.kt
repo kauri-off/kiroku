@@ -29,14 +29,22 @@ internal fun mangaListPane(
     onSignIn: () -> Unit,
     onOpen: (MangaTitleKey) -> Unit,
 ): ListPane.Manga {
+    val editor = LocalMangaEditing.current
+    val origin = LocalMangaEditOrigin.current
     val list =
         viewModel {
-            MangaListViewModel(lists, graph.clock, graph.connection, graph.session.observeSession(), graph.titleLanguage) {
+            MangaListViewModel(
+                lists,
+                graph.clock,
+                graph.connection,
+                graph.session.observeSession(),
+                graph.titleLanguage,
+                onRefreshed = { editor?.listRefreshed(it) },
+            ) {
                 messages.post(ShellMessage(ShellMessage.Text.RefreshFailed(it)))
             }
         }
     val loaded by list.state.collectAsScreenState()
-    val editor = LocalMangaEditing.current
     LaunchedEffect(editor) { editor?.watch() }
     val editing =
         editor
@@ -48,7 +56,14 @@ internal fun mangaListPane(
     val snapshot = editing?.snapshot
     val state =
         if (ready != null && snapshot != null) {
-            loaded.copy(content = ready.copy(entries = snapshot.entries.map(editing::displayed), canEdit = true))
+            loaded.copy(
+                content =
+                    ready.copy(
+                        entries = snapshot.entries.map(editing::displayed),
+                        canEdit =
+                            editing.signedIn && !loaded.sessionExpired,
+                    ),
+            )
         } else {
             loaded
         }
@@ -59,7 +74,7 @@ internal fun mangaListPane(
             MangaListEvent.Refresh -> list.refresh()
             is MangaListEvent.Edit ->
                 loaded.owner?.let { owner ->
-                    if (ready != null) editor?.open(owner, it.entry.id, it.entry.titles.preferred(ready.language))
+                    if (ready != null) editor?.open(owner, it.entry.id, it.entry.titles.preferred(ready.language), origin)
                 }
             is MangaListEvent.Open -> {
                 val content = state.content as? MangaListContent.Ready

@@ -26,6 +26,7 @@ class MangaTitleScreenshots : ScreenshotRegistry() {
 
     override val cases =
         listOf(
+            case("membership-offline", largeText = true) { Screen(mangaFixture.shown(), membershipError = DataError.NoConnection) },
             case("on-personal-list", largeText = true) { Screen(mangaFixture.shown(), mangaEntry.copy(score = 8)) },
             case("opened-with-summary") { Screen(openingSummary) },
             case("opened-with-summary-offline") { Screen(openingSummary.copy(detailsError = DataError.NoConnection)) },
@@ -78,6 +79,7 @@ private fun MangaDetails.shown() = MangaTitleContent.Shown(this, titles.romaji)
 private fun Screen(
     content: MangaTitleContent,
     entry: MangaListEntry? = null,
+    membershipError: DataError? = null,
 ) {
-    MangaTitleScreen(MangaTitleState(content, listEntry = entry), {}, remember { SnackbarHostState() })
+    MangaTitleScreen(MangaTitleState(content, listEntry = entry, membershipError = membershipError), {}, remember { SnackbarHostState() })
 }

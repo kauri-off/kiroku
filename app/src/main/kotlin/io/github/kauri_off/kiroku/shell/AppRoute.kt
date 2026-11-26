@@ -23,7 +23,9 @@ import io.github.kauri_off.kiroku.link.AppLinks
 import io.github.kauri_off.kiroku.list.ListMode
 import io.github.kauri_off.kiroku.list.ListRoute
 import io.github.kauri_off.kiroku.list.UserListRoute
+import io.github.kauri_off.kiroku.manga.LocalMangaEditOrigin
 import io.github.kauri_off.kiroku.manga.LocalMangaEditing
+import io.github.kauri_off.kiroku.manga.MangaEditOrigin
 import io.github.kauri_off.kiroku.manga.MangaTitleKey
 import io.github.kauri_off.kiroku.manga.MangaTitleRoute
 import io.github.kauri_off.kiroku.notifysettings.NotifySettingsKey
@@ -108,20 +110,34 @@ fun AppRoute(
     SignInTurns(graph, navigator)
     val session = SignOutTurns(graph, navigator, messages)
     val images = remember(graph, session) { session?.let(graph::imageLoaderFor) }
-    if (links != null) LinkTurns(links, navigator)
     val mangaEditing = shell.mangaEditing
-    CompositionLocalProvider(LocalMessageCovers provides covers, LocalMangaEditing provides mangaEditing) {
+    if (links != null) LinkTurns(links, navigator) { mangaEditing?.dismissPresentation() }
+    val origin = navigator.mangaEditOrigin()
+    CompositionLocalProvider(
+        LocalMessageCovers provides covers,
+        LocalMangaEditing provides mangaEditing,
+        LocalMangaEditOrigin provides origin,
+    ) {
         ShellRoute(navigator, snackbars, remember(graph, messages, profiles) { appEntries(graph, messages, profiles) }, images)
         if (mangaEditing != null) {
             val editing by mangaEditing.state.collectAsScreenState()
-            val open = editing.open?.takeIf { session == Session.SignedIn(it.owner) }
+            val presentation = editing.open
+            LaunchedEffect(presentation?.instance, origin) {
+                if (presentation != null && presentation.origin != origin) mangaEditing.dismissPresentation(presentation.instance)
+            }
+            val open = presentation?.takeIf { session == Session.SignedIn(it.owner) && it.origin == origin }
             if (open != null) {
                 key(open.instance) {
-                    MangaEditSheet(open.form) { mangaEditing.event(open, it) }
+                    MangaEditSheet(open.form) { if (open.origin == navigator.mangaEditOrigin()) mangaEditing.event(open, it) }
                 }
             }
         }
     }
+}
+
+private fun ShellNavigator.mangaEditOrigin(): MangaEditOrigin {
+    val page = stack.last()
+    return MangaEditOrigin(current, page, restarts, page == ListRoot && listMode == ListMode.Manga)
 }
 
 private fun ShellNavigator.showEditorOf(
@@ -150,10 +166,12 @@ private fun ShellNavigator.showEditorOf(
 private fun LinkTurns(
     links: AppLinks,
     navigator: ShellNavigator,
+    beforeOpening: () -> Unit,
 ) {
     val link by links.link.collectAsScreenState()
     LaunchedEffect(link) {
         link?.let {
+            beforeOpening()
             navigator.openLink(it.link)
             links.taken(it)
         }

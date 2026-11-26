@@ -24,7 +24,9 @@ import androidx.compose.ui.test.performKeyInput
 import androidx.compose.ui.test.performScrollToIndex
 import androidx.compose.ui.test.performSemanticsAction
 import androidx.compose.ui.test.performTextReplacement
+import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.test.pressKey
+import androidx.compose.ui.test.swipeDown
 import androidx.lifecycle.ViewModelStore
 import androidx.lifecycle.ViewModelStoreOwner
 import androidx.lifecycle.viewmodel.compose.LocalViewModelStoreOwner
@@ -36,6 +38,7 @@ import io.github.kauri_off.kiroku.core.fixtures.Fixtures
 import io.github.kauri_off.kiroku.core.model.MangaId
 import io.github.kauri_off.kiroku.core.model.MangaListEntry
 import io.github.kauri_off.kiroku.core.model.MangaListSnapshot
+import io.github.kauri_off.kiroku.core.model.Session
 import io.github.kauri_off.kiroku.core.model.SignInId
 import io.github.kauri_off.kiroku.core.model.Titles
 import io.github.kauri_off.kiroku.core.repository.MangaListEdit
@@ -43,6 +46,7 @@ import io.github.kauri_off.kiroku.core.repository.MangaListEditResult
 import io.github.kauri_off.kiroku.core.repository.MangaListEditor
 import io.github.kauri_off.kiroku.core.repository.MangaListReader
 import io.github.kauri_off.kiroku.core.repository.MangaListRemovalResult
+import io.github.kauri_off.kiroku.core.repository.SessionRepository
 import io.github.kauri_off.kiroku.design.composeRule
 import io.github.kauri_off.kiroku.design.registered
 import io.github.kauri_off.kiroku.design.theme.KirokuTheme
@@ -58,6 +62,7 @@ import io.github.kauri_off.kiroku.shell.ShellRoute
 import io.github.kauri_off.kiroku.shell.rememberShellNavigator
 import io.github.kauri_off.kiroku.wiring.AppGraph
 import io.github.kauri_off.kiroku.wiring.TestGraph
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -218,7 +223,18 @@ class ListModesRouteTest {
     }
 
     @Test
-    fun `an acknowledged edit offers refresh and never resends`() {
+    fun `an acknowledged edit offers refresh and never resends`() = recoverEdit(pull = false, accepted = true)
+
+    @Test
+    fun `pulling My list settles an acknowledged edit after dismissal without resending`() = recoverEdit(pull = true, accepted = true)
+
+    @Test
+    fun `pulling My list settles a retryable edit after dismissal without resending`() = recoverEdit(pull = true, accepted = false)
+
+    private fun recoverEdit(
+        pull: Boolean,
+        accepted: Boolean,
+    ) {
         val entry = entries.first()
         val saved = MutableStateFlow(entry)
         var patches = 0
@@ -240,7 +256,7 @@ class ListModesRouteTest {
                 ): Outcome<MangaListSnapshot>? {
                     if (!canDispatch()) return null
                     refreshes++
-                    saved.value = saved.value.copy(chaptersRead = 24)
+                    saved.value = saved.value.copy(chaptersRead = 26)
                     return stored(owner)
                 }
 
@@ -259,7 +275,11 @@ class ListModesRouteTest {
                     assertEquals(MangaListEdit(chaptersRead = 26), changes)
                     assertEquals(null, retryFrom)
                     patches++
-                    return MangaListEditResult.Accepted(Outcome.Failure(DataError.NoConnection))
+                    return if (accepted) {
+                        MangaListEditResult.Accepted(Outcome.Failure(DataError.NoConnection))
+                    } else {
+                        MangaListEditResult.Failed(DataError.NoConnection)
+                    }
                 }
             }
         val graph =
@@ -271,20 +291,114 @@ class ListModesRouteTest {
             KirokuTheme(dark = false, dynamicColor = false) { AppRoute(graph) }
         }
         compose.onNodeWithText("Manga").performClick()
-        compose
-            .onNode(hasText(entry.titles.romaji) and SemanticsMatcher.keyIsDefined(SemanticsActions.OnLongClick))
-            .performSemanticsAction(SemanticsActions.OnLongClick)
+        val editRow = compose.onNode(hasText(entry.titles.romaji) and SemanticsMatcher.keyIsDefined(SemanticsActions.OnLongClick))
+        editRow.performSemanticsAction(SemanticsActions.OnLongClick)
         val chapters = compose.onNode(hasText("Chapters read") and hasSetTextAction())
         chapters.performTextReplacement("26")
         chapters.performImeAction()
         compose.onNodeWithText("Save").performClick()
-        compose.onNodeWithText("Could not confirm save").assertExists()
-        compose.onNodeWithText("Retry").assertDoesNotExist()
-        compose.onNodeWithText("Refresh list").performClick()
-        compose.onNodeWithText("24\u00A0chapters", substring = true).assertExists()
+        if (accepted) {
+            compose.onNodeWithText("Could not confirm save").assertExists()
+            compose.onNodeWithText("Retry").assertDoesNotExist()
+        } else {
+            compose.onNodeWithText("Retry").assertExists()
+        }
+        if (pull) {
+            val dragHandle = compose.activity.getString(androidx.compose.material3.R.string.m3c_bottom_sheet_drag_handle_description)
+            compose.onNodeWithContentDescription(dragHandle).performSemanticsAction(SemanticsActions.Dismiss)
+            compose.onNodeWithText("Chapters read").assertDoesNotExist()
+            compose.onNode(scroller(entry.titles.romaji)).performTouchInput { swipeDown(startY = centerY, endY = bottom) }
+        } else {
+            compose.onNodeWithText("Refresh list").performClick()
+        }
+        compose.onNodeWithText("26\u00A0chapters", substring = true).assertExists()
+        editRow.performSemanticsAction(SemanticsActions.OnLongClick)
+        compose.onNodeWithText("Save").assertExists()
         compose.onNodeWithText("Could not confirm save").assertDoesNotExist()
+        compose.onNodeWithText("Could not save").assertDoesNotExist()
         assertEquals(1, patches)
         assertEquals(1, refreshes)
+    }
+
+    @Test
+    fun `expiry from a queued refresh cannot restore an already removed row`() {
+        val owner = SignInId("manga-owner")
+        val publishedSession = MutableStateFlow<Session>(Session.SignedIn(owner))
+        val saved = MutableStateFlow(entries.take(2))
+        val removed = CompletableDeferred<Unit>()
+        val expire = CompletableDeferred<Unit>()
+        var removalStarted = false
+        var refreshQueued = false
+
+        fun snapshot(current: List<MangaListEntry>) = MangaListSnapshot(owner, current, demo.clock.instant())
+        val backend =
+            object : MangaListEditor {
+                override fun observe(owner: SignInId) = saved.map { Outcome.Success(snapshot(it)) }
+
+                override suspend fun stored(owner: SignInId) = Outcome.Success(snapshot(saved.value))
+
+                override suspend fun refresh(
+                    owner: SignInId,
+                    canDispatch: () -> Boolean,
+                ): Outcome<MangaListSnapshot>? {
+                    refreshQueued = true
+                    expire.await()
+                    if (!canDispatch()) return null
+                    publishedSession.value = Session.Expired(owner)
+                    return Outcome.Failure(DataError.SessionExpired)
+                }
+
+                override suspend fun remove(
+                    owner: SignInId,
+                    baseline: MangaListEntry,
+                    retry: Boolean,
+                ): MangaListRemovalResult {
+                    removalStarted = true
+                    removed.await()
+                    saved.value = saved.value.filter { it.id != baseline.id }
+                    return MangaListRemovalResult.Removed
+                }
+
+                override suspend fun edit(
+                    owner: SignInId,
+                    id: MangaId,
+                    changes: MangaListEdit,
+                    retryFrom: MangaListEntry?,
+                ) = error("The test only removes an entry")
+            }
+        val graph =
+            object : AppGraph by demo {
+                override val session =
+                    object : SessionRepository by demo.session {
+                        override fun observeSession() = publishedSession
+                    }
+                override val mangaList = backend
+                override val mangaListEditor = backend
+            }
+        val first = entries.first().titles.romaji
+        val survivor = entries[1].titles.romaji
+        compose.setContent { KirokuTheme(dark = false, dynamicColor = false) { AppRoute(graph) } }
+        compose.onNodeWithText("Manga").performClick()
+        compose
+            .onNode(hasText(first) and SemanticsMatcher.keyIsDefined(SemanticsActions.OnLongClick))
+            .performSemanticsAction(SemanticsActions.OnLongClick)
+        compose.onNodeWithText("Remove from list").performClick()
+        compose.onNodeWithText("Remove").performClick()
+        compose.runOnIdle { assertTrue(removalStarted) }
+        val dragHandle = compose.activity.getString(androidx.compose.material3.R.string.m3c_bottom_sheet_drag_handle_description)
+        compose.onNodeWithContentDescription(dragHandle).performSemanticsAction(SemanticsActions.Dismiss)
+        compose.onNodeWithText("Chapters read").assertDoesNotExist()
+        compose.onNode(scroller(survivor)).performTouchInput { swipeDown(startY = centerY, endY = bottom) }
+        compose.runOnIdle {
+            assertTrue(refreshQueued)
+            removed.complete(Unit)
+        }
+        compose.onNodeWithText(first).assertDoesNotExist()
+        compose.runOnIdle { expire.complete(Unit) }
+        compose.onNodeWithText("Session expired").assertExists()
+        compose.onNodeWithText(first).assertDoesNotExist()
+        compose.onNodeWithText(survivor).assertExists()
+        compose.onNode(hasText(survivor) and SemanticsMatcher.keyIsDefined(SemanticsActions.OnLongClick)).assertDoesNotExist()
     }
 
     private fun graphWithManga(onRead: () -> Unit = {}): AppGraph =

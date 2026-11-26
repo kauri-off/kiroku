@@ -34,6 +34,7 @@ import androidx.compose.ui.test.pressKey
 import com.github.takahirom.roborazzi.ExperimentalRoborazziApi
 import com.github.takahirom.roborazzi.InternalRoborazziApi
 import com.github.takahirom.roborazzi.fetchRobolectricWindowRoots
+import io.github.kauri_off.kiroku.R
 import io.github.kauri_off.kiroku.design.composeRule
 import io.github.kauri_off.kiroku.design.registered
 import io.github.kauri_off.kiroku.design.theme.KirokuTheme
@@ -268,6 +269,20 @@ class MangaEditSheetTest {
         compose.onNodeWithText("Could not save").assertIsDisplayed()
         compose.onNodeWithText("Retry").assertDoesNotExist()
         save.assertDoesNotExist()
+    }
+
+    @Test
+    fun removalFailureShowsTheCurrentStatusAndCanStartOver() {
+        sheet(
+            MangaEditFixtures.existing.copy(
+                submission =
+                    MangaEditSubmission.Failed(canRetry = true, message = R.string.manga_edit_could_not_remove, removal = true),
+            ),
+        )
+        compose.onNodeWithText("Current status: Reading").assertIsDisplayed()
+        compose.onNodeWithText("Status in this edit", substring = true).assertDoesNotExist()
+        compose.onNodeWithText("Start over").performClick()
+        assertEquals(listOf(MangaEditSheetEvent.StartOver), events)
     }
 
     @Test

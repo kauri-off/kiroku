@@ -48,7 +48,9 @@ data class ShellMessage(
 
         data object MangaRemovalUnconfirmed : Text
 
-        data object MangaCouldNotRemove : Text
+        data class MangaCouldNotRemove(
+            val title: String,
+        ) : Text
     }
 
     sealed interface Action {

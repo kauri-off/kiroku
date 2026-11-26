@@ -1,10 +1,21 @@
 package io.github.kauri_off.kiroku.edit
 
+import androidx.compose.material3.SnackbarHostState
+import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalCursorBlinkEnabled
 import io.github.kauri_off.kiroku.R
 import io.github.kauri_off.kiroku.core.model.MangaReadingStatus
 import io.github.kauri_off.kiroku.design.MotionBounds
+import io.github.kauri_off.kiroku.manga.MangaTitleContent
+import io.github.kauri_off.kiroku.manga.MangaTitleScreen
+import io.github.kauri_off.kiroku.manga.MangaTitleState
+import io.github.kauri_off.kiroku.manga.mangaEntry
+import io.github.kauri_off.kiroku.manga.mangaFixture
 import io.github.kauri_off.kiroku.screenshots.ScreenshotRegistry
 import io.github.kauri_off.kiroku.screenshots.Transition
 import io.github.kauri_off.kiroku.screenshots.WindowSize
@@ -32,11 +43,10 @@ class MangaEditSheetScreenshots : ScreenshotRegistry() {
                 MangaEditSheet(MangaEditFixtures.changed.copy(canRemove = true)) {}
             },
             case("confirm-removal", largeText = true) {
-                MangaEditSheet(MangaEditFixtures.existing.copy(canRemove = true, confirmRemove = true)) {}
+                MangaEditSheet(MangaEditFixtures.changed.copy(canRemove = true, confirmRemove = true)) {}
             },
-            case("removing") {
-                MangaEditSheet(MangaEditFixtures.existing.copy(submission = MangaEditSubmission.Removing)) {}
-            },
+            case("removing") { RemovalCompletion(confirmed = false) },
+            case("removal-completed") { RemovalCompletion(confirmed = true, initiallyOpen = false) },
             case("checking-removal") {
                 MangaEditSheet(MangaEditFixtures.existing.copy(submission = MangaEditSubmission.CheckingRemoval)) {}
             },
@@ -47,6 +57,7 @@ class MangaEditSheetScreenshots : ScreenshotRegistry() {
                             MangaEditSubmission.Failed(
                                 canRetry = false,
                                 message = R.string.manga_edit_removal_unconfirmed,
+                                removal = true,
                                 canReconcile = true,
                             ),
                     ),
@@ -55,7 +66,12 @@ class MangaEditSheetScreenshots : ScreenshotRegistry() {
             case("removal-retry", largeText = true) {
                 MangaEditSheet(
                     MangaEditFixtures.existing.copy(
-                        submission = MangaEditSubmission.Failed(canRetry = true, message = R.string.manga_edit_could_not_remove),
+                        submission =
+                            MangaEditSubmission.Failed(
+                                canRetry = true,
+                                message = R.string.manga_edit_could_not_remove,
+                                removal = true,
+                            ),
                     ),
                 ) {}
             },
@@ -70,6 +86,7 @@ class MangaEditSheetScreenshots : ScreenshotRegistry() {
                                 canRetry = false,
                                 message = R.string.manga_edit_unconfirmed,
                                 canReconcile = true,
+                                canStartOver = false,
                             ),
                     ),
                 ) {}
@@ -98,6 +115,22 @@ class MangaEditSheetScreenshots : ScreenshotRegistry() {
     override val transitions =
         listOf(
             Transition(
+                "confirm-removal",
+                start = "removable",
+                millis = 2 * MotionBounds.ENTER,
+                at = listOf(16L, 48L, 96L, 2 * MotionBounds.ENTER),
+            ) { changed ->
+                MangaEditSheet(MangaEditFixtures.changed.copy(canRemove = true, confirmRemove = changed)) {}
+            },
+            Transition(
+                "removal-completed",
+                start = "removing",
+                millis = 2 * MotionBounds.ENTER,
+                at = listOf(16L, 48L, 96L, 2 * MotionBounds.ENTER),
+            ) { changed ->
+                RemovalCompletion(confirmed = changed)
+            },
+            Transition(
                 "status-chosen",
                 start = "existing",
                 millis = 2 * MotionBounds.ENTER,
@@ -106,6 +139,25 @@ class MangaEditSheetScreenshots : ScreenshotRegistry() {
                 MangaEditSheet(if (it) MangaEditFixtures.statusChosen else MangaEditFixtures.existing) {}
             },
         )
+}
+
+@Composable
+private fun RemovalCompletion(
+    confirmed: Boolean,
+    initiallyOpen: Boolean = true,
+) {
+    val title = mangaFixture.titles.romaji
+    MangaTitleScreen(
+        MangaTitleState(MangaTitleContent.Shown(mangaFixture, title), listEntry = mangaEntry.takeUnless { confirmed }),
+        {},
+        remember { SnackbarHostState() },
+    )
+    var open by remember { mutableStateOf(initiallyOpen) }
+    if (open) {
+        MangaEditSheet(MangaEditFixtures.existing.copy(title = title, submission = MangaEditSubmission.Removing, closing = confirmed)) {
+            if (it == MangaEditSheetEvent.Dismissed) open = false
+        }
+    }
 }
 
 internal object MangaEditFixtures {

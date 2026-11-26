@@ -18,4 +18,7 @@
     <string name="manga_edit_checking_removal">Проверка удаления…</string>
     <string name="manga_edit_removal_unconfirmed">Не удалось подтвердить удаление</string>
     <string name="manga_edit_could_not_remove">Не удалось удалить</string>
+    <string name="manga_edit_start_over">Начать заново</string>
+    <string name="manga_edit_membership_failed">Не удалось проверить список</string>
+    <string name="manga_edit_could_not_remove_title">Не удалось удалить «%1$s»</string>
 </resources>

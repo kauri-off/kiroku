@@ -20,10 +20,13 @@ import androidx.compose.ui.test.swipeDown
 import io.github.kauri_off.kiroku.MainActivity
 import io.github.kauri_off.kiroku.core.error.DataError
 import io.github.kauri_off.kiroku.core.error.Outcome
+import io.github.kauri_off.kiroku.core.link.Link
+import io.github.kauri_off.kiroku.core.model.MangaId
 import io.github.kauri_off.kiroku.core.model.Session
 import io.github.kauri_off.kiroku.core.model.owner
 import io.github.kauri_off.kiroku.core.repository.MangaListReader
 import io.github.kauri_off.kiroku.core.repository.SignInStep
+import io.github.kauri_off.kiroku.link.appLinks
 import io.github.kauri_off.kiroku.scenario.Scenario
 import io.github.kauri_off.kiroku.scenario.WriteFault
 import io.github.kauri_off.kiroku.source.DataSource
@@ -136,13 +139,14 @@ class SandboxMangaRouteTest {
         compose.onNodeWithText("Manga").assertIsSelected()
         shows("Paper Observatory")
 
-        assertEquals(before, waited { manga.stored(account.signIn) })
+        val afterTitleRefresh = waited { manga.stored(account.signIn) }
+        assertEquals((before as Outcome.Success).value?.entries, (afterTitleRefresh as Outcome.Success).value?.entries)
         graph.scenarios.set(Scenario(offline = true))
         val list = compose.onNode(hasScrollAction() and hasAnyDescendant(hasText("The Lantern District")))
         list.performTouchInput { swipeDown(startY = centerY, endY = bottom) }
         shows("No connection")
         shows("Paper Observatory")
-        assertEquals(before, waited { manga.stored(account.signIn) })
+        assertEquals(afterTitleRefresh, waited { manga.stored(account.signIn) })
         compose.onNodeWithText("Paper Observatory").performClick()
         shows("Manga\u00A0· Finished")
         graph.scenarios.set(Scenario())
@@ -292,6 +296,80 @@ class SandboxMangaRouteTest {
         shows("Paper Observatory")
         assertEquals(before, chapters(replacement))
         compose.onNodeWithText("Retry").assertDoesNotExist()
+    }
+
+    @Test
+    fun `incoming links retire an unsubmitted draft and a removal confirmation`() {
+        val account = signIn()
+        openList()
+        shows("Paper Observatory")
+        val links = checkNotNull(RuntimeEnvironment.getApplication().appLinks)
+        val paper = Link.MangaTitle(MangaId(1))
+        val lantern = Link.MangaTitle(MangaId(2))
+        for (confirming in listOf(false, true)) {
+            links.opened(paper)
+            shows("Paper Observatory")
+            shows("Change")
+            compose.onNodeWithText("Change").performClick()
+            shows("Save")
+            setChapters("27")
+            if (confirming) {
+                compose.onNodeWithText("Remove from list").performClick()
+                shows("Remove Paper Observatory from your list?")
+            }
+            links.opened(lantern)
+            shows("The Lantern District")
+            awaitEditClosed()
+            compose.onNodeWithText("Remove Paper Observatory from your list?").assertDoesNotExist()
+            assertEquals(12, chapters(account))
+        }
+    }
+
+    @Test
+    fun `a cached linked title gains Change after cold membership fails offline and reconnects`() {
+        val account = signIn()
+        val id = MangaId(1)
+        waited {
+            val owner = graph.manga.observeOwner().first { it.id == account.signIn }
+            check(graph.manga.refresh(id, owner) { true } is Outcome.Success)
+            assertEquals(Outcome.Success(null), manga.stored(account.signIn))
+        }
+        graph.scenarios.set(Scenario(offline = true))
+        checkNotNull(RuntimeEnvironment.getApplication().appLinks).opened(Link.MangaTitle(id))
+        shows("Paper Observatory")
+        shows("Could not check your list")
+        compose.onNodeWithText("Change").assertDoesNotExist()
+        graph.scenarios.set(Scenario())
+        shows("Change")
+        compose.onNodeWithText("Could not check your list").assertDoesNotExist()
+    }
+
+    @Test
+    fun `removal Retry names its target after leaving the sheet`() {
+        val account = signIn()
+        openList()
+        shows("Paper Observatory")
+        compose.onNodeWithText("Paper Observatory").performClick()
+        shows("Change")
+        compose.onNodeWithText("Change").performClick()
+        shows("Remove from list")
+        graph.scenarios.set(Scenario(writes = WriteFault.Refused))
+        compose.onNodeWithText("Remove from list").performClick()
+        compose.onNodeWithText("Remove").performClick()
+        shows("Could not confirm removal")
+        graph.scenarios.set(Scenario())
+        compose.onNodeWithText("Refresh list").performClick()
+        shows("Could not remove")
+        checkNotNull(RuntimeEnvironment.getApplication().appLinks).opened(Link.MangaTitle(MangaId(2)))
+        shows("The Lantern District")
+        awaitEditClosed()
+        shows("Could not remove Paper Observatory")
+        compose.onNodeWithText("Retry").performClick()
+        compose.waitUntil(WAIT) {
+            shadowOf(Looper.getMainLooper()).idle()
+            chapters(account) == null
+        }
+        shows("The Lantern District")
     }
 
     private fun signOut(old: Session.SignedIn) {

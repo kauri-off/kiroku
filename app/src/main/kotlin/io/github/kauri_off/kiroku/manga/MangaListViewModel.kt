@@ -7,6 +7,7 @@ import io.github.kauri_off.kiroku.core.error.DataError
 import io.github.kauri_off.kiroku.core.error.Outcome
 import io.github.kauri_off.kiroku.core.model.MangaListSnapshot
 import io.github.kauri_off.kiroku.core.model.Session
+import io.github.kauri_off.kiroku.core.model.SignInId
 import io.github.kauri_off.kiroku.core.model.TitleLanguage
 import io.github.kauri_off.kiroku.core.model.owner
 import io.github.kauri_off.kiroku.core.repository.Connection
@@ -31,6 +32,7 @@ internal class MangaListViewModel(
     connection: Connection,
     private val sessions: Flow<Session>,
     language: Flow<TitleLanguage>,
+    private val onRefreshed: (SignInId) -> Unit = {},
     private val onRefreshFailed: (DataError) -> Unit,
 ) : ViewModel() {
     private data class Page(
@@ -147,6 +149,7 @@ internal class MangaListViewModel(
                         recoveryPending = false
                         val updated = result.value.takeIf { it.owner == owner }
                         page.value = if (updated != null) Page(updated) else Page(error = DataError.ListEnded)
+                        if (updated != null) onRefreshed(owner)
                         loads.ended(null)
                     }
                     is Outcome.Failure -> {

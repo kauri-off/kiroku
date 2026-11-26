@@ -4,20 +4,29 @@ import androidx.compose.material3.SnackbarHostState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.key
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation3.runtime.NavKey
 import io.github.kauri_off.kiroku.CountAsShown
+import io.github.kauri_off.kiroku.ShownLoads
 import io.github.kauri_off.kiroku.collectAsScreenState
+import io.github.kauri_off.kiroku.core.error.DataError
+import io.github.kauri_off.kiroku.core.error.Outcome
 import io.github.kauri_off.kiroku.core.model.MangaDetails
 import io.github.kauri_off.kiroku.core.model.MangaId
 import io.github.kauri_off.kiroku.core.model.SignInId
 import io.github.kauri_off.kiroku.core.model.TitleLanguage
+import io.github.kauri_off.kiroku.core.repository.Connection
 import io.github.kauri_off.kiroku.shell.ShellMessage
 import io.github.kauri_off.kiroku.shell.ShellMessages
 import io.github.kauri_off.kiroku.wiring.AppGraph
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.CoroutineStart
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.launch
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.Transient
 
@@ -65,6 +74,7 @@ internal fun MangaTitleRoute(
     val state by manga.state.collectAsScreenState()
     CountAsShown(manga.shown)
     val editor = LocalMangaEditing.current
+    val origin = LocalMangaEditOrigin.current
     LaunchedEffect(editor) { editor?.watch() }
     val editing =
         editor?.state?.collectAsScreenState()?.value?.takeIf {
@@ -72,10 +82,16 @@ internal fun MangaTitleRoute(
         }
     val owner = editing?.owner
     val content = state.content as? MangaTitleContent.Shown
-    var membershipAttempt by remember(key.id) { mutableIntStateOf(0) }
-    if (editor != null && owner != null && content != null && editing.observed) {
-        LaunchedEffect(owner, key.id, membershipAttempt) { editor.loadMembership(owner) }
-    }
+    val membership =
+        if (editor != null && owner != null && content != null && editing.signedIn && editing.observed) {
+            key(editor, owner, key.id) {
+                val scope = rememberCoroutineScope()
+                remember(scope) { MangaMembership(scope, graph.connection, editor, owner) }.also { CountAsShown(it.shown) }
+            }
+        } else {
+            null
+        }
+    val membershipError = membership?.error?.collectAsScreenState()?.value
     val entry =
         editing
             ?.snapshot
@@ -83,18 +99,70 @@ internal fun MangaTitleRoute(
             ?.find { it.id.value == key.id }
             ?.let(editing::displayed)
     MangaTitleScreen(
-        state.copy(listEntry = entry),
+        state.copy(listEntry = entry.takeIf { editing?.signedIn == true }, membershipError = membershipError),
         onEvent = {
             when (it) {
                 MangaTitleEvent.Back -> onBack()
                 MangaTitleEvent.SignIn -> onSignIn()
-                MangaTitleEvent.Edit -> if (entry != null && owner != null && content != null) editor.open(owner, entry.id, content.title)
+                MangaTitleEvent.RetryMembership -> membership?.request(force = true)
+                MangaTitleEvent.Edit ->
+                    if (entry != null &&
+                        owner != null &&
+                        content != null
+                    ) {
+                        editor.open(owner, entry.id, content.title, origin)
+                    }
                 MangaTitleEvent.Retry, MangaTitleEvent.Refresh -> {
-                    membershipAttempt++
+                    membership?.request(force = true)
                     manga.refresh()
                 }
             }
         },
         snackbars,
     )
+}
+
+internal class MangaMembership(
+    private val scope: CoroutineScope,
+    connection: Connection,
+    private val editor: MangaEditing,
+    private val owner: SignInId,
+) {
+    val error = MutableStateFlow<DataError?>(null)
+    private var pending = false
+    private var covered = false
+    private var load: Job? = null
+    private val loads =
+        ShownLoads(
+            scope,
+            connection,
+            whenShown = { request() },
+            again = { request(force = true) },
+            shownAgain = { request() },
+            hidden = { covered = true },
+            trackOutagesWhileShown = true,
+        )
+    val shown = loads.shown
+
+    fun request(force: Boolean = false) {
+        pending = pending || force
+        if (!loads.isShowing || load?.isActive == true) return
+        load =
+            scope.launch(start = CoroutineStart.LAZY) {
+                val explicit = pending
+                pending = false
+                covered = false
+                val result = editor.loadMembership(owner, explicit) { loads.isShowing }
+                load = null
+                if (result == null) {
+                    pending = pending || (explicit && (covered || !loads.isShowing))
+                    if (pending && loads.isShowing) request()
+                    return@launch
+                }
+                error.value = (result as? Outcome.Failure)?.error?.takeUnless { it == DataError.ListEnded }
+                loads.ended(error.value, retryAfterHiddenFailure = covered || !loads.isShowing)
+                if (pending) request()
+            }
+        load?.start()
+    }
 }

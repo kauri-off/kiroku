@@ -186,7 +186,11 @@ private fun MangaStatusChoice(
         val submitted = state.submission != MangaEditSubmission.Editing
         if (state.status == null || submitted) {
             val status = state.status?.let { stringResource(it.label) } ?: malCodeAsText(state.baseline.status.code)
-            val label = if (submitted) R.string.manga_edit_submitted_status else R.string.manga_edit_current_status
+            val removal =
+                state.submission == MangaEditSubmission.Removing ||
+                    state.submission == MangaEditSubmission.CheckingRemoval ||
+                    (state.submission as? MangaEditSubmission.Failed)?.removal == true
+            val label = if (submitted && !removal) R.string.manga_edit_submitted_status else R.string.manga_edit_current_status
             Text(
                 stringResource(label, status),
                 style = MaterialTheme.typography.bodyMedium,
@@ -337,18 +341,25 @@ private fun MangaEditFooter(
                 WaitIndicator()
             }
         is MangaEditSubmission.Failed ->
-            LineOrStack(gap = Spacing.s, centred = true) {
-                Text(
-                    stringResource(submission.message),
-                    modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite },
-                    color = MaterialTheme.colorScheme.error,
-                )
-                if (submission.canRetry || submission.canReconcile) {
-                    Button(
-                        onClick = { onEvent(if (submission.canRetry) MangaEditSheetEvent.Retry else MangaEditSheetEvent.Reconcile) },
-                        shapes = ButtonDefaults.shapes(),
-                    ) {
-                        Text(stringResource(if (submission.canRetry) R.string.design_retry else R.string.manga_edit_refresh_list))
+            Column {
+                LineOrStack(gap = Spacing.s, centred = true) {
+                    Text(
+                        stringResource(submission.message),
+                        modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite },
+                        color = MaterialTheme.colorScheme.error,
+                    )
+                    if (submission.canRetry || submission.canReconcile) {
+                        Button(
+                            onClick = { onEvent(if (submission.canRetry) MangaEditSheetEvent.Retry else MangaEditSheetEvent.Reconcile) },
+                            shapes = ButtonDefaults.shapes(),
+                        ) {
+                            Text(stringResource(if (submission.canRetry) R.string.design_retry else R.string.manga_edit_refresh_list))
+                        }
+                    }
+                }
+                if (submission.canStartOver) {
+                    TextButton(onClick = { onEvent(MangaEditSheetEvent.StartOver) }) {
+                        Text(stringResource(R.string.manga_edit_start_over))
                     }
                 }
             }
