@@ -186,7 +186,8 @@ class MangaCatalogueRouteTest {
         settle()
 
         compose.onNodeWithText("Synopsis").assertExists()
-        compose.onNodeWithText("MAL score 9.16").assertExists()
+        compose.onNodeWithText("MAL score").assertExists()
+        compose.onNodeWithText("9.16").assertExists()
         assertTrue(detailIds.isEmpty())
     }
 
