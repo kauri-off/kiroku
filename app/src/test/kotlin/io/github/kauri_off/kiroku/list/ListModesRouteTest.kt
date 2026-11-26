@@ -4,17 +4,22 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.remember
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.SemanticsMatcher
+import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsFocused
+import androidx.compose.ui.test.assertIsOn
 import androidx.compose.ui.test.assertIsSelected
 import androidx.compose.ui.test.getUnclippedBoundsInRoot
 import androidx.compose.ui.test.hasAnyDescendant
 import androidx.compose.ui.test.hasSetTextAction
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.StateRestorationTester
+import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onRoot
@@ -47,6 +52,7 @@ import io.github.kauri_off.kiroku.core.repository.MangaListEditResult
 import io.github.kauri_off.kiroku.core.repository.MangaListEditor
 import io.github.kauri_off.kiroku.core.repository.MangaListReader
 import io.github.kauri_off.kiroku.core.repository.MangaListRemovalResult
+import io.github.kauri_off.kiroku.core.repository.MangaListStatus
 import io.github.kauri_off.kiroku.core.repository.SessionRepository
 import io.github.kauri_off.kiroku.design.composeRule
 import io.github.kauri_off.kiroku.design.registered
@@ -85,7 +91,10 @@ class ListModesRouteTest {
     private val compose = composeRule()
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
     private val demo = TestGraph(Demo(Fixtures.reference, scope))
-    private val entries = (1L..24).map { mangaEntry.copy(id = MangaId(it), titles = Titles("Reading title $it"), posterUrl = null) }
+    private val entries =
+        (1L..24).map {
+            mangaEntry.copy(id = MangaId(it), titles = Titles("Reading title ${it.toString().padStart(2, '0')}"), posterUrl = null)
+        }
 
     @get:Rule
     val rule: TestRule = registered(compose) { scope.cancel() }
@@ -136,13 +145,36 @@ class ListModesRouteTest {
         assertEquals(listOf(ListRoot), navigator.stack)
         val mangaPlanned = "Planned title"
         scrollTo(entries.first().titles.romaji, 8)
-        val readingRow = compose.onNodeWithText(entries[8].titles.romaji)
+        val readingRow = compose.onNode(hasText(entries[8].titles.romaji) and !hasSetTextAction())
         val readingTop = readingRow.getUnclippedBoundsInRoot().top
         planned.performClick()
         planned.assertIsSelected()
-        scrollTo("$mangaPlanned 1", 10)
+        scrollTo("$mangaPlanned 01", 10)
         val mangaRow = compose.onNodeWithText("$mangaPlanned 11")
         val mangaTop = mangaRow.getUnclippedBoundsInRoot().top
+        compose.onNodeWithContentDescription("Filter by title").performClick()
+        val mangaFilter = compose.onNode(hasSetTextAction())
+        mangaFilter.assertIsFocused().performTextReplacement("reading TITLE 09")
+        readingRow.assertIsDisplayed()
+        compose.onNodeWithText("Reading").assertIsDisplayed()
+        manga.assertDoesNotExist()
+        compose.onNodeWithContentDescription("Sort").assertDoesNotExist()
+        mangaFilter.performTextReplacement("there is no title by this name")
+        compose.onNodeWithText("No titles match the filter").assertIsDisplayed()
+        compose.runOnUiThread { compose.activity.onBackPressedDispatcher.onBackPressed() }
+        planned.assertIsSelected()
+        assertEquals(mangaTop, mangaRow.getUnclippedBoundsInRoot().top)
+
+        compose.onNodeWithContentDescription("Filter by title").performClick()
+        mangaFilter.performTextReplacement("Reading title 09")
+        readingRow.performClick()
+        assertEquals(listOf(ListRoot, MangaTitleKey(entries[8].id.value)), navigator.stack)
+        compose.onNodeWithContentDescription("Back").performClick()
+        mangaFilter.assertExists()
+        readingRow.assertIsDisplayed()
+        compose.onNodeWithContentDescription("Clear").performClick()
+        planned.assertIsSelected()
+        assertEquals(mangaTop, mangaRow.getUnclippedBoundsInRoot().top)
         compose
             .onNode(hasText("$mangaPlanned 11") and SemanticsMatcher.keyIsDefined(SemanticsActions.OnLongClick))
             .assertDoesNotExist()
@@ -175,6 +207,154 @@ class ListModesRouteTest {
         anime.performClick()
         planned.assertIsSelected()
         assertEquals(animePosition, scrollPosition(FixtureAnime.premiereMonth.titles.romaji))
+    }
+
+    @Test
+    fun `Manga sorts are per tab and independent of Anime and restore after recreation`() {
+        val graph = graphWithManga()
+        var owner = newOwner()
+        val restoration = StateRestorationTester(compose)
+        restoration.setContent {
+            CompositionLocalProvider(LocalViewModelStoreOwner provides owner) {
+                KirokuTheme(dark = false, dynamicColor = false) { AppRoute(graph) }
+            }
+        }
+        compose.onNodeWithText("Manga").performClick()
+        val sort = compose.onNodeWithContentDescription("Sort")
+        sort.performClick()
+        val options = compose.onNodeWithText("Sort by")
+        options.assertIsDisplayed()
+        compose.onNodeWithText("Last updated").assertIsSelected()
+        compose.onNodeWithText("Up next").assertDoesNotExist()
+        compose.onNodeWithText("Start date").assertDoesNotExist()
+        compose.onNodeWithText("Title").performClick().assertIsSelected()
+        compose.onNodeWithText("Z to A").performClick()
+        options.assertIsDisplayed()
+        dismissSheet()
+        val first = compose.onNodeWithText("Reading title 24")
+        val second = compose.onNodeWithText("Reading title 23")
+        assertTrue(first.getUnclippedBoundsInRoot().top < second.getUnclippedBoundsInRoot().top)
+
+        compose.onNodeWithText("Planned").performClick().assertIsSelected()
+        sort.performClick()
+        compose.onNodeWithText("Last updated").assertIsSelected()
+        compose.onNodeWithText("Score").performClick().assertIsSelected()
+        compose.onNodeWithText("Lowest first").performClick()
+        dismissSheet()
+        compose.onNodeWithText("Anime").performClick()
+        sort.performClick()
+        compose.onNodeWithText("Up next").assertIsSelected()
+        dismissSheet()
+        compose.onNodeWithText("Manga").performClick()
+        compose.onNodeWithText("Planned").assertIsSelected()
+
+        owner.viewModelStore.clear()
+        owner = newOwner()
+        restoration.emulateSavedInstanceStateRestore()
+        sort.performClick()
+        compose.onNodeWithText("Score").assertIsSelected()
+        compose.onNodeWithText("Lowest first").assertIsOn()
+        dismissSheet()
+        compose.onNodeWithText("Reading").performClick().assertIsSelected()
+        assertTrue(first.getUnclippedBoundsInRoot().top < second.getUnclippedBoundsInRoot().top)
+    }
+
+    @Test
+    fun `an early interrupted tab tap restores the page where the pager settled`() {
+        compose.setContent {
+            KirokuTheme(dark = false, dynamicColor = false) { AppRoute(graphWithManga()) }
+        }
+        compose.onNodeWithText("Manga").performClick()
+        val reading = compose.onNodeWithText("Reading")
+        reading.assertIsSelected()
+        compose.mainClock.autoAdvance = false
+        val planned = compose.onNodeWithText("Planned")
+        planned.performClick()
+        compose.mainClock.advanceTimeByFrame()
+        planned.assertIsSelected()
+        compose.mainClock.advanceTimeBy(32)
+        compose.onRoot().performTouchInput {
+            down(center)
+            moveBy(Offset(width * 0.35f, 0f))
+            up()
+        }
+        compose.mainClock.advanceTimeBy(1_000)
+        compose.mainClock.autoAdvance = true
+        reading.assertIsSelected()
+        compose.onNodeWithText("Anime").performClick()
+        compose.onNodeWithText("Manga").performClick()
+        reading.assertIsSelected()
+    }
+
+    @Test
+    fun `a refused edit keeps the selected unfamiliar tab and restores its final row`() {
+        val unknown = MangaReadingStatus("rereading")
+        val entry = entries.first().copy(status = unknown)
+        val refuse = CompletableDeferred<Unit>()
+        var requested = false
+        val backend =
+            object : MangaListEditor {
+                override fun observe(owner: SignInId) = MutableStateFlow(Outcome.Success(snapshot(owner)))
+
+                override suspend fun stored(owner: SignInId) = Outcome.Success(snapshot(owner))
+
+                override suspend fun refresh(
+                    owner: SignInId,
+                    canDispatch: () -> Boolean,
+                ) = error("The snapshot is fresh")
+
+                override suspend fun remove(
+                    owner: SignInId,
+                    baseline: MangaListEntry,
+                    retry: Boolean,
+                ) = error("This test only edits a status")
+
+                override suspend fun edit(
+                    owner: SignInId,
+                    id: MangaId,
+                    changes: MangaListEdit,
+                    retryFrom: MangaListEntry?,
+                ): MangaListEditResult {
+                    assertEquals(MangaListStatus.PlanToRead, changes.status)
+                    requested = true
+                    refuse.await()
+                    return MangaListEditResult.Failed(DataError.Refused)
+                }
+
+                private fun snapshot(owner: SignInId) = MangaListSnapshot(owner, listOf(entry), demo.clock.instant())
+            }
+        val graph =
+            object : AppGraph by demo {
+                override val mangaList = backend
+                override val mangaListEditor = backend
+            }
+        compose.setContent { KirokuTheme(dark = false, dynamicColor = false) { AppRoute(graph) } }
+        compose.onNodeWithText("Manga").performClick()
+        val tab = compose.onNodeWithText("Rereading")
+        tab.performSemanticsAction(SemanticsActions.RequestFocus)
+        tab.assertIsDisplayed().performClick()
+        val title = entry.titles.romaji
+        compose.onNodeWithText(title).assertIsDisplayed()
+        tab.assertIsSelected()
+        compose
+            .onNode(hasText(title) and SemanticsMatcher.keyIsDefined(SemanticsActions.OnLongClick))
+            .performSemanticsAction(SemanticsActions.OnLongClick)
+        compose
+            .onNode(hasText("Planned") and SemanticsMatcher.expectValue(SemanticsProperties.Role, Role.RadioButton))
+            .performClick()
+        compose.onNodeWithText("Save").performClick()
+        compose.runOnIdle { assertTrue(requested) }
+        assertTrue(compose.onAllNodesWithText("No titles in Rereading").fetchSemanticsNodes().isNotEmpty())
+        compose.runOnIdle { refuse.complete(Unit) }
+        compose.onNodeWithText("Could not save").assertExists()
+        dismissSheet()
+        tab.assertIsSelected()
+        compose.onNodeWithText(title).assertIsDisplayed()
+    }
+
+    private fun dismissSheet() {
+        val handle = compose.activity.getString(androidx.compose.material3.R.string.m3c_bottom_sheet_drag_handle_description)
+        compose.onNodeWithContentDescription(handle).performSemanticsAction(SemanticsActions.Dismiss)
     }
 
     @Test
@@ -425,7 +605,7 @@ class ListModesRouteTest {
                             entries.map { entry ->
                                 entry.copy(
                                     id = MangaId(entry.id.value + 100),
-                                    titles = Titles("Planned title ${entry.id.value}"),
+                                    titles = Titles("Planned title ${entry.id.value.toString().padStart(2, '0')}"),
                                     status = MangaReadingStatus("plan_to_read"),
                                 )
                             }

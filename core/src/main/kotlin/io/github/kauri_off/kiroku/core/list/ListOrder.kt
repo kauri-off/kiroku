@@ -7,8 +7,9 @@ import io.github.kauri_off.kiroku.core.model.AnimeId
 import io.github.kauri_off.kiroku.core.model.EntryStatus
 import io.github.kauri_off.kiroku.core.model.ListEntry
 import io.github.kauri_off.kiroku.core.model.ListStatus
+import io.github.kauri_off.kiroku.core.model.MangaListEntry
+import io.github.kauri_off.kiroku.core.model.TitleLanguage
 import io.github.kauri_off.kiroku.core.model.firstDay
-import java.text.CollationKey
 import java.text.Collator
 import java.time.Instant
 import java.util.Locale
@@ -60,8 +61,8 @@ fun order(
     direction: SortDirection? = sort.defaultDirection,
     title: (ListEntry) -> String,
 ): List<ListEntry> {
-    val titles = titleKeys(entries, title)
-    val byTitle = compareBy<ListEntry> { titles.getValue(it.anime.id) }
+    val id: (ListEntry) -> Long = { it.anime.id.value }
+    val byTitle = byListTitle(entries, id, title)
     val ascending = direction != SortDirection.Descending
     val comparator: Comparator<ListEntry> =
         when (sort) {
@@ -71,22 +72,44 @@ fun order(
             ListSort.Score -> keyed(ascending) { it.values.score }
             ListSort.StartDate -> keyed(ascending) { it.anime.startDate?.firstDay() }
         }
-    return entries.sortedWith(comparator.then(byTitle).thenBy { it.anime.id.value })
+    return entries.sortedWith(comparator.then(byTitle).thenBy(id))
+}
+
+val mangaListSorts: List<ListSort> = listOf(ListSort.Title, ListSort.LastUpdated, ListSort.Score)
+
+fun orderManga(
+    entries: List<MangaListEntry>,
+    choice: TabSort,
+    language: TitleLanguage,
+): List<MangaListEntry> {
+    val id: (MangaListEntry) -> Long = { it.id.value }
+    val byTitle = byListTitle(entries, id) { it.titles.preferred(language) }
+    val ascending = choice.direction == SortDirection.Ascending
+    val comparator: Comparator<MangaListEntry> =
+        when (choice.sort) {
+            ListSort.Title -> if (ascending) byTitle else byTitle.reversed()
+            ListSort.LastUpdated -> keyed(ascending, MangaListEntry::updatedAt)
+            ListSort.Score -> keyed(ascending, MangaListEntry::score)
+            ListSort.UpNext, ListSort.StartDate -> throw IllegalArgumentException()
+        }
+    return entries.sortedWith(comparator.then(byTitle).thenBy(id))
 }
 
 // Root Unicode collation, case ignored: a letter with a macron or accent sorts with its base letter, in any language.
-private fun titleKeys(
-    entries: List<ListEntry>,
-    title: (ListEntry) -> String,
-): Map<AnimeId, CollationKey> {
+private fun <T> byListTitle(
+    entries: List<T>,
+    id: (T) -> Long,
+    title: (T) -> String,
+): Comparator<T> {
     val collator = Collator.getInstance(Locale.ROOT).apply { strength = Collator.SECONDARY }
-    return entries.associate { it.anime.id to collator.getCollationKey(title(it)) }
+    val keys = entries.associate { id(it) to collator.getCollationKey(title(it)) }
+    return compareBy { keys.getValue(id(it)) }
 }
 
-private fun <K : Comparable<K>> keyed(
+private fun <T, K : Comparable<K>> keyed(
     ascending: Boolean,
-    key: (ListEntry) -> K?,
-): Comparator<ListEntry> = compareBy(nullsLast(if (ascending) naturalOrder() else reverseOrder())) { key(it) }
+    key: (T) -> K?,
+): Comparator<T> = compareBy(nullsLast(if (ascending) naturalOrder() else reverseOrder()), key)
 
 // "Up next" by the keys of the result the row shows: episodes to watch, latest aired first; then a known time for the
 // next episode or the premiere, soonest first; then the rest, last updated first.

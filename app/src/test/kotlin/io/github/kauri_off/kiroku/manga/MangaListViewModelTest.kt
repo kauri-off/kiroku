@@ -1,9 +1,14 @@
 package io.github.kauri_off.kiroku.manga
 
+import androidx.compose.runtime.snapshots.Snapshot
 import androidx.lifecycle.viewModelScope
 import io.github.kauri_off.kiroku.core.error.DataError
 import io.github.kauri_off.kiroku.core.error.Outcome
+import io.github.kauri_off.kiroku.core.list.ListSort
+import io.github.kauri_off.kiroku.core.list.SortDirection
+import io.github.kauri_off.kiroku.core.list.TabSort
 import io.github.kauri_off.kiroku.core.model.MangaListSnapshot
+import io.github.kauri_off.kiroku.core.model.MangaReadingStatus
 import io.github.kauri_off.kiroku.core.model.Session
 import io.github.kauri_off.kiroku.core.model.SignInId
 import io.github.kauri_off.kiroku.core.model.TitleLanguage
@@ -34,7 +39,7 @@ class MangaListViewModelTest {
     private val dispatcher = StandardTestDispatcher()
     private val owner = SignInId("first")
     private val now = Instant.parse("2026-11-25T12:00:00Z")
-    private val snapshot = MangaListSnapshot(owner, listOf(mangaEntry), now)
+    private var snapshot = MangaListSnapshot(owner, listOf(mangaEntry), now)
     private val online = MutableStateFlow(false)
     private val sessions = MutableStateFlow<Session>(Session.SignedIn(owner))
     private val failures = mutableListOf<DataError>()
@@ -75,6 +80,44 @@ class MangaListViewModelTest {
             flowOf(TitleLanguage.Romaji),
             onRefreshFailed = failures::add,
         )
+
+    @Test
+    fun `a replacement owner receives no saved Manga filter or sort from the old owner`() =
+        runTest(dispatcher) {
+            val vm = model()
+            try {
+                showing(vm.shown, vm.state)
+                runCurrent()
+                val planned = MangaReadingStatus("plan_to_read")
+                vm.control(owner, MangaListEvent.OpenSort(planned))
+                vm.control(owner, MangaListEvent.SelectSort(ListSort.Score))
+                vm.control(owner, MangaListEvent.SelectDirection(SortDirection.Ascending))
+                vm.control(owner, MangaListEvent.DismissSort)
+                vm.control(owner, MangaListEvent.StartFilter)
+                vm.control(owner, MangaListEvent.FilterChanged("private query"))
+                Snapshot.sendApplyNotifications()
+                runCurrent()
+                assertEquals("private query", vm.state.value.filterText)
+                assertEquals(TabSort(ListSort.Score, SortDirection.Ascending), vm.state.value.sortFor(planned))
+                assertEquals(defaultMangaSort, vm.state.value.sortFor(mangaEntry.status))
+                val replacement = SignInId("replacement")
+                snapshot = snapshot.copy(owner = replacement)
+                sessions.value = Session.SignedIn(replacement)
+                runCurrent()
+                Snapshot.sendApplyNotifications()
+                runCurrent()
+
+                vm.control(owner, MangaListEvent.StartFilter)
+                vm.control(owner, MangaListEvent.SelectTab(planned))
+                runCurrent()
+                assertEquals(replacement, vm.state.value.owner)
+                assertEquals(mangaEntry.status, vm.state.value.tab)
+                assertEquals(defaultMangaSort, vm.state.value.sortFor(planned))
+                assertEquals(null, vm.state.value.filterText)
+            } finally {
+                vm.viewModelScope.cancel()
+            }
+        }
 
     @Test
     fun `reconnect retains its refresh while a fresh cache lookup is suspended`() =

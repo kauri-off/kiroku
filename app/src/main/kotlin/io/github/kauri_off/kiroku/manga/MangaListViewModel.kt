@@ -1,13 +1,17 @@
 package io.github.kauri_off.kiroku.manga
 
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.snapshotFlow
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import io.github.kauri_off.kiroku.ShownLoads
 import io.github.kauri_off.kiroku.core.error.DataError
 import io.github.kauri_off.kiroku.core.error.Outcome
+import io.github.kauri_off.kiroku.core.list.TabSort
+import io.github.kauri_off.kiroku.core.list.mangaListSorts
+import io.github.kauri_off.kiroku.core.model.MangaListEntry
 import io.github.kauri_off.kiroku.core.model.MangaListSnapshot
-import io.github.kauri_off.kiroku.core.model.MangaReadingStatus
 import io.github.kauri_off.kiroku.core.model.Session
 import io.github.kauri_off.kiroku.core.model.SignInId
 import io.github.kauri_off.kiroku.core.model.TitleLanguage
@@ -15,8 +19,7 @@ import io.github.kauri_off.kiroku.core.model.owner
 import io.github.kauri_off.kiroku.core.repository.Connection
 import io.github.kauri_off.kiroku.core.repository.MangaListReader
 import io.github.kauri_off.kiroku.core.repository.listStale
-import io.github.kauri_off.kiroku.edit.MangaEditStatus
-import io.github.kauri_off.kiroku.notShown
+import io.github.kauri_off.kiroku.list.TitleFilter
 import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.ensureActive
@@ -25,7 +28,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.flow.onStart
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import java.time.Clock
@@ -37,6 +40,7 @@ internal class MangaListViewModel(
     private val sessions: Flow<Session>,
     language: Flow<TitleLanguage>,
     private val saved: SavedStateHandle = SavedStateHandle(),
+    edits: Flow<MangaEditingState> = flowOf(MangaEditingState()),
     private val onRefreshed: (MangaListSnapshot) -> Unit = {},
     private val onRefreshFailed: (DataError) -> Unit,
 ) : ViewModel() {
@@ -44,9 +48,12 @@ internal class MangaListViewModel(
         val snapshot: MangaListSnapshot? = null,
         val error: DataError? = null,
         val refreshing: Boolean = false,
+        val orderPass: Int = 0,
     )
 
-    private val selection = saved.getStateFlow<ArrayList<String>?>(TAB, null)
+    private val controls = mutableStateOf(saved.restoreMangaControls())
+    private var ordering = MangaListOrdering()
+    private var listFilter = mangaTitleFilter()
     private val page = MutableStateFlow(Page())
     private val session = MutableStateFlow<Session?>(null)
     private var load: Job? = null
@@ -73,33 +80,108 @@ internal class MangaListViewModel(
 
     val shown = loads.shown
     val state =
-        combine(page, session, language.onStart { emit(TitleLanguage.Romaji) }, selection) { current, account, titles, selected ->
-            val tab =
-                selected
-                    ?.takeIf { it.firstOrNull() == account?.owner?.value }
-                    ?.getOrNull(1)
-                    ?.takeIf { it.isNotBlank() }
-                    ?.let(::MangaReadingStatus)
-                    ?: MangaEditStatus.Reading.readingStatus
-            val snapshot = current.snapshot?.takeIf { it.owner == account?.owner }
-            val error = current.error
-            val content =
-                when {
-                    account == Session.SignedOut -> MangaListContent.SignedOut
-                    snapshot != null -> MangaListContent.Ready(snapshot.entries, titles, current.refreshing)
-                    error != null -> MangaListContent.Failed(error)
-                    else -> MangaListContent.Loading
+        combine(page, session, language, snapshotFlow { controls.value }, edits, ::present)
+            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(replayExpirationMillis = 0), MangaListState())
+
+    private fun present(
+        current: Page,
+        account: Session?,
+        titles: TitleLanguage,
+        saved: MangaListControls,
+        edits: MangaEditingState,
+    ): MangaListState {
+        val owner = account?.owner
+        val active = saved.takeIf { it.owner == owner } ?: MangaListControls(owner)
+        val snapshot = current.snapshot?.takeIf { it.owner == owner }
+        val editing = edits.takeIf { it.owner == owner && it.snapshot?.owner == owner }
+        val confirmed = editing?.snapshot ?: snapshot
+        val error = current.error
+        val content =
+            when {
+                account == Session.SignedOut -> MangaListContent.SignedOut
+                snapshot != null && confirmed != null -> {
+                    val displayed = confirmed.entries.map { editing?.displayed(it) ?: it }
+                    MangaListContent.Ready(
+                        entries =
+                            ordering.entries(
+                                displayed,
+                                titles,
+                                active.sorts,
+                                current.orderPass,
+                                snapshot.entries,
+                                editing,
+                            ),
+                        language = titles,
+                        refreshing = current.refreshing,
+                        canEdit = editing?.signedIn == true && account is Session.SignedIn,
+                        confirmedStatuses = confirmed.entries.mapTo(mutableSetOf(), MangaListEntry::status),
+                    )
                 }
-            MangaListState(account?.owner, content, account is Session.Expired, tab)
-        }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(replayExpirationMillis = 0), MangaListState())
+                error != null -> MangaListContent.Failed(error)
+                else -> MangaListContent.Loading
+            }
+        val ready = content as? MangaListContent.Ready
+        val filter = active.filter
+        return MangaListState(
+            owner = owner,
+            content = content,
+            sessionExpired = account is Session.Expired,
+            tab = active.tab,
+            sorts = active.sorts,
+            sortTab = active.sortTab,
+            filter = filter,
+            matches = listFilter.rows(ready, filter.text, filter.session),
+        )
+    }
+
+    fun forDisplay(state: MangaListState): MangaListState =
+        if (state.owner == controls.value.owner) state.copy(typed = controls.value.filter) else state
 
     fun refresh() = read(force = true)
 
-    fun selectTab(
+    fun control(
         owner: SignInId,
-        tab: MangaReadingStatus,
+        event: MangaListEvent,
     ) {
-        if (session.value?.owner == owner) saved[TAB] = arrayListOf(owner.value, tab.code)
+        val current = controls.value
+        val displayed = state.value
+        val content = displayed.content as? MangaListContent.Ready
+        if (session.value?.owner != owner || current.owner != owner || displayed.owner != owner) return
+        val tab = current.sortTab
+        val choice = tab?.let(current.sorts::get) ?: defaultMangaSort
+        val next =
+            when (event) {
+                is MangaListEvent.SelectTab ->
+                    if (content != null && event.status in content.statuses) current.copy(tab = event.status) else current
+                MangaListEvent.StartFilter -> current.copy(filter = current.filter.withText(""), sortTab = null)
+                is MangaListEvent.FilterChanged ->
+                    if (current.filter.text != null) current.copy(filter = current.filter.withText(event.text)) else current
+                MangaListEvent.EndFilter -> current.copy(filter = current.filter.withText(null))
+                is MangaListEvent.OpenSort ->
+                    if (content != null && event.tab in content.statuses && current.filter.text == null) {
+                        current.copy(sortTab = event.tab)
+                    } else {
+                        current
+                    }
+                MangaListEvent.DismissSort -> current.copy(sortTab = null)
+                is MangaListEvent.SelectSort ->
+                    if (tab != null && event.sort in mangaListSorts && event.sort != choice.sort) {
+                        current.copy(sorts = current.sorts + (tab to TabSort(event.sort)))
+                    } else {
+                        current
+                    }
+                is MangaListEvent.SelectDirection ->
+                    if (tab != null && event.direction != choice.direction) {
+                        current.copy(sorts = current.sorts + (tab to choice.copy(direction = event.direction)))
+                    } else {
+                        current
+                    }
+                else -> current
+            }
+        if (next != current) {
+            controls.value = next
+            saved.saveMangaControls(next)
+        }
     }
 
     private fun watchSession() {
@@ -116,7 +198,12 @@ internal class MangaListViewModel(
                         loads.started()
                         page.value = Page()
                     }
-                    if (selection.value?.firstOrNull() != next.owner?.value) saved[TAB] = null
+                    if (controls.value.owner != next.owner) {
+                        ordering = MangaListOrdering()
+                        listFilter = mangaTitleFilter()
+                        controls.value = MangaListControls(next.owner)
+                        saved.saveMangaControls(controls.value)
+                    }
                     session.value = next
                     if (previous != next) read()
                 }
@@ -140,7 +227,7 @@ internal class MangaListViewModel(
                     page.value = Page(error = stored.error)
                     return@launch
                 }
-                page.value = Page(snapshot)
+                page.value = page.value.copy(snapshot = snapshot, error = null, refreshing = false)
                 if (!loads.isShowing) return@launch
                 if (session.value is Session.Expired) {
                     if (snapshot == null) page.value = Page(error = DataError.SessionExpired)
@@ -151,7 +238,7 @@ internal class MangaListViewModel(
                 if (!forced && !recovering && !listStale(snapshot?.syncedAt, clock.instant())) return@launch
                 refreshPending = false
                 recoveryPending = false
-                page.value = Page(snapshot, refreshing = true)
+                page.value = page.value.copy(snapshot = snapshot, refreshing = true)
                 coveredDuringRefresh = false
                 val result = lists.refresh(owner) { loads.isShowing }
                 ensureActive()
@@ -160,7 +247,7 @@ internal class MangaListViewModel(
                 if (result == null) {
                     refreshPending = refreshPending || forced
                     recoveryPending = recoveryPending || recovering
-                    page.value = Page(snapshot)
+                    page.value = page.value.copy(snapshot = snapshot, error = null, refreshing = false)
                     read()
                     return@launch
                 }
@@ -169,14 +256,19 @@ internal class MangaListViewModel(
                     is Outcome.Success -> {
                         recoveryPending = false
                         val updated = result.value.takeIf { it.owner == owner }
-                        page.value = if (updated != null) Page(updated) else Page(error = DataError.ListEnded)
+                        page.value =
+                            if (updated != null) {
+                                Page(updated, orderPass = page.value.orderPass + if (forced) 1 else 0)
+                            } else {
+                                Page(error = DataError.ListEnded)
+                            }
                         if (updated != null) onRefreshed(updated)
                         loads.ended(null)
                     }
                     is Outcome.Failure -> {
                         if (result.error != DataError.NoConnection) recoveryPending = false
                         val kept = snapshot.takeUnless { result.error == DataError.ListEnded }
-                        page.value = Page(kept, result.error)
+                        page.value = Page(kept, result.error, orderPass = page.value.orderPass)
                         if (kept != null) onRefreshFailed(result.error)
                         loads.ended(
                             result.error.takeUnless { recoveryPending },
@@ -188,8 +280,11 @@ internal class MangaListViewModel(
             }
         load?.start()
     }
-
-    private companion object {
-        val TAB = notShown("mangaTab")
-    }
 }
+
+internal fun mangaTitleFilter() =
+    TitleFilter(
+        rows = { content: MangaListContent.Ready -> content.statuses.flatMap { content.pages[it].orEmpty() } },
+        id = MangaListEntry::id,
+        title = { entry, content -> entry.titles.preferred(content.language) },
+    )

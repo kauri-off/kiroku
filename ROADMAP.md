@@ -331,6 +331,7 @@ Not to forget:
 - [x] Read the personal manga list.
 - [x] Switch between Anime and Manga in My list.
 - [x] Manga status tabs in My list.
+- [x] Filter and sort the personal manga list.
 - [x] Edit personal manga list entries.
   - [x] Owner-bound edits and read-back reconciliation.
 - [x] Remove entries from the personal manga list.

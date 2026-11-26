@@ -83,6 +83,14 @@ class MangaListScreenTest {
         compose.onNodeWithText("Reading").assertIsSelected()
     }
 
+    @Test
+    fun `a status the formatter would erase keeps its label`() {
+        val punctuation = MangaReadingStatus("__")
+        show(mangaListFixture(listOf(mangaEntry.copy(status = punctuation))), punctuation)
+        compose.onNodeWithText("__").assertIsSelected().assertIsDisplayed()
+        compose.onNodeWithText(mangaEntry.titles.romaji).assertIsDisplayed()
+    }
+
     private fun assertEmptyLibraryDisplayed() {
         val messages = compose.onAllNodesWithText("Your manga list is empty")
         assertEquals(1, messages.fetchSemanticsNodes().indices.count { messages[it].isDisplayed() })
