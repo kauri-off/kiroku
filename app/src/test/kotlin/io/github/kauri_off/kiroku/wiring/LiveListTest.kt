@@ -21,6 +21,8 @@ import io.github.kauri_off.kiroku.core.model.ListStatus
 import io.github.kauri_off.kiroku.core.model.Session
 import io.github.kauri_off.kiroku.core.model.SignInId
 import io.github.kauri_off.kiroku.core.repository.ListWrite
+import io.github.kauri_off.kiroku.core.repository.MangaListEdit
+import io.github.kauri_off.kiroku.core.repository.MangaListEditResult
 import io.github.kauri_off.kiroku.core.repository.SignIn
 import io.github.kauri_off.kiroku.core.repository.SignInStep
 import io.github.kauri_off.kiroku.data.db.RoomLocalList
@@ -51,6 +53,7 @@ import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertSame
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Rule
@@ -168,6 +171,7 @@ class LiveListTest {
             val parts = parts(process())
             val graph = LiveGraph(parts, listStore = { InMemoryLocalList() })
             val reader = graph.mangaList
+            assertSame(reader, graph.mangaListEditor)
             assertTrue(mangaRequests().isEmpty())
             graph.signInOnce()
             val first = (graph.account.currentSession() as Session.SignedIn).signIn
@@ -188,6 +192,16 @@ class LiveListTest {
             graph.signInOnce()
             val second = (graph.account.currentSession() as Session.SignedIn).signIn
             assertEquals(Outcome.Failure(DataError.ListEnded), reader.stored(first))
+            assertEquals(
+                MangaListEditResult.Failed(DataError.ListEnded),
+                graph.mangaListEditor.edit(
+                    first,
+                    saved.value.entries
+                        .single()
+                        .id,
+                    MangaListEdit(score = 5),
+                ),
+            )
             assertEquals(Outcome.Success(null), reader.stored(second))
             withTimeout(5_000) {
                 while (mangaRows(parts) != 0L) delay(10)
@@ -203,6 +217,7 @@ class LiveListTest {
             val requests = mangaRequests()
             assertEquals(3, requests.size)
             assertTrue(requests.all { it.startsWith("GET ") })
+            assertTrue(mal.asked.none { it.startsWith("PATCH ") })
             assertTrue(unexpected.isEmpty())
         }
 

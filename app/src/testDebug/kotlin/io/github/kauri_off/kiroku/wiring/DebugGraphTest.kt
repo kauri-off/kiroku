@@ -25,6 +25,7 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertSame
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
@@ -60,6 +61,7 @@ class DebugGraphTest {
                 assertTrue(graph is DemoGraph)
                 assertNull(graph.manga)
                 assertNull(graph.mangaList)
+                assertNull(graph.mangaListEditor)
                 assertEquals(Fixtures.at(device).entries, graph.list.observeEntries().first())
                 assertEquals(Fixtures.at(device).now, graph.clock.instant())
             }
@@ -86,6 +88,7 @@ class DebugGraphTest {
             val first = started("0123abcd")
             assertTrue(first is LiveGraph)
             assertNotNull(first.mangaList)
+            assertSame(first.mangaList, first.mangaListEditor)
             assertNotNull(first.mangaCatalogue)
             assertEquals(Session.SignedOut, first.session.observeSession().first())
             assertEquals(emptyList<ListEntry>(), first.list.observeEntries().first())
@@ -107,6 +110,7 @@ class DebugGraphTest {
                 val graph = createGraph(context, id, device, process, live = { error("The sandbox started the real account") })
                 assertTrue(graph is SandboxGraph)
                 assertTrue(graph.manga != null && graph.mangaList != null)
+                assertSame(graph.mangaList, graph.mangaListEditor)
                 assertNull(graph.mangaCatalogue)
                 assertEquals(emptyList<String>(), (graph as SandboxGraph).sandbox.mal.asked)
                 assertEquals(Session.SignedOut, graph.session.observeSession().first())

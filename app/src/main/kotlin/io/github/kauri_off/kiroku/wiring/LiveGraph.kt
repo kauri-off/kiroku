@@ -176,6 +176,8 @@ internal class LiveGraph(
             return mangaReader.value
         }
 
+    override val mangaListEditor: RoomMangaList get() = mangaList
+
     internal fun wasRetiredOnDisk(owner: SignInId) = imageCache.wasRecorded(owner)
 
     private fun hasDatabase() = parts.context.getDatabasePath(parts.databaseName).isFile
