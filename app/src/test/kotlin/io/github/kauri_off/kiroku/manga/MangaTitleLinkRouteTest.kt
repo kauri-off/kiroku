@@ -316,10 +316,18 @@ class MangaTitleLinkRouteTest {
         compose.onAllNodesWithText("Could not confirm save").assertCountEquals(2)
         compose.mainClock.advanceTimeBy(12_000)
         compose.onAllNodesWithText("Could not confirm save").assertCountEquals(1)
-        compose.onNodeWithText("Refresh list").performClick()
+        val refresh = compose.onNodeWithText("Refresh list")
+        compose.runOnUiThread { list.storedError = DataError.StorageError }
+        refresh.performClick()
+        compose.onNodeWithText("Added to Planned").assertDoesNotExist()
+        compose.onNodeWithText("Add to list").assertDoesNotExist()
+        assertEquals(1, list.additions.size)
+        compose.runOnUiThread { list.storedError = null }
+        compose.mainClock.advanceTimeBy(12_000)
+        refresh.performClick()
         compose.onNode(hasText("Planned") and hasClickAction()).assertExists()
         assertEquals(1, list.additions.size)
-        assertEquals(list.additions.map { it.first }, list.membershipReads)
+        assertEquals(List(2) { list.additions.single().first }, list.membershipReads)
     }
 
     @Test

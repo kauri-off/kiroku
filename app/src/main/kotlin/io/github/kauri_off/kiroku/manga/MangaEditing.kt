@@ -342,8 +342,11 @@ internal class MangaEditing(
         mutable.value = mutable.value.copy(adding = mutable.value.adding + id)
         scope.launch {
             if (!active(owner)) return@launch
-            val result = editor.refresh(owner)
-            if (result is Outcome.Success) readSnapshot(owner)
+            val result =
+                when (val refreshed = editor.refresh(owner)) {
+                    is Outcome.Success -> readSnapshot(owner)
+                    else -> refreshed
+                }
             if (!active(owner)) return@launch
             if (result == Outcome.Failure(DataError.ListEnded)) {
                 retire(null, signedIn = false)
@@ -356,7 +359,7 @@ internal class MangaEditing(
             } else {
                 val current = mutable.value
                 when {
-                    current.snapshot?.entries?.any { it.id == id } == true -> finishAdd(change)
+                    current.snapshotReadable && current.snapshot?.entries?.any { it.id == id } == true -> finishAdd(change)
                     else ->
                         offerAddRecovery(
                             change,
