@@ -28,6 +28,7 @@ internal class Journal(
         val user: String,
         val mangaProof: JsonObject? = null,
         val mangaPendingEdit: Boolean = false,
+        val mangaExplicitRemoval: Boolean = false,
     ) {
         val removableMangaProof: JsonObject? get() = mangaProof.takeUnless { mangaPendingEdit }
     }
@@ -75,7 +76,9 @@ internal class Journal(
             }
         val pending = PENDING_EDIT in values
         if (pending && (proof == null || values[PENDING_EDIT] != JsonPrimitive(true))) throw Unreadable()
-        return Left(RecordedTitle(id, name, episodes, media), user, proof, pending)
+        val explicitRemoval = EXPLICIT_REMOVAL in values
+        if (explicitRemoval && (proof == null || pending || values[EXPLICIT_REMOVAL] != JsonPrimitive(true))) throw Unreadable()
+        return Left(RecordedTitle(id, name, episodes, media), user, proof, pending, explicitRemoval)
     }
 
     // On the disk when this returns: a write to the list never goes out before it.
@@ -89,6 +92,7 @@ internal class Journal(
                 if (left.title.media != RecorderMedia.Anime) put(MEDIA, left.title.media.name)
                 left.mangaProof?.let { put(PROOF, it) }
                 if (left.mangaPendingEdit) put(PENDING_EDIT, true)
+                if (left.mangaExplicitRemoval) put(EXPLICIT_REMOVAL, true)
             }.toString()
         val next = File(file.path + NEXT)
         try {
@@ -114,6 +118,7 @@ internal class Journal(
     }
 
     private companion object {
+        const val EXPLICIT_REMOVAL = "manga_explicit_removal"
         const val PENDING_EDIT = "manga_pending_edit"
         const val LEGACY_PROOF = "manga_row"
         const val PROOF = "manga_row_v2"

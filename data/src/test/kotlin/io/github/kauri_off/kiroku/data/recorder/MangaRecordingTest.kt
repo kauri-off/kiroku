@@ -9,7 +9,6 @@ import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.cancel
 import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
@@ -50,7 +49,7 @@ class MangaRecordingTest {
     private val session by lazy { runBlocking { fixture.open().also { it.signIn(TokenGrant(ACCESS, "test-refresh")) } } }
     private val journal by lazy { File(folder.root, "recording") }
     private val root by lazy { File(folder.root, "no_backup/private-manga-mutations") }
-    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+    private var recorderJob = SupervisorJob()
     private val writes = CopyOnWriteArrayList<RecordedRequest>()
     private val requests = CopyOnWriteArrayList<RecordedRequest>()
 
@@ -72,7 +71,7 @@ class MangaRecordingTest {
     @After
     fun close() =
         runBlocking {
-            scope.cancel()
+            recorderJob.cancelAndJoin()
             fixture.close()
         }
 
@@ -269,7 +268,9 @@ class MangaRecordingTest {
             val stay = CompletableDeferred<Unit>()
             val recorder =
                 recorder(pause = {
-                    if (writes.size == 1 && journal.readText().contains("manga_row")) {
+                    if (writes.size == 1 &&
+                        root.listFiles().orEmpty().any { it.resolve("$MANGA_BEFORE_EDIT.200.json").isFile }
+                    ) {
                         afterPatch.complete(Unit)
                         stay.await()
                     }
@@ -312,7 +313,9 @@ class MangaRecordingTest {
             val continueRun = CompletableDeferred<Unit>()
             val recorder =
                 recorder(pause = {
-                    if (writes.size == 1 && journal.readText().contains("manga_row")) {
+                    if (writes.size == 1 &&
+                        root.listFiles().orEmpty().any { it.resolve("$MANGA_BEFORE_EDIT.200.json").isFile }
+                    ) {
                         afterPatch.complete(Unit)
                         continueRun.await()
                     }
@@ -553,6 +556,54 @@ class MangaRecordingTest {
         }
 
     @Test
+    fun `a failed later page cannot restore proof after an early pre-edit mismatch`() =
+        runBlocking { interruptedContinuity(500, Halt.Unexpected(500)) }
+
+    @Test
+    fun `expiry on a later page cannot restore proof after an early pre-edit mismatch`() =
+        runBlocking { interruptedContinuity(401, Halt.NotSignedIn) }
+
+    private suspend fun interruptedContinuity(
+        laterStatus: Int,
+        halt: Halt,
+    ) {
+        val recorder = recorder()
+        val title = checked(recorder)
+        var reads = 0
+        fixture.answer = { TokenReply.Answer(400, "") }
+        override = { request ->
+            when {
+                !request.url.encodedPath.endsWith("/mangalist") -> null
+                request.url.queryParameter("offset") == "1" -> MockResponse(code = laterStatus)
+                writes.size == 1 && ++reads == 2 ->
+                    json(
+                        """{"data":[{"node":{"id":$ID},"list_status":{"status":"plan_to_read","updated_at":"$CHANGED"}}],""" +
+                            """"paging":{"next":"https://invalid.test/?offset=1"}}""",
+                    )
+                else -> null
+            }
+        }
+        recorder.record(title).join()
+
+        val stopped = recorder.state.value as Recording.Stopped
+        assertEquals(halt, stopped.halt)
+        assertEquals(MANGA_BEFORE_EDIT, stopped.at)
+        assertEquals(ListAfter.Unresolved, stopped.list)
+        assertEquals(listOf("PATCH"), writes.map { it.method })
+
+        values = planned
+        override = { null }
+        if (laterStatus == 401) session.signIn(TokenGrant(ACCESS, "owner-returned"))
+        val reopened = recorder()
+        assertEquals(ListAfter.Unresolved, (reopened.state.value as Recording.Leftover).list)
+        reopened.recheck().join()
+        reopened.remove().join()
+        assertEquals(ListAfter.Unresolved, (reopened.state.value as Recording.Leftover).list)
+        assertEquals(listOf("PATCH"), writes.map { it.method })
+        assertTrue(journal.exists())
+    }
+
+    @Test
     fun `checking again after a recovery mismatch is read only even when the exact row returns`() =
         runBlocking {
             val recorder = recorder()
@@ -577,8 +628,12 @@ class MangaRecordingTest {
             recorder.recheck().join()
             assertEquals(ListAfter.Left, (recorder.state.value as Recording.Stopped).list)
             assertEquals(before, writes.size)
-            recorder.remove().join()
-            assertEquals(ListAfter.Removed, (recorder.state.value as Recording.Stopped).list)
+            val reopened = recorder()
+            assertEquals(ListAfter.Left, (reopened.state.value as Recording.Leftover).list)
+            assertEquals(before, writes.size)
+
+            reopened.remove().join()
+            assertEquals(ListAfter.Removed, (reopened.state.value as Recording.Leftover).list)
             assertEquals(before + 1, writes.size)
         }
 
@@ -626,6 +681,12 @@ class MangaRecordingTest {
             assertTrue(journal.resolve("intent").isFile)
             assertEquals("PATCH", requests.last().method)
             assertEquals(listOf("PATCH"), writes.map { it.method })
+
+            assertTrue(checkNotNull(stopped.folder).isDirectory)
+            val requestCount = requests.size
+            recorder.recheck().join()
+            assertEquals(stopped.copy(cleanupHalt = Halt.JournalUnreadable), recorder.state.value)
+            assertEquals(requestCount, requests.size)
         }
 
     private suspend fun assertConflict(
@@ -822,18 +883,21 @@ class MangaRecordingTest {
     private suspend fun recorder(
         pause: suspend () -> Unit = {},
         write: (File, String) -> Unit = { file, contents -> file.writeText(contents) },
-    ): SignedInRecorder =
-        SignedInRecorder(
+    ): SignedInRecorder {
+        recorderJob.cancelAndJoin()
+        recorderJob = SupervisorJob()
+        return SignedInRecorder(
             lazyOf(session),
             network.http,
             { journal },
             { error("Manga answers must stay private") },
             { error("Write recordings must have their own folder") },
-            scope,
+            CoroutineScope(recorderJob + Dispatchers.Default),
             pause,
             writePrivateFile = write,
             privateMutations = { root },
         ).also { it.started.join() }
+    }
 
     private suspend fun checked(recorder: SignedInRecorder): RecordedTitle {
         recorder.check(ID, RecorderMedia.Manga).join()
