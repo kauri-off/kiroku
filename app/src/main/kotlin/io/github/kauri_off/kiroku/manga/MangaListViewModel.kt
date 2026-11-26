@@ -80,7 +80,10 @@ internal class MangaListViewModel(
                 read()
             },
             shownAgain = { read() },
-            hidden = { coveredDuringRefresh = true },
+            hidden = {
+                coveredDuringRefresh = true
+                page.value = page.value.copy(refreshing = false)
+            },
             trackOutagesWhileShown = true,
         )
 

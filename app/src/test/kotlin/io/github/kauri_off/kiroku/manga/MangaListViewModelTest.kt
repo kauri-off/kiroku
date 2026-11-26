@@ -537,16 +537,18 @@ class MangaListViewModelTest {
         }
 
     @Test
-    fun `a queued refresh waits for visibility at admission and resumes after Back`() =
+    fun `a queued pull resumes after returning without carrying its indicator`() =
         runTest(dispatcher) {
             val vm = model()
+            val response = CompletableDeferred<Outcome<MangaListSnapshot>>()
             try {
                 val firstShow = showing(vm.shown, vm.state)
                 runCurrent()
                 admission = CompletableDeferred()
-                answer = CompletableDeferred(Outcome.Success(snapshot))
+                answer = response
                 vm.refresh()
                 runCurrent()
+                assertEquals(true, (vm.state.value.content as MangaListContent.Ready).refreshing)
                 firstShow.cancel()
                 runCurrent()
                 admission.complete(Unit)
@@ -556,7 +558,14 @@ class MangaListViewModelTest {
                 showing(vm.shown, vm.state)
                 runCurrent()
                 assertEquals(1, fetches)
+                assertEquals(false, (vm.state.value.content as MangaListContent.Ready).refreshing)
+                val updated = snapshot.copy(entries = listOf(mangaEntry.copy(chaptersRead = 26)))
+                response.complete(Outcome.Success(updated))
+                runCurrent()
+                assertEquals(updated.entries, (vm.state.value.content as MangaListContent.Ready).entries)
+                assertEquals(1, fetches)
             } finally {
+                response.complete(Outcome.Failure(DataError.NoConnection))
                 vm.viewModelScope.cancel()
             }
         }
