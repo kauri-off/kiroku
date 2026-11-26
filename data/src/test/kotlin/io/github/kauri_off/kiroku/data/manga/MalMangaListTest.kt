@@ -558,6 +558,27 @@ class MalMangaListTest {
         }
 
     @Test
+    fun `PATCH acknowledgement requires valid JSON without assuming a response schema`() =
+        runBlocking {
+            val owner = signIn("first")
+            val edit = MangaListEdit(score = 3)
+            val bodies =
+                listOf(
+                    """{"arbitrary":[true,false,null,0,-0,1.25,-1e+3,"a\n\u0020\""]}""" to MangaPatchResult.Accepted,
+                    """{"status":broken}""" to MangaPatchResult.Unknown(DataError.ServerError),
+                    """{"status":NaN}""" to MangaPatchResult.Unknown(DataError.ServerError),
+                    """{"n":00,"n":2}""" to MangaPatchResult.Unknown(DataError.ServerError),
+                    """{"a":1,}""" to MangaPatchResult.Unknown(DataError.ServerError),
+                    """{"a":true "b":false}""" to MangaPatchResult.Unknown(DataError.ServerError),
+                    """{"bad":"line${'\n'}break"}""" to MangaPatchResult.Unknown(DataError.ServerError),
+                )
+            for ((body, expected) in bodies) {
+                network.api.enqueue(answer(200, body))
+                assertEquals(expected, source.patch(owner, id, edit))
+            }
+        }
+
+    @Test
     fun `a queued patch is blocked while sign out is still in local cleanup`() =
         runBlocking {
             val dispatcher = Dispatcher().apply { maxRequests = 1 }

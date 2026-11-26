@@ -4,6 +4,7 @@ import io.github.kauri_off.kiroku.core.error.DataError
 import io.github.kauri_off.kiroku.core.error.Outcome
 import io.github.kauri_off.kiroku.core.model.MangaId
 import io.github.kauri_off.kiroku.core.model.MangaListEntry
+import io.github.kauri_off.kiroku.core.model.MangaListNumber
 import io.github.kauri_off.kiroku.core.model.MangaReadingStatus
 import io.github.kauri_off.kiroku.core.model.SignInId
 import io.github.kauri_off.kiroku.core.repository.MangaListEdit
@@ -101,28 +102,61 @@ private fun MangaListRow.toEntry(repairs: MutableSet<String>): MangaListEntry {
         return parse(value).also { if (it == null) repairs += "list_status.$key" }
     }
     if (MangaListStatus.entries.none { it.readingStatus.code == statusCode }) repairs += "list_status.status"
-    val score = read("score") { it.number()?.takeIf { n -> n in 0..10 } }
+    val unverified = mutableSetOf<MangaListNumber>()
+
+    fun number(
+        key: String,
+        field: MangaListNumber,
+        range: IntRange,
+    ): Int? =
+        read(key) {
+            val primitive = it as? JsonPrimitive ?: return@read null
+            val number = primitive.intOrNull?.takeIf { n -> n in range }
+            if (number != null && (primitive.isString || !JsonInteger.matches(primitive.content))) {
+                unverified += field
+                repairs += "list_status.$key"
+            }
+            number
+        }
+
+    val score = number("score", MangaListNumber.Score, 0..10)
     return MangaListEntry(
         id = id,
         titles = manga.titles.copy(synonyms = synonyms),
         status = MangaReadingStatus(statusCode),
         posterUrl = manga.posterUrl,
-        chaptersRead = read("num_chapters_read") { it.number()?.takeIf { n -> n >= 0 } },
-        volumesRead = read("num_volumes_read") { it.number()?.takeIf { n -> n >= 0 } },
+        chaptersRead = number("num_chapters_read", MangaListNumber.ChaptersRead, 0..Int.MAX_VALUE),
+        volumesRead = number("num_volumes_read", MangaListNumber.VolumesRead, 0..Int.MAX_VALUE),
         score = score?.takeIf { it > 0 },
         explicitlyUnrated = score == 0,
         updatedAt = read("updated_at") { it.text()?.let(::updatedAtOf) },
+        unverifiedNumbers = unverified.toSet(),
     )
 }
 
 private fun JsonElement.text(): String? = (this as? JsonPrimitive)?.takeIf { it.isString }?.content
 
-private fun JsonElement.number(): Int? = (this as? JsonPrimitive)?.takeUnless { it.isString }?.intOrNull
+private const val INTEGER = "-?(?:0|[1-9][0-9]*)"
+private val JsonInteger = Regex(INTEGER)
+private val JsonToken =
+    Regex(
+        """\G(?:[ \t\r\n]++|[{}\[\]:,]|"(?:[^"\\\x00-\x1F]++|\\(?:["\\/bfnrt]|u[0-9A-Fa-f]{4}))*+"""" +
+            """|(?:true|false|null|$INTEGER(?:\.[0-9]+)?(?:[eE][+-]?[0-9]+)?)(?=$|[ \t\r\n,}\]]))""",
+    )
 
 private fun MangaListWriteAnswer.acknowledgesPatch(): Boolean {
     if (status != 200 || mediaType?.toMediaTypeOrNull()?.subtype?.equals("json", ignoreCase = true) != true) return false
+    val payload = body ?: return false
+    if (JsonToken
+            .findAll(payload)
+            .lastOrNull()
+            ?.range
+            ?.last != payload.lastIndex
+    ) {
+        return false
+    }
     return try {
-        val document = body?.let(MalJson::parseToJsonElement) as? JsonObject
+        val document = MalJson.parseToJsonElement(payload) as? JsonObject
         document != null && document.isNotEmpty() && "error" !in document
     } catch (_: SerializationException) {
         false

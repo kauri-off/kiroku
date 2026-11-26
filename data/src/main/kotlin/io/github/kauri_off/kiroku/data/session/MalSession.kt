@@ -256,6 +256,8 @@ class MalSession internal constructor(
 
     internal fun mayWriteAs(owner: SignInId): Boolean = !signingOut && isSignedInAs(owner)
 
+    internal fun mayObserveAs(owner: SignInId): Boolean = !signingOut && state.value?.session?.owner == owner
+
     internal fun signedInOwner(): SessionOwner? = owners.value?.takeIf { it.id?.let(::isSignedInAs) == true }
 
     // S5: a rejected token leads to one refresh, shared with every request rejected beside this one, and one retry.

@@ -135,7 +135,13 @@ class RoomMangaList internal constructor(
                 emit(Outcome.Failure(DataError.StorageError))
             }.flowOn(Dispatchers.IO)
             .map {
-                if (it is Outcome.Success && session.currentSession()?.owner != owner) Outcome.Failure(DataError.ListEnded) else it
+                if (it is Outcome.Failure) return@map it
+                if (!session.mayObserveAs(owner)) return@map Outcome.Failure(DataError.ListEnded)
+                when (val retirement = storage { Outcome.Success(retired(owner)) }) {
+                    is Outcome.Failure -> retirement
+                    is Outcome.Success ->
+                        if (retirement.value || !session.mayObserveAs(owner)) Outcome.Failure(DataError.ListEnded) else it
+                }
             }.distinctUntilChanged()
 
     override suspend fun refresh(

@@ -36,33 +36,31 @@ data class MangaListEdit(
 
     fun hasEvidenceIn(entry: MangaListEntry): Boolean =
         (score == null || entry.recordedScore != null) &&
-            (chaptersRead == null || entry.chaptersRead != null) &&
-            (volumesRead == null || entry.volumesRead != null)
+            (chaptersRead == null || entry.recordedChaptersRead != null) &&
+            (volumesRead == null || entry.recordedVolumesRead != null)
 
     fun isPresentIn(entry: MangaListEntry): Boolean =
         (status == null || entry.status == status.readingStatus) &&
             (score == null || entry.recordedScore == score) &&
-            (chaptersRead == null || entry.chaptersRead == chaptersRead) &&
-            (volumesRead == null || entry.volumesRead == volumesRead)
+            (chaptersRead == null || entry.recordedChaptersRead == chaptersRead) &&
+            (volumesRead == null || entry.recordedVolumesRead == volumesRead)
 
     fun remainingAfter(
         baseline: MangaListEntry,
         current: MangaListEntry,
     ): MangaListEdit {
+        val currentChapters = current.recordedChaptersRead
+        val currentVolumes = current.recordedVolumesRead
+        val currentScore = current.recordedScore
         val sameProgress =
             current.status == baseline.status &&
-                (chaptersRead == null || (current.chaptersRead != null && current.chaptersRead == baseline.chaptersRead)) &&
-                (volumesRead == null || (current.volumesRead != null && current.volumesRead == baseline.volumesRead))
+                (chaptersRead == null || (currentChapters != null && currentChapters == baseline.recordedChaptersRead)) &&
+                (volumesRead == null || (currentVolumes != null && currentVolumes == baseline.recordedVolumesRead))
         return MangaListEdit(
             status = status?.takeIf { sameProgress && it.readingStatus != current.status },
-            score =
-                score?.takeIf {
-                    current.recordedScore != null &&
-                        current.recordedScore == baseline.recordedScore &&
-                        it != current.recordedScore
-                },
-            chaptersRead = chaptersRead?.takeIf { sameProgress && it != current.chaptersRead },
-            volumesRead = volumesRead?.takeIf { sameProgress && it != current.volumesRead },
+            score = score?.takeIf { currentScore != null && currentScore == baseline.recordedScore && it != currentScore },
+            chaptersRead = chaptersRead?.takeIf { sameProgress && it != currentChapters },
+            volumesRead = volumesRead?.takeIf { sameProgress && it != currentVolumes },
         )
     }
 }

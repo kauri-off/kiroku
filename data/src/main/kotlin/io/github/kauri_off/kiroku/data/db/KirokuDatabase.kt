@@ -129,6 +129,7 @@ abstract class KirokuDatabase : RoomDatabase() {
                 },
                 migration(9, 10) {
                     execSQL("ALTER TABLE `manga_list_state` ADD COLUMN `needs_refresh` INTEGER NOT NULL DEFAULT 0")
+                    execSQL("ALTER TABLE `manga_list_entry` ADD COLUMN `unverified_numbers` INTEGER NOT NULL DEFAULT 7")
                 },
             )
 

@@ -11,6 +11,8 @@ value class MangaReadingStatus(
     }
 }
 
+enum class MangaListNumber { Score, ChaptersRead, VolumesRead }
+
 data class MangaListEntry(
     val id: MangaId,
     val titles: Titles,
@@ -21,6 +23,7 @@ data class MangaListEntry(
     val score: Int? = null,
     val updatedAt: Instant? = null,
     val explicitlyUnrated: Boolean = false,
+    val unverifiedNumbers: Set<MangaListNumber> = emptySet(),
 ) {
     init {
         require(id.value > 0)
@@ -30,7 +33,9 @@ data class MangaListEntry(
         require(!explicitlyUnrated || score == null)
     }
 
-    val recordedScore: Int? get() = score ?: 0.takeIf { explicitlyUnrated }
+    val recordedScore: Int? get() = (score ?: 0.takeIf { explicitlyUnrated }).takeUnless { MangaListNumber.Score in unverifiedNumbers }
+    val recordedChaptersRead: Int? get() = chaptersRead.takeUnless { MangaListNumber.ChaptersRead in unverifiedNumbers }
+    val recordedVolumesRead: Int? get() = volumesRead.takeUnless { MangaListNumber.VolumesRead in unverifiedNumbers }
 }
 
 data class MangaListSnapshot(

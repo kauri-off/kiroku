@@ -401,7 +401,15 @@ class RoomMangaListTest {
                 val list = RoomMangaList({ database }, session, network.http, clock) { false }
                 for (page in pages) network.api.enqueue(answer(page.status, page.body))
                 val before = (list.refresh(owner) as Outcome.Success).value
-                val acknowledgements = listOf(answer(204, ""), answer(200, "{"), answer(202, """{"queued":true}"""))
+                val acknowledgements =
+                    listOf(
+                        answer(204, ""),
+                        answer(200, "{"),
+                        answer(200, """{"status":broken}"""),
+                        answer(200, """{"status":NaN}"""),
+                        answer(200, """{"score":00}"""),
+                        answer(202, """{"queued":true}"""),
+                    )
                 for (ack in acknowledgements) {
                     for (requestedAlreadyPresent in listOf(false, true)) {
                         val entry = before.entries.first { it.recordedScore != null }
@@ -464,13 +472,42 @@ class RoomMangaListTest {
                     check(network.api.requestCount == sent)
                 }
 
+                val placeholder = "INVALID_SCORE_TEST_TOKEN"
+                network.api.enqueue(answer(204, ""))
+                network.api.enqueue(
+                    answer(200, firstPage.edited(scorePath, JsonPrimitive(placeholder)).toString().replace("\"$placeholder\"", "00")),
+                )
+                for (page in pages.drop(1)) network.api.enqueue(answer(page.status, page.body))
+                check(
+                    list.edit(owner, id, MangaListEdit(score = 0)) ==
+                        MangaListEditResult.Uncertain(DataError.ServerError, needsRefresh = true),
+                )
+                val sent = network.api.requestCount
+                check(list.edit(owner, id, requested, retryFrom = baseline) == MangaListEditResult.Discarded)
+                check(network.api.requestCount == sent)
+
+                val repairedPage =
+                    firstPage
+                        .edited(scorePath, JsonPrimitive("7"))
+                        .edited(listOf("data", "0", "list_status", "num_chapters_read"), JsonPrimitive("12"))
+                        .edited(listOf("data", "0", "list_status", "num_volumes_read"), JsonPrimitive("3"))
+                network.api.enqueue(answer(200, repairedPage.toString()))
+                for (page in pages.drop(1)) network.api.enqueue(answer(page.status, page.body))
+                val repaired = (list.refresh(owner) as Outcome.Success).value.entries.single { it.id == id }
+                check(repaired.score == 7 && repaired.chaptersRead == 12 && repaired.volumesRead == 3)
+                check(repaired.recordedScore == null && repaired.recordedChaptersRead == null && repaired.recordedVolumesRead == null)
+                database.close()
+                database = KirokuDatabase.open(context, name)
+                val reopened = RoomMangaList({ database }, session, network.http, clock) { false }
+                check((reopened.stored(owner) as Outcome.Success).value?.entries?.single { it.id == id } == repaired)
+
                 score(JsonPrimitive(0))
-                list.refresh(owner)
-                val stored = (list.stored(owner) as Outcome.Success).value?.entries?.single { it.id == id }
+                reopened.refresh(owner)
+                val stored = (reopened.stored(owner) as Outcome.Success).value?.entries?.single { it.id == id }
                 check(stored?.recordedScore == 0)
                 network.api.enqueue(answer(204, ""))
                 score(JsonPrimitive(7))
-                val result = list.edit(owner, id, requested, retryFrom = baseline)
+                val result = reopened.edit(owner, id, requested, retryFrom = baseline)
                 check(result is MangaListEditResult.Confirmed && result.entry.score == 7)
             }
         }
@@ -511,54 +548,79 @@ class RoomMangaListTest {
         }
 
     @Test
-    fun `a delayed observer discards queued rows from a replaced sign in`() =
+    fun `buffered rows are discarded after replacement or retirement`() =
         runBlocking {
-            val owner = signIn("a")
-            val old = entry()
-            val seen = CompletableDeferred<Unit>()
-            val release = CompletableDeferred<Unit>()
-            val observedRead = CompletableDeferred<Unit>()
-            val checks = AtomicInteger()
-            val list =
-                RoomMangaList(
-                    { database },
-                    session,
-                    { asked, _ -> response(asked) },
-                    clock,
-                    unexpected = { reported += it },
-                    retired = {
-                        if (it == owner && checks.incrementAndGet() == 7) observedRead.complete(Unit)
-                        false
-                    },
-                )
-            response = { Outcome.Success(listOf(old)) }
-            list.refresh(owner)
-            val delivered = mutableListOf<Outcome<MangaListSnapshot?>>()
-            val observing =
-                async {
-                    list.observe(owner).take(2).collect {
-                        delivered += it
-                        if (delivered.size == 1) {
-                            seen.complete(Unit)
-                            release.await()
+            for (end in listOf(OwnerEnd.Replaced, OwnerEnd.SigningOut, OwnerEnd.Retired)) {
+                val owner = signIn("a")
+                val old = entry()
+                val seen = CompletableDeferred<Unit>()
+                val release = CompletableDeferred<Unit>()
+                val observedRead = CompletableDeferred<Unit>()
+                val cleanupStarted = CompletableDeferred<Unit>()
+                val finishCleanup = CompletableDeferred<Unit>()
+                val checks = AtomicInteger()
+                val bufferedRead = AtomicInteger(Int.MAX_VALUE)
+                val durableRetirement = AtomicBoolean(false)
+                val list =
+                    RoomMangaList(
+                        { database },
+                        session,
+                        { asked, _ -> response(asked) },
+                        clock,
+                        unexpected = { reported += it },
+                        retired = {
+                            if (it == owner && checks.incrementAndGet() == bufferedRead.get()) observedRead.complete(Unit)
+                            durableRetirement.get()
+                        },
+                    )
+                response = { Outcome.Success(listOf(old)) }
+                list.refresh(owner)
+                val delivered = mutableListOf<Outcome<MangaListSnapshot?>>()
+                val observing =
+                    async {
+                        list.observe(owner).take(2).collect {
+                            delivered += it
+                            if (delivered.size == 1) {
+                                seen.complete(Unit)
+                                release.await()
+                            }
                         }
                     }
+                try {
+                    withTimeout(5_000) { seen.await() }
+                    bufferedRead.set(checks.get() + 3)
+                    response = { Outcome.Success(listOf(old.copy(score = 2))) }
+                    list.refresh(owner)
+                    withTimeout(5_000) { observedRead.await() }
+                    when (end) {
+                        OwnerEnd.Replaced -> signIn("b")
+                        OwnerEnd.Retired -> durableRetirement.set(true)
+                        OwnerEnd.SigningOut -> {
+                            async {
+                                session.signOutIfCurrent(owner) {
+                                    cleanupStarted.complete(Unit)
+                                    finishCleanup.await()
+                                }
+                            }
+                            withTimeout(5_000) { cleanupStarted.await() }
+                            assertEquals(owner, session.currentSession()?.owner)
+                        }
+                    }
+                    release.complete(Unit)
+                    withTimeout(5_000) { observing.await() }
+                    assertEquals(
+                        end.name,
+                        listOf(Outcome.Success(MangaListSnapshot(owner, listOf(old), clock.now)), Outcome.Failure(DataError.ListEnded)),
+                        delivered,
+                    )
+                } finally {
+                    release.complete(Unit)
+                    finishCleanup.complete(Unit)
                 }
-            try {
-                withTimeout(5_000) { seen.await() }
-                response = { Outcome.Success(listOf(old.copy(score = 2))) }
-                list.refresh(owner)
-                withTimeout(5_000) { observedRead.await() }
-                signIn("b")
-            } finally {
-                release.complete(Unit)
             }
-            withTimeout(5_000) { observing.await() }
-            assertEquals(
-                listOf(Outcome.Success(MangaListSnapshot(owner, listOf(old), clock.now)), Outcome.Failure(DataError.ListEnded)),
-                delivered,
-            )
         }
+
+    private enum class OwnerEnd { Replaced, SigningOut, Retired }
 
     @Test
     fun `a first 401 with failed renewal goes no further than the refused patch`() =

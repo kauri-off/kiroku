@@ -2,7 +2,7 @@
   "formatVersion": 1,
   "database": {
     "version": 10,
-    "identityHash": "5d758a3800fabcb043fd9a48686c97c8",
+    "identityHash": "26326b4eacb144dad9d1cdf2a8b9bce9",
     "entities": [
       {
         "tableName": "title",
@@ -218,7 +218,7 @@
       },
       {
         "tableName": "manga_list_entry",
-        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`owner` TEXT NOT NULL, `manga_id` INTEGER NOT NULL, `romaji` TEXT NOT NULL, `english` TEXT, `japanese` TEXT, `synonyms` TEXT NOT NULL, `poster` TEXT, `status` TEXT NOT NULL, `chapters_read` INTEGER, `volumes_read` INTEGER, `score` INTEGER, `updated_at` INTEGER, PRIMARY KEY(`owner`, `manga_id`), FOREIGN KEY(`owner`) REFERENCES `manga_list_state`(`owner`) ON UPDATE NO ACTION ON DELETE CASCADE )",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`owner` TEXT NOT NULL, `manga_id` INTEGER NOT NULL, `romaji` TEXT NOT NULL, `english` TEXT, `japanese` TEXT, `synonyms` TEXT NOT NULL, `poster` TEXT, `status` TEXT NOT NULL, `chapters_read` INTEGER, `volumes_read` INTEGER, `score` INTEGER, `updated_at` INTEGER, `unverified_numbers` INTEGER NOT NULL DEFAULT 7, PRIMARY KEY(`owner`, `manga_id`), FOREIGN KEY(`owner`) REFERENCES `manga_list_state`(`owner`) ON UPDATE NO ACTION ON DELETE CASCADE )",
         "fields": [
           {
             "fieldPath": "owner",
@@ -284,6 +284,13 @@
             "fieldPath": "updatedAt",
             "columnName": "updated_at",
             "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "unverifiedNumbers",
+            "columnName": "unverified_numbers",
+            "affinity": "INTEGER",
+            "notNull": true,
+            "defaultValue": "7"
           }
         ],
         "primaryKey": {
@@ -1008,7 +1015,7 @@
     ],
     "setupQueries": [
       "CREATE TABLE IF NOT EXISTS room_master_table (id INTEGER PRIMARY KEY,identity_hash TEXT)",
-      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, '5d758a3800fabcb043fd9a48686c97c8')"
+      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, '26326b4eacb144dad9d1cdf2a8b9bce9')"
     ]
   }
 }

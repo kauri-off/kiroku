@@ -10,6 +10,7 @@ import androidx.room.Query
 import androidx.room.Upsert
 import io.github.kauri_off.kiroku.core.model.MangaId
 import io.github.kauri_off.kiroku.core.model.MangaListEntry
+import io.github.kauri_off.kiroku.core.model.MangaListNumber
 import io.github.kauri_off.kiroku.core.model.MangaReadingStatus
 import io.github.kauri_off.kiroku.core.model.SignInId
 import io.github.kauri_off.kiroku.core.model.Titles
@@ -46,6 +47,7 @@ internal data class MangaListEntryRow(
     @ColumnInfo(name = "volumes_read") val volumesRead: Int?,
     val score: Int?,
     @ColumnInfo(name = "updated_at") val updatedAt: Long?,
+    @ColumnInfo(name = "unverified_numbers", defaultValue = "7") val unverifiedNumbers: Int,
 ) {
     fun toEntry(): MangaListEntry =
         MangaListEntry(
@@ -57,6 +59,7 @@ internal data class MangaListEntryRow(
             volumesRead = volumesRead,
             score = score?.takeUnless { it == 0 },
             explicitlyUnrated = score == 0,
+            unverifiedNumbers = UnverifiedNumbers.filterValues { unverifiedNumbers and it != 0 }.keys,
             updatedAt = updatedAt?.let(::instantOf),
         )
 }
@@ -73,9 +76,13 @@ internal fun MangaListEntry.toRow(owner: SignInId): MangaListEntryRow =
         status = status.code,
         chaptersRead = chaptersRead,
         volumesRead = volumesRead,
-        score = recordedScore,
+        score = score ?: 0.takeIf { explicitlyUnrated },
         updatedAt = updatedAt?.toColumn(),
+        unverifiedNumbers = unverifiedNumbers.sumOf { UnverifiedNumbers.getValue(it) },
     )
+
+private val UnverifiedNumbers =
+    mapOf(MangaListNumber.Score to 1, MangaListNumber.ChaptersRead to 2, MangaListNumber.VolumesRead to 4)
 
 @Dao
 internal interface MangaListDao {
