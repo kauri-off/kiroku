@@ -194,12 +194,6 @@ internal class LiveGraph(
             }
         }
 
-    init {
-        parts.scope.launch(Dispatchers.IO) {
-            if (hasDatabase()) startMangaCleanup()
-        }
-    }
-
     internal fun startMangaCleanup() {
         mangaCleanup.start()
     }
@@ -215,7 +209,23 @@ internal class LiveGraph(
     override val search by lazy { MalSearch(parts.http, parts.clock) { account } }
     override val user: LiveUser by lazy { liveUser(parts, account, ownProfile) }
     override val connection by lazy { liveConnection(parts) }
-    override val preferences by lazy { livePreferences(parts) }
+    private val storedPreferences by lazy { livePreferences(parts) }
+    private val mangaSortCleanup =
+        parts.scope.launch(Dispatchers.IO, start = CoroutineStart.LAZY) {
+            account.observeOwner().collectLatest { owner ->
+                storedPreferences.sweepMangaListSorts(account, owner, ::wasRetiredOnDisk)
+            }
+        }
+    override val preferences
+        get() = storedPreferences.also { mangaSortCleanup.start() }
+
+    init {
+        parts.scope.launch(Dispatchers.IO) {
+            if (hasDatabase()) startMangaCleanup()
+            if (hasPreferencesFile(parts)) mangaSortCleanup.start()
+        }
+    }
+
     override val signIn by lazy { liveSignIn(parts, account) }
 
     // MAL's one way in for work without a screen; it holds nothing of its own.

@@ -428,12 +428,13 @@ interface PreferencesRepository {
         sort: TabSort,
     )
 
-    fun observeMangaListSorts(owner: SignInId): Flow<Map<MangaReadingStatus, TabSort>>
+    suspend fun mangaSorts(owner: SignInId): Map<MangaReadingStatus, TabSort>
 
     suspend fun setMangaListSort(
         owner: SignInId,
         status: MangaReadingStatus,
         sort: TabSort,
+        canWrite: suspend () -> Boolean = { true },
     )
 
     // The other users' profiles the person opened, newest first; a sign-out forgets them with the user's other choices.

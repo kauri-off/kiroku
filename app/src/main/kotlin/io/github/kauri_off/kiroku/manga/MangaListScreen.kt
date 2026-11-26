@@ -15,10 +15,12 @@ import androidx.compose.material3.ListItem
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.key
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.saveable.listSaver
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalLayoutDirection
@@ -48,6 +50,7 @@ import io.github.kauri_off.kiroku.list.ListStatusPager
 import io.github.kauri_off.kiroku.list.ListTabMotion
 import io.github.kauri_off.kiroku.list.StatusTabs
 import io.github.kauri_off.kiroku.list.belowBars
+import io.github.kauri_off.kiroku.list.listScrollAnchor
 import io.github.kauri_off.kiroku.list.listScrollSaver
 import io.github.kauri_off.kiroku.list.rememberListTabMotion
 import io.github.kauri_off.kiroku.title.countText
@@ -201,19 +204,20 @@ internal fun MangaListBody(
                     val rows = content.pages[status].orEmpty()
                     val choice = state.sortFor(status)
                     key(status.code, choice.sort.name, choice.direction?.name, content.language.name) {
-                        if (rows.isEmpty()) null else rememberMangaScroll(rows)
+                        rememberMangaScroll(rows)
                     }
                 }
             val pages: @Composable () -> Unit = {
                 if (motion == null) {
                     val matches = state.matches.takeIf { state.filter.session == state.activeFilterSession }
                     key(state.activeFilterSession, state.filter.text) {
+                        val scroll = rememberMangaScroll(matches.orEmpty())
                         FilterResults(matches?.isNotEmpty(), pagePadding) { bottom ->
                             val rows = checkNotNull(matches)
                             MangaRows(
                                 rows,
                                 content,
-                                rememberMangaScroll(rows),
+                                scroll,
                                 onEvent,
                                 PaddingValues(
                                     start = pagePadding.calculateStartPadding(direction),
@@ -238,11 +242,36 @@ internal fun MangaListBody(
     }
 }
 
+private class MangaViewport(
+    var saved: List<Long> = emptyList(),
+) {
+    var visible: LazyListState? = null
+
+    fun anchor(): List<Long> = visible?.listScrollAnchor()?.takeIf { it.size == 3 } ?: saved
+}
+
+private val mangaViewportSaver =
+    listSaver<MangaViewport, Long>(save = { it.anchor() }, restore = ::MangaViewport)
+
 @Composable
-private fun rememberMangaScroll(rows: List<MangaListEntry>): LazyListState =
-    rememberSaveable(saver = listScrollSaver(rows.lastIndex) { id -> rows.indexOfFirst { it.id.value == id } }) {
-        LazyListState()
+private fun rememberMangaScroll(rows: List<MangaListEntry>): LazyListState? {
+    val viewport = rememberSaveable(saver = mangaViewportSaver) { MangaViewport() }
+    if (rows.isEmpty()) return null
+    val scroll =
+        remember(viewport) {
+            viewport.saved.takeIf { it.isNotEmpty() }?.let { anchor ->
+                listScrollSaver(rows.lastIndex) { id -> rows.indexOfFirst { it.id.value == id } }.restore(anchor)
+            } ?: LazyListState()
+        }
+    DisposableEffect(viewport, scroll) {
+        viewport.visible = scroll
+        onDispose {
+            viewport.saved = viewport.anchor()
+            viewport.visible = null
+        }
     }
+    return scroll
+}
 
 @Composable
 private fun MangaPages(

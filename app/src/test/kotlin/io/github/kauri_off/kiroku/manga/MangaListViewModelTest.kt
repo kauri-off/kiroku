@@ -1,6 +1,7 @@
 package io.github.kauri_off.kiroku.manga
 
 import androidx.compose.runtime.snapshots.Snapshot
+import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.viewModelScope
 import io.github.kauri_off.kiroku.core.demo.DemoPreferences
 import io.github.kauri_off.kiroku.core.error.DataError
@@ -16,6 +17,7 @@ import io.github.kauri_off.kiroku.core.model.SignInId
 import io.github.kauri_off.kiroku.core.model.TitleLanguage
 import io.github.kauri_off.kiroku.core.repository.Connection
 import io.github.kauri_off.kiroku.core.repository.MangaListReader
+import io.github.kauri_off.kiroku.core.repository.PreferencesRepository
 import io.github.kauri_off.kiroku.wiring.MainDispatcherRule
 import io.github.kauri_off.kiroku.wiring.showing
 import kotlinx.coroutines.CompletableDeferred
@@ -26,6 +28,8 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.onStart
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
@@ -57,34 +61,117 @@ class MangaListViewModelTest {
     @get:Rule
     val main = MainDispatcherRule(dispatcher)
 
-    private fun model() =
-        MangaListViewModel(
-            object : MangaListReader {
-                override suspend fun stored(owner: SignInId): Outcome<MangaListSnapshot?> {
-                    cachedReads++
-                    cache.await()
-                    return Outcome.Success(snapshot.takeIf { it.owner == owner })
-                }
+    private fun model(
+        saved: SavedStateHandle = SavedStateHandle(),
+        repo: PreferencesRepository = preferences,
+    ) = MangaListViewModel(
+        object : MangaListReader {
+            override suspend fun stored(owner: SignInId): Outcome<MangaListSnapshot?> {
+                cachedReads++
+                cache.await()
+                return Outcome.Success(snapshot.takeIf { it.owner == owner })
+            }
 
-                override suspend fun refresh(
-                    owner: SignInId,
-                    canDispatch: () -> Boolean,
-                ): Outcome<MangaListSnapshot>? {
-                    admission.await()
-                    if (!canDispatch()) return null
-                    fetches++
-                    return withContext(NonCancellable) { answer.await() }
+            override suspend fun refresh(
+                owner: SignInId,
+                canDispatch: () -> Boolean,
+            ): Outcome<MangaListSnapshot>? {
+                admission.await()
+                if (!canDispatch()) return null
+                fetches++
+                return withContext(NonCancellable) { answer.await() }
+            }
+        },
+        Clock.fixed(now, ZoneOffset.UTC),
+        object : Connection {
+            override fun observeOnline() = online.onStart { connectionAdmission.await() }
+        },
+        sessions,
+        flowOf(TitleLanguage.Romaji),
+        repo,
+        saved,
+        onRefreshFailed = failures::add,
+    )
+
+    @Test
+    fun `recreation during a sort write starts with the committed direction and order`() =
+        runTest(dispatcher) {
+            val reading = mangaEntry.status
+            val highScore = mangaEntry.copy(id = MangaId(10), score = 9, updatedAt = now)
+            val lowScore = mangaEntry.copy(id = MangaId(20), score = 4, updatedAt = now.minusSeconds(30))
+            snapshot = snapshot.copy(entries = listOf(highScore, lowScore))
+            val write = CompletableDeferred<Unit>()
+            val serial = Mutex()
+            val repo =
+                object : PreferencesRepository by preferences {
+                    override suspend fun mangaSorts(owner: SignInId) = serial.withLock { preferences.mangaSorts(owner) }
+
+                    override suspend fun setMangaListSort(
+                        owner: SignInId,
+                        status: MangaReadingStatus,
+                        sort: TabSort,
+                        canWrite: suspend () -> Boolean,
+                    ) {
+                        serial.withLock {
+                            write.await()
+                            preferences.setMangaListSort(owner, status, sort, canWrite)
+                        }
+                    }
                 }
-            },
-            Clock.fixed(now, ZoneOffset.UTC),
-            object : Connection {
-                override fun observeOnline() = online.onStart { connectionAdmission.await() }
-            },
-            sessions,
-            flowOf(TitleLanguage.Romaji),
-            preferences,
-            onRefreshFailed = failures::add,
-        )
+            val first = model(repo = repo)
+            val recreated = model(repo = repo)
+            val shown = showing(first.shown, first.state)
+            try {
+                runCurrent()
+                Snapshot.sendApplyNotifications()
+                runCurrent()
+                first.control(owner, MangaListEvent.OpenSort(reading))
+                first.control(owner, MangaListEvent.SelectSort(ListSort.Score))
+                first.control(owner, MangaListEvent.SelectDirection(SortDirection.Ascending))
+                Snapshot.sendApplyNotifications()
+                runCurrent()
+                assertEquals(listOf(lowScore, highScore), (first.state.value.content as MangaListContent.Ready).entries)
+
+                shown.cancel()
+                first.viewModelScope.cancel()
+                showing(recreated.shown, recreated.state)
+                runCurrent()
+                assertEquals(MangaListContent.Loading, recreated.state.value.content)
+                write.complete(Unit)
+                runCurrent()
+                assertEquals(TabSort(ListSort.Score, SortDirection.Ascending), recreated.state.value.sortFor(reading))
+                assertEquals(listOf(lowScore, highScore), (recreated.state.value.content as MangaListContent.Ready).entries)
+            } finally {
+                write.complete(Unit)
+                first.viewModelScope.cancel()
+                recreated.viewModelScope.cancel()
+            }
+        }
+
+    @Test
+    fun `an unfamiliar selection stays pending until the first authoritative rows arrive`() =
+        runTest(dispatcher) {
+            val unfamiliar = MangaReadingStatus("rereading")
+            val saved = SavedStateHandle().apply { saveMangaControls(MangaListControls(owner, unfamiliar)) }
+            snapshot = snapshot.copy(entries = emptyList(), syncedAt = now.minusSeconds(7 * 24 * 60 * 60))
+            answer = CompletableDeferred()
+            val vm = model(saved)
+            try {
+                showing(vm.shown, vm.state)
+                runCurrent()
+                assertEquals(unfamiliar, vm.state.value.tab)
+                val waiting = vm.state.value.content as MangaListContent.Ready
+                assertEquals(unfamiliar, waiting.statuses[waiting.pageIndex(unfamiliar)])
+                assertEquals(1, fetches)
+                val restored = mangaEntry.copy(status = unfamiliar)
+                answer.complete(Outcome.Success(snapshot.copy(entries = listOf(restored), syncedAt = now)))
+                runCurrent()
+                assertEquals(unfamiliar, vm.state.value.tab)
+                assertEquals(listOf(restored), (vm.state.value.content as MangaListContent.Ready).pages[unfamiliar])
+            } finally {
+                vm.viewModelScope.cancel()
+            }
+        }
 
     @Test
     fun `a fresh task restores Manga sort and direction from preferences`() =
@@ -103,7 +190,7 @@ class MangaListViewModelTest {
                 first.control(owner, MangaListEvent.FilterChanged("previous task"))
                 Snapshot.sendApplyNotifications()
                 runCurrent()
-                assertEquals(TabSort(ListSort.Score, SortDirection.Ascending), preferences.observeMangaListSorts(owner).first()[reading])
+                assertEquals(TabSort(ListSort.Score, SortDirection.Ascending), preferences.mangaSorts(owner)[reading])
             } finally {
                 shown.cancel()
                 first.viewModelScope.cancel()

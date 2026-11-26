@@ -86,18 +86,18 @@ internal class MangaListViewModel(
 
     val shown = loads.shown
     val state =
-        combine(page, session, language, snapshotFlow { controls.value }, edits, ::present)
-            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(replayExpirationMillis = 0), MangaListState())
+        combine(page, session, language, snapshotFlow { controls.value }, edits) { current, account, titles, _, editing ->
+            present(current, account, titles, editing)
+        }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(replayExpirationMillis = 0), MangaListState())
 
     private fun present(
         current: Page,
         account: Session?,
         titles: TitleLanguage,
-        saved: MangaListControls,
         edits: MangaEditingState,
     ): MangaListState {
         val owner = account?.owner
-        val active = saved.takeIf { it.owner == owner } ?: MangaListControls(owner)
+        val active = controls.value.takeIf { it.owner == owner } ?: MangaListControls(owner)
         val snapshot = current.snapshot?.takeIf { it.owner == owner }
         val editing = edits.takeIf { it.owner == owner && it.snapshot?.owner == owner }
         val confirmed = editing?.snapshot ?: snapshot
@@ -107,6 +107,12 @@ internal class MangaListViewModel(
                 account == Session.SignedOut -> MangaListContent.SignedOut
                 snapshot != null && confirmed != null -> {
                     val displayed = confirmed.entries.map { editing?.displayed(it) ?: it }
+                    val staleBlank =
+                        snapshot.entries.isEmpty() && listStale(snapshot.syncedAt, clock.instant()) && account !is Session.Expired
+                    val awaitingEditor =
+                        snapshot.syncedAt != confirmed.syncedAt && snapshot.entries.any { it.status == active.tab }
+                    val statuses = confirmed.entries.mapTo(mutableSetOf(), MangaListEntry::status)
+                    if (confirmed.entries.isEmpty() && (staleBlank || awaitingEditor)) statuses += active.tab
                     MangaListContent.Ready(
                         entries =
                             ordering.entries(
@@ -120,7 +126,7 @@ internal class MangaListViewModel(
                         language = titles,
                         refreshing = current.refreshing,
                         canEdit = editing?.signedIn == true && account is Session.SignedIn,
-                        confirmedStatuses = confirmed.entries.mapTo(mutableSetOf(), MangaListEntry::status),
+                        confirmedStatuses = statuses,
                     )
                 }
                 error != null -> MangaListContent.Failed(error)
@@ -191,7 +197,7 @@ internal class MangaListViewModel(
             if (tab != null && sort != null && next.sorts != current.sorts) {
                 viewModelScope.launch(start = CoroutineStart.UNDISPATCHED) {
                     withContext(NonCancellable) {
-                        if (sessions.first().owner == owner) preferences.setMangaListSort(owner, tab, sort)
+                        preferences.setMangaListSort(owner, tab, sort) { sessions.first().owner == owner }
                     }
                 }
             }
@@ -222,7 +228,7 @@ internal class MangaListViewModel(
                     }
                     val owner = next.owner
                     if (owner != null && sortsOwner != owner) {
-                        val sorts = preferences.observeMangaListSorts(owner).first()
+                        val sorts = preferences.mangaSorts(owner)
                         controls.value = controls.value.copy(sorts = sorts)
                         sortsOwner = owner
                     }

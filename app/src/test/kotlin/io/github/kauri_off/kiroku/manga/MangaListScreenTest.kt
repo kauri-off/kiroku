@@ -163,6 +163,25 @@ class MangaListScreenTest {
         compose.onNodeWithText(entries[5].titles.romaji).assertIsNotDisplayed()
     }
 
+    @Test
+    fun `the mounted status viewport survives temporary empty rows`() = mountedViewport(null)
+
+    @Test
+    fun `the mounted filter viewport survives temporary empty matches`() = mountedViewport("Volume")
+
+    private fun mountedViewport(query: String?) {
+        val entries = longList()
+        val initial = MangaListState(content = mangaListFixture(entries), filter = ListState.Typed(query), matches = entries)
+        state = initial
+        compose.setContent { Screen(state) {} }
+        val anchor = scrollToAnchor(entries)
+        val top = anchor.getUnclippedBoundsInRoot().top
+        compose.runOnIdle { state = initial.copy(content = mangaListFixture(emptyList()), matches = emptyList()) }
+        if (query == null) assertEmptyLibraryDisplayed() else compose.onNodeWithText("No titles match the filter").assertIsDisplayed()
+        compose.runOnIdle { state = initial.copy(content = mangaListFixture(entries.drop(1)), matches = entries.drop(1)) }
+        assertEquals(top, anchor.getUnclippedBoundsInRoot().top)
+    }
+
     private fun longList() = (1L..24).map { id -> mangaEntry.copy(id = MangaId(id), titles = Titles("Volume $id"), posterUrl = null) }
 
     private fun scrollToAnchor(entries: List<MangaListEntry>): SemanticsNodeInteraction {

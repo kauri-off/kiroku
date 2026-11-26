@@ -10,14 +10,12 @@ import io.github.kauri_off.kiroku.core.repository.AdultSearchChoice
 import io.github.kauri_off.kiroku.core.repository.PreferencesRepository
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.distinctUntilChanged
-import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.update
 
 // The demo's choices, kept as long as its process, as the rest of the demo is.
 class DemoPreferences : PreferencesRepository {
     private val sorts = MutableStateFlow(ListStatus.entries.associateWith(TabSort::defaultFor))
-    private val mangaSorts = MutableStateFlow(emptyMap<Pair<SignInId, MangaReadingStatus>, TabSort>())
+    private val mangaChoices = MutableStateFlow(emptyMap<Pair<SignInId, MangaReadingStatus>, TabSort>())
     private val opened = MutableStateFlow(emptyList<String>())
 
     private val language = MutableStateFlow(TitleLanguage.Romaji)
@@ -47,14 +45,17 @@ class DemoPreferences : PreferencesRepository {
         sort: TabSort,
     ) = sorts.update { it + (status to sort) }
 
-    override fun observeMangaListSorts(owner: SignInId): Flow<Map<MangaReadingStatus, TabSort>> =
-        mangaSorts.map { choices -> choices.filterKeys { it.first == owner }.mapKeys { it.key.second } }.distinctUntilChanged()
+    override suspend fun mangaSorts(owner: SignInId): Map<MangaReadingStatus, TabSort> =
+        mangaChoices.value.filterKeys { it.first == owner }.mapKeys { it.key.second }
 
     override suspend fun setMangaListSort(
         owner: SignInId,
         status: MangaReadingStatus,
         sort: TabSort,
-    ) = mangaSorts.update { it + ((owner to status) to sort) }
+        canWrite: suspend () -> Boolean,
+    ) {
+        if (canWrite()) mangaChoices.update { it + ((owner to status) to sort) }
+    }
 
     override fun observeOpenedProfiles(): Flow<List<String>> = opened
 

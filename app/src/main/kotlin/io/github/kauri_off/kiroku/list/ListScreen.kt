@@ -714,14 +714,7 @@ internal fun listScrollSaver(
     lastIndex: Int,
     indexOfId: (Long) -> Int,
 ) = listSaver<LazyListState, Long>(
-    save = { state ->
-        val first = state.firstVisibleItemIndex
-        val title =
-            state.layoutInfo.visibleItemsInfo
-                .firstOrNull { it.index == first }
-                ?.key as? Long
-        listOfNotNull(first.toLong(), state.firstVisibleItemScrollOffset.toLong(), title)
-    },
+    save = { it.listScrollAnchor() },
     restore = { saved ->
         val title = saved.getOrNull(2)
         val index = title?.let(indexOfId) ?: -1
@@ -729,6 +722,12 @@ internal fun listScrollSaver(
         LazyListState(if (index >= 0) index else fallback, saved[1].toInt())
     },
 )
+
+internal fun LazyListState.listScrollAnchor(): List<Long> {
+    val first = firstVisibleItemIndex
+    val title = layoutInfo.visibleItemsInfo.firstOrNull { it.index == first }?.key as? Long
+    return listOfNotNull(first.toLong(), firstVisibleItemScrollOffset.toLong(), title)
+}
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
