@@ -52,6 +52,7 @@ import io.github.kauri_off.kiroku.wiring.AppEnds
 import io.github.kauri_off.kiroku.wiring.KeysInMemory
 import io.github.kauri_off.kiroku.wiring.appGraph
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.delay
@@ -178,7 +179,17 @@ class SandboxAppTest {
     // A wait that ends in time; one that does not, or fails, fails first on a connection, if it asked for one.
     private fun <T> waited(block: suspend () -> T): T =
         try {
-            runBlocking { withTimeout(WAIT) { block() } }
+            val looper = shadowOf(Looper.getMainLooper())
+            runBlocking {
+                withTimeout(WAIT) {
+                    val result = async(start = CoroutineStart.UNDISPATCHED) { block() }
+                    while (!result.isCompleted) {
+                        looper.idle()
+                        delay(1)
+                    }
+                    result.await()
+                }
+            }
         } catch (e: Exception) {
             assertEquals(emptyList<URI>(), connections.asked)
             throw e
