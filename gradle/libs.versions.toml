@@ -1,6 +1,6 @@
 [versions]
-app-name = "0.9.0"
-app-code = "2"
+app-name = "0.9.1"
+app-code = "3"
 sdk-compile = "37"
 sdk-compileMinor = "2"
 sdk-min = "26"
