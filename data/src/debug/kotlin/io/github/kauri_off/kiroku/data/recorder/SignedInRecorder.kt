@@ -602,15 +602,17 @@ class SignedInRecorder internal constructor(
                 if (proof == null) throw Halted(Halt.Unconfirmed, at)
             }
             val reply = send(MANGA_REMOVED, delete(title.id, title.media), owner, manga = true)
-            val kept = mangaReply(MANGA_REMOVED, reply.status, if (reply.literalNull) JsonNull else reply.values)
+            val body =
+                when {
+                    reply.status != OK -> null
+                    reply.literalNull -> JsonNull
+                    else -> reply.values
+                }
+            val kept = mangaReply(MANGA_REMOVED, reply.status, body)
             verifyMangaReply(MANGA_REMOVED, reply, kept, directory, ::mangaDeleted)
             saveManga(MANGA_REMOVED, kept, directory)
             val after = mangaMembership(title, owner, MANGA_REMOVED_READ)
             if (after.present) throw Halted(Halt.StillOnTheList, MANGA_REMOVED_READ)
-            if (!reply.validDeletion) {
-                saveManga(MANGA_REMOVED_READ, after.kept(MANGA_REMOVED_READ), directory)
-                throw Halted(Halt.Unconfirmed, MANGA_REMOVED)
-            }
             filed(JOURNAL) { journal.deleteConfirmed() }
             left = null
             list = ListAfter.Removed
@@ -724,9 +726,8 @@ class SignedInRecorder internal constructor(
                 }
                 if (readOnly) return Recording.Leftover(left.title, ListAfter.Left, null)
                 list = ListAfter.Left
-                val reply = askManga(REMOVED, delete(left.title.id, left.title.media), initiating) { mangaDeleted(it) || it == NOT_FOUND }
+                askManga(REMOVED, delete(left.title.id, left.title.media), initiating) { mangaDeleted(it) || it == NOT_FOUND }
                 if (mangaMembership(left.title, initiating, READ).present) throw Halted(Halt.StillOnTheList, READ)
-                if (reply.status != NOT_FOUND && !reply.validDeletion) throw Halted(Halt.Unconfirmed, REMOVED)
             }
             filed(JOURNAL) { journal.deleteConfirmed() }
             list = if (left.removableMangaProof != null) ListAfter.Removed else ListAfter.Absent
@@ -1066,7 +1067,7 @@ class SignedInRecorder internal constructor(
         val mangaObject: JsonObject? get() = page?.takeIf { jsonType && "error" !in it }
         val values: JsonObject? get() = mangaObject?.projectMangaValues()?.takeUnless(hasSecret)
         val checkpoint: JsonObject? get() = mangaObject?.projectMangaCheckpoint()?.takeUnless(hasSecret)
-        val validDeletion: Boolean get() {
+        val hasDeletionAcknowledgment: Boolean get() {
             val projected = values
             return empty ||
                 (status == OK && jsonType && (literalNull || (projected != null && (page?.isEmpty() == true || projected.isNotEmpty()))))
@@ -1242,7 +1243,7 @@ class SignedInRecorder internal constructor(
                 hasSecret = { values -> values != null && sanitiser.asSent(values.toString()) != values.toString() },
             )
         if ((status == OK && answer.mangaObject != null) ||
-            (response.request.method == "DELETE" && mangaDeleted(status) && answer.validDeletion)
+            (response.request.method == "DELETE" && mangaDeleted(status) && answer.hasDeletionAcknowledgment)
         ) {
             http.backOff.answered(mark)
         }

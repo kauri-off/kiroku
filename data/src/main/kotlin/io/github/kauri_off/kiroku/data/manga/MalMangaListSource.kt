@@ -178,20 +178,19 @@ private class JsonStructure(
     private val startsObject: (() -> (String) -> Boolean)?,
 ) {
     private var end = 0
-    private val tokens =
-        JsonToken
-            .findAll(payload)
-            .takeWhile { it.range.first == end }
-            .onEach { end = it.range.last + 1 }
-            .map { it.value }
-            .filterNot { it[0] in " \t\r\n" }
-            .iterator()
-
+    private val tokens = JsonToken.toPattern().matcher(payload)
     private var token = next()
 
     fun isObject(): Boolean = token == "{" && value(0) && token == null && end == payload.length
 
-    private fun next(): String? = if (tokens.hasNext()) tokens.next() else null
+    private fun next(): String? {
+        while (tokens.find() && tokens.start() == end) {
+            end = tokens.end()
+            val value = tokens.group()
+            if (value[0] !in " \t\r\n") return value
+        }
+        return null
+    }
 
     private fun take(expected: String): Boolean {
         if (token != expected) return false
