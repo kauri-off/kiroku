@@ -4,12 +4,14 @@ import io.github.kauri_off.kiroku.core.error.DataError
 import io.github.kauri_off.kiroku.core.error.DataException
 import io.github.kauri_off.kiroku.core.model.AnimeId
 import io.github.kauri_off.kiroku.core.model.ListValues
+import io.github.kauri_off.kiroku.core.model.MangaId
 import io.github.kauri_off.kiroku.core.model.SignInId
 import io.github.kauri_off.kiroku.core.model.sameAsWritten
 import io.github.kauri_off.kiroku.core.repository.ListChange
 import io.github.kauri_off.kiroku.core.repository.ListRepository
 import io.github.kauri_off.kiroku.core.repository.ListWrite
 import io.github.kauri_off.kiroku.core.repository.WriteFailure
+import io.github.kauri_off.kiroku.edit.MangaEditTotals
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -91,6 +93,13 @@ data class ShellMessage(
             }
 }
 
+internal data class MangaChange(
+    val id: MangaId,
+    val owner: SignInId,
+    val title: String,
+    val totals: MangaEditTotals,
+) : ShellMessage.Action
+
 // One message at a time; one that must stay is never replaced, and an ordinary one posted meanwhile is dropped.
 class ShellMessages(
     private val scope: CoroutineScope,
@@ -109,6 +118,13 @@ class ShellMessages(
 
     // A title whose edit sheet "Change" asked for, until a screen with an edit sheet takes it.
     val editRequest: StateFlow<ShellMessage.Action.Change?> = requested.asStateFlow()
+
+    private val mangaRequested = MutableStateFlow<MangaChange?>(null)
+    internal val mangaEditRequest = mangaRequested.asStateFlow()
+
+    internal fun editTaken(request: MangaChange) {
+        mangaRequested.compareAndSet(request, null)
+    }
 
     private class Waiting(
         val posted: Posted,
@@ -197,6 +213,7 @@ class ShellMessages(
                 is ShellMessage.Action.Retry -> write(action.write)
                 is ShellMessage.Action.Change -> requested.value = action
                 is ShellMessage.Action.MangaRecovery -> action.run()
+                is MangaChange -> mangaRequested.value = action
                 null -> Unit
             }
         }
@@ -209,6 +226,7 @@ class ShellMessages(
     }
 
     internal fun retireManga(owner: SignInId) {
+        mangaRequested.value?.takeIf { it.owner == owner }?.let(::editTaken)
         waiting.removeAll { it.posted.message.mangaOwner == owner }
         if (shown.value?.message?.mangaOwner == owner) showNext()
     }
@@ -251,6 +269,7 @@ class ShellMessages(
         waiting.forEach { it.watch?.cancel() }
         waiting.clear()
         requested.value = null
+        mangaRequested.value = null
         show(null)
     }
 

@@ -35,6 +35,7 @@ import io.github.kauri_off.kiroku.design.component.TitleText
 import io.github.kauri_off.kiroku.design.theme.Spacing
 import io.github.kauri_off.kiroku.title.MalScore
 import io.github.kauri_off.kiroku.title.PublicTitleStats
+import io.github.kauri_off.kiroku.title.TitleAddButton
 import io.github.kauri_off.kiroku.title.TitleStatusButton
 import io.github.kauri_off.kiroku.title.countText
 import io.github.kauri_off.kiroku.title.message
@@ -46,7 +47,10 @@ internal data class MangaTitleState(
     val sessionExpired: Boolean = false,
     val listEntry: MangaListEntry? = null,
     val membershipError: DataError? = null,
+    val addAction: MangaAddAction? = null,
 )
+
+internal enum class MangaAddAction { Available, Saving }
 
 internal sealed interface MangaTitleContent {
     data object Loading : MangaTitleContent
@@ -73,7 +77,7 @@ internal sealed interface MangaTitleProblem {
     ) : MangaTitleProblem
 }
 
-internal enum class MangaTitleEvent { Back, Retry, Refresh, SignIn, Edit, RetryMembership }
+internal enum class MangaTitleEvent { Back, Retry, Refresh, SignIn, Edit, AddToList, RetryMembership }
 
 @Composable
 internal fun MangaTitleScreen(
@@ -103,6 +107,15 @@ internal fun MangaTitleScreen(
                         item { MangaHeader(content) }
                         state.listEntry?.let { entry ->
                             item { MangaOnList(entry) { onEvent(MangaTitleEvent.Edit) } }
+                        }
+                        state.addAction?.let { action ->
+                            item {
+                                TitleAddButton(
+                                    onClick = { onEvent(MangaTitleEvent.AddToList) },
+                                    modifier = Modifier.padding(start = Spacing.l, end = Spacing.l, top = Spacing.xl).fillMaxWidth(),
+                                    enabled = action == MangaAddAction.Available,
+                                )
+                            }
                         }
                         state.membershipError?.let {
                             item {

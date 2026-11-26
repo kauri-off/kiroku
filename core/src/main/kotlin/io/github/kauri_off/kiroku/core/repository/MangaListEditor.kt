@@ -127,6 +127,11 @@ fun MangaListEntry.matchesRemovalRetry(current: MangaListEntry): Boolean =
 interface MangaListEditor : MangaListReader {
     fun observe(owner: SignInId): Flow<Outcome<MangaListSnapshot?>>
 
+    suspend fun addPlanned(
+        owner: SignInId,
+        id: MangaId,
+    ): MangaListEditResult
+
     suspend fun edit(
         owner: SignInId,
         id: MangaId,

@@ -14,6 +14,7 @@ import io.github.kauri_off.kiroku.core.repository.MangaListEdit
 import io.github.kauri_off.kiroku.core.repository.MangaListEditResult
 import io.github.kauri_off.kiroku.core.repository.MangaListEditor
 import io.github.kauri_off.kiroku.core.repository.MangaListRemovalResult
+import io.github.kauri_off.kiroku.core.repository.MangaListStatus
 import io.github.kauri_off.kiroku.core.repository.matchesRemovalRetry
 import io.github.kauri_off.kiroku.data.db.KirokuDatabase
 import io.github.kauri_off.kiroku.data.db.MangaListStateRow
@@ -162,6 +163,36 @@ class RoomMangaList internal constructor(
             queue.lock.withLock { withContext(Dispatchers.IO) { download(owner, canDispatch) } }
         }
 
+    override suspend fun addPlanned(
+        owner: SignInId,
+        id: MangaId,
+    ): MangaListEditResult {
+        if (id.value <= 0) return MangaListEditResult.Failed(DataError.NotFound)
+        val writer = writer ?: return MangaListEditResult.Failed(DataError.InvalidRequest)
+        return queued(owner) { queue ->
+            queue.edit(id) { withContext(Dispatchers.IO) { add(owner, id, writer) } }
+        }
+    }
+
+    private suspend fun add(
+        owner: SignInId,
+        id: MangaId,
+        writer: MangaListWriter,
+    ): MangaListEditResult {
+        when (val fresh = checkNotNull(download(owner) { true })) {
+            is Outcome.Failure -> return MangaListEditResult.Failed(fresh.error)
+            is Outcome.Success -> if (fresh.value.entries.any { it.id == id }) return MangaListEditResult.Discarded
+        }
+        val prepared =
+            whileOwner(owner) {
+                if (!session.isSignedInAs(owner)) return@whileOwner Outcome.Failure(DataError.SessionExpired)
+                dao.requireRefresh(owner.value, true)
+                Outcome.Success(Unit)
+            }
+        if (prepared is Outcome.Failure) return MangaListEditResult.Failed(prepared.error)
+        return sendPatch(owner, id, MangaListEdit(status = MangaListStatus.PlanToRead), writer)
+    }
+
     override suspend fun edit(
         owner: SignInId,
         id: MangaId,
@@ -290,7 +321,15 @@ class RoomMangaList internal constructor(
                 is Outcome.Success -> prepared.value ?: return MangaListEditResult.RefreshRequired
             }
         if (patch.isEmpty) return MangaListEditResult.Discarded
+        return sendPatch(owner, id, patch, writer)
+    }
 
+    private suspend fun sendPatch(
+        owner: SignInId,
+        id: MangaId,
+        patch: MangaListEdit,
+        writer: MangaListWriter,
+    ): MangaListEditResult {
         val sent = send { writer.patch(owner, id, patch) }
         if (sent is MangaWriteResult.Refused) {
             val cleared = clearRefusal(owner)

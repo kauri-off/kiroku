@@ -111,6 +111,18 @@ fun AppRoute(
     val session = SignOutTurns(graph, navigator, messages)
     val images = remember(graph, session) { session?.let(graph::imageLoaderFor) }
     val mangaEditing = shell.mangaEditing
+    val mangaEdit by messages.mangaEditRequest.collectAsScreenState()
+    LaunchedEffect(mangaEdit) {
+        val request = mangaEdit ?: return@LaunchedEffect
+        messages.editTaken(request)
+        if (graph.session.observeSession().first() != Session.SignedIn(request.owner)) return@LaunchedEffect
+        val editing = mangaEditing?.state?.value ?: return@LaunchedEffect
+        if (editing.owner != request.owner || !editing.signedIn || editing.open != null) return@LaunchedEffect
+        if (editing.snapshot?.entries?.any { it.id == request.id } != true) return@LaunchedEffect
+        val page = MangaTitleKey(request.id.value)
+        if (navigator.stack.last() != page && !navigator.mangaEditOrigin().inMangaList) navigator.open(page)
+        mangaEditing.open(request.owner, request.id, request.title, navigator.mangaEditOrigin(), request.totals)
+    }
     if (links != null) LinkTurns(links, navigator) { mangaEditing?.dismissPresentation() }
     val origin = navigator.mangaEditOrigin()
     CompositionLocalProvider(

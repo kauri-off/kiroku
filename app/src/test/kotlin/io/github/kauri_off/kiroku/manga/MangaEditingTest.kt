@@ -13,8 +13,12 @@ import io.github.kauri_off.kiroku.core.repository.MangaListEdit
 import io.github.kauri_off.kiroku.core.repository.MangaListEditResult
 import io.github.kauri_off.kiroku.core.repository.MangaListEditor
 import io.github.kauri_off.kiroku.core.repository.MangaListRemovalResult
+import io.github.kauri_off.kiroku.core.repository.MangaListStatus
+import io.github.kauri_off.kiroku.core.repository.readingStatus
 import io.github.kauri_off.kiroku.edit.MangaEditSheetEvent
 import io.github.kauri_off.kiroku.edit.MangaEditSubmission
+import io.github.kauri_off.kiroku.edit.MangaEditTotals
+import io.github.kauri_off.kiroku.shell.MangaChange
 import io.github.kauri_off.kiroku.shell.ShellMessage
 import io.github.kauri_off.kiroku.shell.ShellMessages
 import io.github.kauri_off.kiroku.wiring.TestGraph
@@ -69,6 +73,8 @@ class MangaEditingTest {
         var refreshAdmission = CompletableDeferred(Unit)
         var answer = CompletableDeferred<MangaListEditResult>()
         var removalAnswer = CompletableDeferred<MangaListRemovalResult>()
+        var addAnswer = CompletableDeferred<MangaListEditResult>()
+        val adds = mutableListOf<Pair<SignInId, MangaId>>()
         val removals = mutableListOf<Triple<SignInId, MangaListEntry, Boolean>>()
         var refreshed: Outcome<MangaListSnapshot> = Outcome.Failure(DataError.NoConnection)
         val sent = mutableListOf<Sent>()
@@ -98,6 +104,14 @@ class MangaEditingTest {
             return removalAnswer.await()
         }
 
+        override suspend fun addPlanned(
+            owner: SignInId,
+            id: MangaId,
+        ): MangaListEditResult {
+            adds += owner to id
+            return addAnswer.await()
+        }
+
         override suspend fun edit(
             owner: SignInId,
             id: MangaId,
@@ -117,6 +131,145 @@ class MangaEditingTest {
         editing.open(owner, entry.id, entry.titles.romaji)
         return Subject(editing, messages)
     }
+
+    @Test
+    fun addRequiresReadableConfirmedAbsenceAndAStillActiveSignIn() =
+        runTest {
+            val backend = Backend()
+            val subject = start(backend)
+            subject.editing.dismissPresentation()
+            val id = entry.id
+            backend.cache.value = MangaListSnapshot(owner, emptyList(), null)
+            runCurrent()
+            subject.add()
+            assertFalse(
+                subject.editing.state.value
+                    .canAdd(id),
+            )
+
+            backend.storeError = DataError.StorageError
+            backend.cache.value = MangaListSnapshot(owner, emptyList(), Instant.EPOCH)
+            runCurrent()
+            assertFalse(
+                subject.editing.state.value
+                    .canAdd(id),
+            )
+            subject.add()
+            assertTrue(backend.adds.isEmpty())
+
+            backend.storeError = null
+            backend.cache.value = backend.cache.value.copy(syncedAt = Instant.EPOCH.plusSeconds(1))
+            runCurrent()
+            assertTrue(
+                subject.editing.state.value
+                    .canAdd(id),
+            )
+            subject.add()
+            subject.add()
+            assertFalse(
+                subject.editing.state.value
+                    .canAdd(id),
+            )
+            runCurrent()
+            assertEquals(listOf(owner to id), backend.adds)
+
+            backend.sessions.value = Session.Expired(owner)
+            runCurrent()
+            assertFalse(
+                subject.editing.state.value
+                    .canAdd(id),
+            )
+            backend.sessions.value = Session.SignedIn(next)
+            runCurrent()
+            backend.addAnswer.complete(MangaListEditResult.Confirmed(entry))
+            runCurrent()
+            assertNull(subject.messages.current.value)
+            assertFalse(
+                subject.editing.state.value
+                    .canAdd(id),
+            )
+        }
+
+    @Test
+    fun uncertainAddReconcilesWithoutResendingAndOnlyOffersRetryAfterConfirmedAbsence() =
+        runTest {
+            val backend = Backend()
+            val subject = start(backend)
+            subject.editing.dismissPresentation()
+            val empty = MangaListSnapshot(owner, emptyList(), Instant.EPOCH)
+            backend.cache.value = empty
+            runCurrent()
+            subject.add()
+            runCurrent()
+            backend.cache.value = empty.copy(syncedAt = null)
+            backend.addAnswer.complete(MangaListEditResult.Uncertain(DataError.ServerError, needsRefresh = true))
+            runCurrent()
+
+            val refresh = checkNotNull(subject.messages.current.value)
+            assertEquals(ShellMessage.Text.MangaUnconfirmed, refresh.message.text)
+            assertFalse(
+                subject.editing.state.value
+                    .canAdd(entry.id),
+            )
+            subject.add()
+            assertEquals(1, backend.adds.size)
+
+            subject.messages.ended(refresh, actionPerformed = true)
+            runCurrent()
+            assertEquals(1, backend.adds.size)
+            assertEquals(listOf(owner), backend.reads)
+            assertEquals(
+                ShellMessage.Text.MangaUnconfirmed,
+                subject.messages.current.value
+                    ?.message
+                    ?.text,
+            )
+
+            backend.refreshed = Outcome.Success(empty)
+            subject.messages.ended(checkNotNull(subject.messages.current.value), actionPerformed = true)
+            runCurrent()
+            assertEquals(
+                ShellMessage.Text.CouldNotSave,
+                subject.messages.current.value
+                    ?.message
+                    ?.text,
+            )
+            assertEquals(1, backend.adds.size)
+
+            backend.addAnswer = CompletableDeferred()
+            subject.messages.ended(checkNotNull(subject.messages.current.value), actionPerformed = true)
+            runCurrent()
+            assertEquals(listOf(owner to entry.id, owner to entry.id), backend.adds)
+        }
+
+    @Test
+    fun readBackOfAnUncertainAddShowsConfirmedPlannedAndInvalidatesTheOldAction() =
+        runTest {
+            val backend = Backend()
+            val subject = start(backend)
+            subject.editing.dismissPresentation()
+            backend.cache.value = MangaListSnapshot(owner, emptyList(), Instant.EPOCH)
+            runCurrent()
+            subject.add()
+            runCurrent()
+            backend.cache.value = backend.cache.value.copy(syncedAt = null)
+            backend.addAnswer.complete(MangaListEditResult.Accepted(Outcome.Failure(DataError.ServerError)))
+            runCurrent()
+            val stale = checkNotNull(subject.messages.current.value)
+            val planned = entry.copy(status = MangaListStatus.PlanToRead.readingStatus)
+            backend.cache.value = snapshot(owner, planned)
+            runCurrent()
+            subject.messages.ended(stale, actionPerformed = true)
+            runCurrent()
+            assertEquals(listOf(owner to entry.id), backend.adds)
+            assertTrue(backend.reads.isEmpty())
+            val added = checkNotNull(subject.messages.current.value)
+            assertEquals(ShellMessage.Text.AddedToPlanned, added.message.text)
+            val change = added.message.action as MangaChange
+            assertEquals(entry.id to owner, change.id to change.owner)
+        }
+
+    private fun Subject.add() = editing.addPlanned(owner, entry.id, entry.titles.romaji, MangaEditTotals())
 
     @Test
     fun acceptedWriteCanOnlyRefreshAndSettlesToTheObservedCount() =
