@@ -120,7 +120,19 @@ val ownerRecordings: String =
         .orElse(providers.systemProperty("user.home").map { "$it/.local/share/kiroku/owner-recordings" })
         .get()
 
+val mangaMutationCapture = providers.gradleProperty("kiroku.mangaMutationCapture")
+val mangaMutationExpected = providers.gradleProperty("kiroku.mangaMutationExpected")
+
 tasks.withType<Test>().configureEach {
+    for ((property, selected) in listOf(
+        "kiroku.mangaMutationCapture" to mangaMutationCapture,
+        "kiroku.mangaMutationExpected" to mangaMutationExpected,
+    )) {
+        selected.orNull?.let { path ->
+            systemProperty(property, path)
+            inputs.files(file(path)).withPropertyName(property)
+        }
+    }
     systemProperty("kiroku.ownerRecordings", ownerRecordings)
     systemProperty("kiroku.ownerRecordings.explicit", selectedOwnerRecordings.isPresent)
     inputs.files(fileTree(ownerRecordings)).withPropertyName("ownerRecordings")

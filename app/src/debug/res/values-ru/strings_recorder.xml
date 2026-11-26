@@ -53,4 +53,25 @@
     <string name="recorder_halt_still_on_the_list">MyAnimeList ответил на удаление, но всё ещё показывает тайтл в вашем списке</string>
     <string name="recorder_halt_refused">MyAnimeList отклоняет запросы (ответ\u00A0%1$d), попробуйте позже</string>
     <string name="recorder_halt_unexpected">MyAnimeList ответил\u00A0%1$d, чего запись не ожидала</string>
+    <string name="recorder_manga_mutations">Запись изменения в списке манги</string>
+    <string name="recorder_manga_mutation_detail">Введите ID записи из «Моего списка» на MyAnimeList и включите запись для нужного действия</string>
+    <string name="recorder_manga_id">ID манги на MyAnimeList</string>
+    <string name="recorder_manga_arm_patch">Включить запись сохранения</string>
+    <string name="recorder_manga_arm_delete">Включить запись удаления</string>
+    <string name="recorder_manga_disarm">Выключить запись</string>
+    <string name="recorder_manga_armed_patch">Запись PATCH включена для манги с ID\u00A0%1$d. Откройте запись, измените данные и нажмите «Сохранить»</string>
+    <string name="recorder_manga_armed_delete">Запись DELETE включена для манги с ID\u00A0%1$d. Откройте запись и подтвердите удаление из списка</string>
+    <string name="recorder_manga_capturing">Проверяем изменение манги с ID\u00A0%1$d\u00A0на MyAnimeList</string>
+    <string name="recorder_manga_saving">Сохраняем запись подтверждённого изменения манги</string>
+    <string name="recorder_manga_patch_complete">Ответ на PATCH и результат проверки для манги с ID\u00A0%1$d\u00A0записаны</string>
+    <string name="recorder_manga_delete_complete">Ответ на DELETE и результат проверки для манги с ID\u00A0%1$d\u00A0записаны</string>
+    <string name="recorder_manga_missing">Манги с таким ID нет в сохранённом списке. Откройте «Мой список» и обновите его перед записью</string>
+    <string name="recorder_manga_ended">Запись изменения манги завершилась до сохранения</string>
+    <string name="recorder_manga_unconfirmed">Ответы сервера не подтвердили изменение манги. Запись не сохранена</string>
+    <plurals name="recorder_manga_window">
+        <item quantity="one">Запись доступна\u00A0%d\u00A0минуту</item>
+        <item quantity="few">Запись доступна\u00A0%d\u00A0минуты</item>
+        <item quantity="many">Запись доступна\u00A0%d\u00A0минут</item>
+        <item quantity="other">Запись доступна\u00A0%d\u00A0минуты</item>
+    </plurals>
 </resources>

@@ -2,7 +2,10 @@ package io.github.kauri_off.kiroku.data.recorder
 
 import io.github.kauri_off.kiroku.core.error.DataError
 import io.github.kauri_off.kiroku.core.error.Outcome
+import io.github.kauri_off.kiroku.core.model.MangaId
 import io.github.kauri_off.kiroku.core.model.SessionOwner
+import io.github.kauri_off.kiroku.core.model.SignInId
+import io.github.kauri_off.kiroku.data.manga.MangaMutationMethod
 import io.github.kauri_off.kiroku.data.network.AUTHORIZATION
 import io.github.kauri_off.kiroku.data.network.MalFields
 import io.github.kauri_off.kiroku.data.network.MalHttp
@@ -181,7 +184,8 @@ fun signedInRecorder(
     folders: () -> RecorderFolders,
     privateReads: () -> File,
     scope: CoroutineScope,
-): SignedInRecorder = SignedInRecorder(session, http, journal, folders, privateReads, scope)
+    privateMutations: (() -> File)? = null,
+): SignedInRecorder = SignedInRecorder(session, http, journal, folders, privateReads, scope, privateMutations = privateMutations)
 
 class SignedInRecorder internal constructor(
     private val session: Lazy<MalSession>,
@@ -193,6 +197,7 @@ class SignedInRecorder internal constructor(
     private val pause: suspend () -> Unit = { delay(PAUSE_MILLIS) },
     dispatcher: CoroutineDispatcher = Dispatchers.IO,
     private val writePrivateFile: (File, String) -> Unit = { file, text -> file.writeText(text) },
+    privateMutations: (() -> File)? = null,
 ) {
     private val journal by lazy { Journal(journalFile()) }
     private val files by lazy(folders)
@@ -201,13 +206,33 @@ class SignedInRecorder internal constructor(
     private val busy = Mutex()
     private val shown = MutableStateFlow<Recording>(Recording.Idle)
     val state: StateFlow<Recording> = shown.asStateFlow()
+    val manga = privateMutations?.let { MangaCaptureRecorder(session, work, it, writePrivateFile) }
 
     // Of the work in hand, which holds [busy].
     private var sent = 0
     private var stored = 0
     private var running: RecordedTitle? = null
 
-    internal val started: Job = work.launch { busy.withLock { journal.read()?.let { shown.value = leftover(it) } } }
+    internal val started: Job =
+        work.launch {
+            busy.withLock {
+                manga?.initialize()
+                journal.read()?.let { shown.value = leftover(it) }
+            }
+        }
+
+    fun armManga(
+        id: MangaId,
+        method: MangaMutationMethod,
+        contains: suspend (SignInId, MangaId) -> Boolean,
+    ): Job {
+        val owner = if (session.isInitialized()) session.value.signedInOwner() else null
+        return act {
+            if (journal.read() == null && shown.value != Recording.Reading && shown.value !is Recording.Checked) {
+                manga?.arm(owner, id, method, contains)
+            }
+        }
+    }
 
     // Asks MAL for the title and nothing else. Refuses one a recording cannot be made on, and any while a title is left.
     fun check(title: Long): Job =
@@ -255,7 +280,7 @@ class SignedInRecorder internal constructor(
         work.launch {
             if (!busy.tryLock()) return@launch
             try {
-                block()
+                if (manga?.active != true) block()
             } finally {
                 busy.unlock()
             }
@@ -673,13 +698,7 @@ class SignedInRecorder internal constructor(
         pending: File,
     ) {
         filed(name) {
-            val temp = Files.createTempFile(pending.toPath().parent, "answer-", ".tmp").toFile()
-            try {
-                writePrivateFile(temp, kept.text)
-                Files.move(temp.toPath(), File(pending, kept.file).toPath(), StandardCopyOption.ATOMIC_MOVE)
-            } finally {
-                temp.delete()
-            }
+            storePrivateAnswer(pending, kept, writePrivateFile)
         }
         stored++
     }

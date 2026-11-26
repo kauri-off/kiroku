@@ -12,15 +12,19 @@ import io.github.kauri_off.kiroku.search.searchStandIn
 import io.github.kauri_off.kiroku.source.DataSource
 import io.github.kauri_off.kiroku.source.SourceChoice
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancelAndJoin
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.job
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeout
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
@@ -32,6 +36,7 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.RuntimeEnvironment
+import java.io.File
 import java.time.Clock
 import java.time.Duration
 import java.time.ZoneId
@@ -149,6 +154,21 @@ class DebugGraphTest {
         }
 
     // The live graph alone makes the HTTP client, so a start that never asks for it has none.
+    @Test
+    fun `either non account source retires the account capture directory at startup`() =
+        runTest {
+            for (source in listOf(DataSource.Demo, DataSource.Sandbox)) {
+                val root = mangaCaptureRoot(context)
+                File(root, "run-abandoned").apply { mkdirs() }.resolve("answer.tmp").writeText("projected test evidence")
+                File(root, "capture-abandoned").apply { mkdirs() }.resolve("reply.txt").writeText("projected test evidence")
+                assertTrue(SourceChoice(context).choose(source))
+                createGraph(context, "", Clock.systemUTC(), backgroundScope, live = { error("Unexpected account graph") })
+                withContext(Dispatchers.IO) {
+                    withTimeout(5_000) { while (root.exists()) delay(20) }
+                }
+            }
+        }
+
     @Test
     fun `a start on the demo builds no live graph, with a client id and without`() =
         runTest {

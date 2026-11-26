@@ -57,7 +57,9 @@ internal val requestLog: ((String) -> Unit)? = { Log.d(LOG_TAG, it) }
 
 // The demo holds no HTTP client and no file: it reaches no host and keeps nothing. The sandbox answers on the device.
 internal val otherSource: OtherSource? = { context, clientId, clock, scope ->
-    when (SourceChoice(context).startsOn(clientId)) {
+    val source = SourceChoice(context).startsOn(clientId)
+    if (source != DataSource.Account) retireMangaCapturesForOtherSource(context, scope)
+    when (source) {
         DataSource.Account -> null
         DataSource.Demo -> {
             // Neither is asked for anything before the graph is there: the engine starts no run of its own.
