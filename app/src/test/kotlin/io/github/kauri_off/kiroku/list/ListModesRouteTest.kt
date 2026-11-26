@@ -1,6 +1,9 @@
 package io.github.kauri_off.kiroku.list
 
+import androidx.compose.material3.Text
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.SideEffect
+import androidx.compose.runtime.remember
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.SemanticsMatcher
@@ -34,7 +37,11 @@ import io.github.kauri_off.kiroku.manga.MangaTitleKey
 import io.github.kauri_off.kiroku.manga.mangaEntry
 import io.github.kauri_off.kiroku.shell.AppRoute
 import io.github.kauri_off.kiroku.shell.ListRoot
+import io.github.kauri_off.kiroku.shell.ProfileRoot
+import io.github.kauri_off.kiroku.shell.SearchRoot
+import io.github.kauri_off.kiroku.shell.ShellEntries
 import io.github.kauri_off.kiroku.shell.ShellNavigator
+import io.github.kauri_off.kiroku.shell.ShellRoute
 import io.github.kauri_off.kiroku.shell.rememberShellNavigator
 import io.github.kauri_off.kiroku.wiring.AppGraph
 import io.github.kauri_off.kiroku.wiring.TestGraph
@@ -139,6 +146,41 @@ class ListModesRouteTest {
         compose.onNodeWithContentDescription("Clear").performClick()
         planned.assertIsSelected()
         assertEquals(animePosition, scrollPosition(FixtureAnime.premiereMonth.titles.romaji))
+    }
+
+    @Test
+    fun `restart does not compose Anime in the outgoing Manga entry`() {
+        lateinit var navigator: ShellNavigator
+        val presented = mutableSetOf<Pair<Int, ListMode>>()
+        val entries: ShellEntries = { shell, _ ->
+            entry<ListRoot> {
+                val generation = remember { shell.restarts }
+                val mode = shell.listMode
+                SideEffect { presented += generation to mode }
+                Text(mode.name)
+            }
+            entry<SearchRoot> { Text("Search screen") }
+            entry<ProfileRoot> { Text("Profile screen") }
+        }
+        compose.setContent {
+            navigator = rememberShellNavigator()
+            KirokuTheme(dark = false, dynamicColor = false) { ShellRoute(navigator, entries = entries) }
+        }
+        compose.runOnUiThread { navigator.listMode = ListMode.Manga }
+        compose.onNodeWithText("Manga").assertExists()
+        compose.mainClock.autoAdvance = false
+        compose.runOnUiThread {
+            presented.clear()
+            navigator.restart()
+        }
+
+        repeat(5) {
+            compose.mainClock.advanceTimeByFrame()
+            compose.waitForIdle()
+        }
+        compose.runOnUiThread {
+            assertEquals(setOf(1 to ListMode.Anime), presented)
+        }
     }
 
     private fun scrollTo(

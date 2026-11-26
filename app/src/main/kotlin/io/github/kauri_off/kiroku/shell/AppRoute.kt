@@ -97,7 +97,7 @@ fun AppRoute(
                     return@let
                 }
             }
-            navigator.showEditorOf(request.id)
+            navigator.showEditorOf(request.id, graph.mangaList != null)
         }
     }
     SignInTurns(graph, navigator)
@@ -109,7 +109,10 @@ fun AppRoute(
     }
 }
 
-private fun ShellNavigator.showEditorOf(id: AnimeId) {
+private fun ShellNavigator.showEditorOf(
+    id: AnimeId,
+    mangaAvailable: Boolean,
+) {
     val stack = stackOf(visible.last())
     val page = TitleKey(id.value)
     val subScreen =
@@ -121,7 +124,7 @@ private fun ShellNavigator.showEditorOf(id: AnimeId) {
             else -> false
         }
     when {
-        (stack.last() is ListRoot && listMode == ListMode.Anime) || stack.last() == page -> Unit
+        (stack.last() is ListRoot && (!mangaAvailable || listMode == ListMode.Anime)) || stack.last() == page -> Unit
         subScreen && stack.getOrNull(stack.lastIndex - 1) == page -> back()
         else -> open(page)
     }

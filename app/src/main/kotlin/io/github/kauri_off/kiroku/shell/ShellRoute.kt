@@ -105,9 +105,11 @@ private fun NavEntry<NavKey>.scopedTo(
     suggestionsOwner: SignInId?,
 ): NavEntry<NavKey> {
     val entry = this
-    val scopedKey = notShown("${navigator.restarts}/${destination.name}/$depth/$contentKey")
+    val generation = navigator.restarts
+    val scopedKey = notShown("$generation/${destination.name}/$depth/$contentKey")
     val identity = suggestionsOwner?.let { notShown("$scopedKey/${it.value}") } ?: scopedKey
     return NavEntry(key, identity, metadata) {
+        if (navigator.restarts != generation) return@NavEntry
         val onTop = navigator.visible.last() == destination && navigator.stackOf(destination).lastIndex == depth
         val inStack = destination in navigator.visible && navigator.stackOf(destination).getOrNull(depth) == key
         CompositionLocalProvider(
