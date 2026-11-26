@@ -333,6 +333,7 @@ Not to forget:
 - [x] Edit personal manga list entries.
   - [x] Owner-bound edits and read-back reconciliation.
 - [x] Remove entries from the personal manga list.
+- [x] Record personal manga list changes.
 - [x] Delete individual recent searches.
 - [x] Open anime from MyAnimeList links pasted in Search.
 

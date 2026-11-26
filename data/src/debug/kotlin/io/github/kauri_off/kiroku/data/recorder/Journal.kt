@@ -1,7 +1,5 @@
 package io.github.kauri_off.kiroku.data.recorder
 
-import kotlinx.serialization.SerializationException
-import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonObject
@@ -11,8 +9,11 @@ import kotlinx.serialization.json.put
 import java.io.File
 import java.io.FileOutputStream
 import java.io.IOException
+import java.io.InputStreamReader
 import java.nio.channels.FileChannel
+import java.nio.charset.StandardCharsets
 import java.nio.file.Files
+import java.nio.file.LinkOption.NOFOLLOW_LINKS
 import java.nio.file.StandardCopyOption
 import java.nio.file.StandardOpenOption
 
@@ -22,27 +23,62 @@ internal class Journal(
     // Makes a rename in a directory last through a loss of power.
     private val synced: (File) -> Unit = ::syncedDirectory,
 ) {
-    // [user] names the user without holding the id MAL gives them.
-    class Left(
+    data class Left(
         val title: RecordedTitle,
         val user: String,
-    )
+        val mangaProof: JsonObject? = null,
+        val mangaPendingEdit: Boolean = false,
+        val mangaExplicitRemoval: Boolean = false,
+    ) {
+        val removableMangaProof: JsonObject? get() = mangaProof.takeUnless { mangaPendingEdit }
+    }
 
-    // Null when no title is left.
+    class Unreadable : IOException()
+
     fun read(): Left? {
-        val values =
+        val path = file.toPath()
+        if (Files.notExists(path, NOFOLLOW_LINKS)) return null
+        if (!Files.isRegularFile(path, NOFOLLOW_LINKS)) throw Unreadable()
+        val text =
             try {
-                Json.parseToJsonElement(file.readText()) as? JsonObject
+                Files.newInputStream(path, NOFOLLOW_LINKS).use { input ->
+                    InputStreamReader(input, StandardCharsets.UTF_8.newDecoder()).buffered().readText()
+                }
             } catch (_: IOException) {
+                if (Files.notExists(path, NOFOLLOW_LINKS)) return null
+                throw Unreadable()
+            } catch (_: SecurityException) {
+                throw Unreadable()
+            }
+        val values = text.uniqueMangaObject() ?: throw Unreadable()
+        val id = (values[ID] as? JsonPrimitive)?.longOrNull?.takeIf { it > 0 } ?: throw Unreadable()
+        val episodes = (values[EPISODES] as? JsonPrimitive)?.intOrNull?.takeIf { it >= 0 } ?: throw Unreadable()
+        val name = values.mangaText(NAME) ?: throw Unreadable()
+        val user = values.mangaText(USER) ?: throw Unreadable()
+        val media =
+            if (MEDIA in values) {
+                val value = values.mangaText(MEDIA)
+                RecorderMedia.entries.singleOrNull { it.name == value } ?: throw Unreadable()
+            } else {
+                RecorderMedia.Anime
+            }
+        if (PROOF in values && LEGACY_PROOF in values) throw Unreadable()
+        val proof =
+            if (PROOF in values || LEGACY_PROOF in values) {
+                if (media != RecorderMedia.Manga) throw Unreadable()
+                val row = (values[PROOF] ?: values[LEGACY_PROOF]) as? JsonObject ?: throw Unreadable()
+                if (MANGA_VERSION !in row || row.projectMangaCheckpoint() != row || MangaWrites.none { (_, form) -> row.matches(form) }) {
+                    throw Unreadable()
+                }
+                row.takeIf { PROOF in values }
+            } else {
                 null
-            } catch (_: SerializationException) {
-                null
-            } ?: return null
-        val id = (values[ID] as? JsonPrimitive)?.longOrNull ?: return null
-        val episodes = (values[EPISODES] as? JsonPrimitive)?.intOrNull ?: return null
-        val name = (values[NAME] as? JsonPrimitive)?.content ?: return null
-        val user = (values[USER] as? JsonPrimitive)?.content ?: return null
-        return Left(RecordedTitle(id, name, episodes), user)
+            }
+        val pending = PENDING_EDIT in values
+        if (pending && (proof == null || values[PENDING_EDIT] != JsonPrimitive(true))) throw Unreadable()
+        val explicitRemoval = EXPLICIT_REMOVAL in values
+        if (explicitRemoval && (proof == null || pending || values[EXPLICIT_REMOVAL] != JsonPrimitive(true))) throw Unreadable()
+        return Left(RecordedTitle(id, name, episodes, media), user, proof, pending, explicitRemoval)
     }
 
     // On the disk when this returns: a write to the list never goes out before it.
@@ -53,6 +89,10 @@ internal class Journal(
                 put(EPISODES, left.title.episodes)
                 put(NAME, left.title.name)
                 put(USER, left.user)
+                if (left.title.media != RecorderMedia.Anime) put(MEDIA, left.title.media.name)
+                left.mangaProof?.let { put(PROOF, it) }
+                if (left.mangaPendingEdit) put(PENDING_EDIT, true)
+                if (left.mangaExplicitRemoval) put(EXPLICIT_REMOVAL, true)
             }.toString()
         val next = File(file.path + NEXT)
         try {
@@ -72,7 +112,17 @@ internal class Journal(
         file.delete()
     }
 
+    fun deleteConfirmed() {
+        Files.deleteIfExists(file.toPath())
+        file.absoluteFile.parentFile?.let(synced)
+    }
+
     private companion object {
+        const val EXPLICIT_REMOVAL = "manga_explicit_removal"
+        const val PENDING_EDIT = "manga_pending_edit"
+        const val LEGACY_PROOF = "manga_row"
+        const val PROOF = "manga_row_v2"
+        const val MEDIA = "media"
         const val ID = "id"
         const val EPISODES = "episodes"
         const val NAME = "name"

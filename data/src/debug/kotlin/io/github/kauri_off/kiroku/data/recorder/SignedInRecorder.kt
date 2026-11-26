@@ -2,10 +2,10 @@ package io.github.kauri_off.kiroku.data.recorder
 
 import io.github.kauri_off.kiroku.core.error.DataError
 import io.github.kauri_off.kiroku.core.error.Outcome
-import io.github.kauri_off.kiroku.core.model.MangaId
+import io.github.kauri_off.kiroku.core.model.Session
 import io.github.kauri_off.kiroku.core.model.SessionOwner
-import io.github.kauri_off.kiroku.core.model.SignInId
-import io.github.kauri_off.kiroku.data.manga.MangaMutationMethod
+import io.github.kauri_off.kiroku.data.manga.MangaListQuery
+import io.github.kauri_off.kiroku.data.manga.mangaListPage
 import io.github.kauri_off.kiroku.data.network.AUTHORIZATION
 import io.github.kauri_off.kiroku.data.network.MalFields
 import io.github.kauri_off.kiroku.data.network.MalHttp
@@ -19,11 +19,14 @@ import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.plus
 import kotlinx.coroutines.sync.Mutex
@@ -35,11 +38,16 @@ import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.longOrNull
+import kotlinx.serialization.json.put
 import okhttp3.FormBody
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
+import okhttp3.MediaType.Companion.toMediaTypeOrNull
 import okhttp3.Request
+import okhttp3.Response
 import java.io.File
 import java.io.IOException
 import java.nio.file.Files
@@ -52,7 +60,10 @@ data class RecordedTitle(
     val id: Long,
     val name: String,
     val episodes: Int,
+    val media: RecorderMedia = RecorderMedia.Anime,
 )
+
+enum class RecorderMedia { Anime, Manga }
 
 // Why the recorder did not start, stopped, or could not take its title off the list.
 sealed interface Halt {
@@ -67,6 +78,16 @@ sealed interface Halt {
     data object NotSignedIn : Halt
 
     data object NoAnswer : Halt
+
+    data object Interrupted : Halt
+
+    data object Unconfirmed : Halt
+
+    data object JournalUnreadable : Halt
+
+    data object JournalRetained : Halt
+
+    data object BackingOff : Halt
 
     // The device's own store failed.
     data object Storage : Halt
@@ -103,6 +124,13 @@ enum class ListAfter {
 
     // The title may still be on the list.
     Left,
+
+    Unresolved,
+
+    Absent,
+    ;
+
+    val needsRecovery: Boolean get() = this == Left || this == Unresolved
 }
 
 sealed interface Recording {
@@ -125,6 +153,7 @@ sealed interface Recording {
 
     data class Removing(
         val title: RecordedTitle,
+        val checking: Boolean = false,
     ) : Recording
 
     data object Reading : Recording
@@ -158,8 +187,9 @@ sealed interface Recording {
         val at: String,
         val halt: Halt,
         val answers: Int,
-        val folder: File,
+        val folder: File?,
         val list: ListAfter,
+        val cleanupHalt: Halt? = null,
     ) : Recording
 
     // The title of a recording that did not take it off the list, and whether it is off now.
@@ -206,44 +236,88 @@ class SignedInRecorder internal constructor(
     private val busy = Mutex()
     private val shown = MutableStateFlow<Recording>(Recording.Idle)
     val state: StateFlow<Recording> = shown.asStateFlow()
-    val manga = privateMutations?.let { MangaCaptureRecorder(session, work, it, writePrivateFile) }
+    private val mangaFiles = privateMutations?.let { MangaRecordingFiles(it, work) }
+    val canRecordManga: Boolean get() = mangaFiles != null
+    private var checkedOwner: SessionOwner? = null
+    private var watchingMangaOwner = false
+
+    fun forgetMangaCaptures() {
+        mangaFiles?.forget(::clearMangaReport)
+    }
+
+    private fun clearMangaReport() =
+        shown.update {
+            when {
+                it is Recording.Recorded && it.title.media == RecorderMedia.Manga -> Recording.Idle
+                it is Recording.Stopped && it.title.media == RecorderMedia.Manga ->
+                    if (it.list.needsRecovery) it.copy(folder = null, answers = 0) else Recording.Idle
+                else -> it
+            }
+        }
+
+    private fun watchMangaOwner(files: MangaRecordingFiles) {
+        if (watchingMangaOwner) return
+        watchingMangaOwner = true
+        work.launch {
+            session.value.observeSession().collect { sessionState ->
+                files.forgetRetired(session.value::isCurrentOwner, ::clearMangaReport)
+                if (sessionState is Session.Expired) {
+                    files.discardPartial()
+                    shown.update {
+                        if (it is Recording.Stopped && it.title.media == RecorderMedia.Manga) it.copy(folder = null, answers = 0) else it
+                    }
+                }
+            }
+        }
+    }
 
     // Of the work in hand, which holds [busy].
     private var sent = 0
     private var stored = 0
     private var running: RecordedTitle? = null
+    private var mangaRequest = RUN
 
     internal val started: Job =
         work.launch {
             busy.withLock {
-                manga?.initialize()
-                journal.read()?.let { shown.value = leftover(it) }
+                mangaFiles?.forget()
+                guardingJournal { journal.read()?.let { shown.value = leftover(it, readOnly = it.mangaExplicitRemoval) } }
             }
         }
 
-    fun armManga(
-        id: MangaId,
-        method: MangaMutationMethod,
-        contains: suspend (SignInId, MangaId) -> Boolean,
+    fun check(
+        title: Long,
+        media: RecorderMedia = RecorderMedia.Anime,
     ): Job {
-        val owner = if (session.isInitialized()) session.value.signedInOwner() else null
+        val owner = if (media == RecorderMedia.Manga && session.isInitialized()) session.value.signedInOwner() else null
         return act {
-            if (journal.read() == null && shown.value != Recording.Reading && shown.value !is Recording.Checked) {
-                manga?.arm(owner, id, method, contains)
-            }
+            val left = journal.read()
+            if (left == null) shown.value = Recording.Checking(title)
+            checkedOwner = owner
+            shown.value =
+                when {
+                    left != null -> Recording.Leftover(left.title, left.recoveryStatus, null)
+                    media == RecorderMedia.Anime -> checked(title)
+                    canRecordManga && owner != null -> checkedManga(title, owner)
+                    else -> Recording.NotStarted(Halt.NotSignedIn)
+                }
         }
     }
 
-    // Asks MAL for the title and nothing else. Refuses one a recording cannot be made on, and any while a title is left.
-    fun check(title: Long): Job =
+    fun record(title: RecordedTitle): Job =
         act {
-            val left = journal.read()
-            if (left == null) shown.value = Recording.Checking(title)
-            shown.value = if (left == null) checked(title) else Recording.Leftover(left.title, ListAfter.Left, null)
+            val checked = shown.value as? Recording.Checked ?: return@act
+            val owner = checkedOwner
+            journal.read()?.let { left ->
+                shown.value = Recording.Leftover(left.title, left.recoveryStatus, null)
+                return@act
+            }
+            when {
+                title.media == RecorderMedia.Anime && checked.title == title -> shown.value = ran(title)
+                checked.title === title && owner != null && title.media == RecorderMedia.Manga ->
+                    runManga(title, owner, checkNotNull(mangaFiles))
+            }
         }
-
-    // Runs only on the title that was checked last and is still shown for confirmation.
-    fun record(title: RecordedTitle): Job = act { if (shown.value == Recording.Checked(title)) shown.value = ran(title) }
 
     fun recordReads(capture: ReadCapture): Job {
         val owner = if (session.isInitialized()) session.value.signedInOwner() else null
@@ -254,13 +328,68 @@ class SignedInRecorder internal constructor(
                     shown.value = Recording.Reading
                     readCapture(capture, owner)
                 } else {
-                    Recording.Leftover(left.title, ListAfter.Left, null)
+                    Recording.Leftover(left.title, left.recoveryStatus, null)
                 }
         }
     }
 
     // One more try at taking off the list what a recording left there.
-    fun remove(): Job = act { journal.read()?.let { shown.value = leftover(it) } }
+    fun remove(): Job = recover(readOnly = false)
+
+    fun recheck(): Job = recover(readOnly = true)
+
+    private fun recover(readOnly: Boolean): Job =
+        act {
+            val left =
+                try {
+                    journal.read()
+                } catch (error: Journal.Unreadable) {
+                    shown.update { current ->
+                        when (current) {
+                            is Recording.Stopped ->
+                                current
+                                    .takeIf { it.title.media == RecorderMedia.Manga && it.list.needsRecovery }
+                                    ?.copy(list = ListAfter.Unresolved, cleanupHalt = Halt.JournalUnreadable)
+                            is Recording.Leftover ->
+                                current
+                                    .takeIf { it.title.media == RecorderMedia.Manga && it.list.needsRecovery }
+                                    ?.copy(list = ListAfter.Unresolved, halt = Halt.JournalUnreadable)
+                            else -> null
+                        } ?: throw error
+                    }
+                    return@act
+                } ?: return@act
+            if (left.title.media == RecorderMedia.Manga) {
+                val list =
+                    when (val current = shown.value) {
+                        is Recording.Stopped -> current.list
+                        is Recording.Leftover -> current.list
+                        else -> return@act
+                    }
+                val expected = if (readOnly) ListAfter.Unresolved else ListAfter.Left
+                if (list != expected) return@act
+            } else if (readOnly) {
+                return@act
+            }
+            val stopped = (shown.value as? Recording.Stopped)?.takeIf { it.title == left.title && left.title.media == RecorderMedia.Manga }
+            val recovered = leftover(left, readOnly)
+            val owner = if (stopped != null) session.value.signedInOwner() else null
+            if (stopped != null && owner != null && mangaFiles != null) {
+                mangaFiles.report(owner, stopped.folder) { folder ->
+                    shown.value = if (folder == null) recovered else stopped.copy(list = recovered.list, cleanupHalt = recovered.halt)
+                }
+            } else {
+                shown.value = recovered
+            }
+        }
+
+    private val Journal.Left.recoveryStatus: ListAfter
+        get() =
+            if (title.media == RecorderMedia.Manga && (removableMangaProof == null || mangaExplicitRemoval)) {
+                ListAfter.Unresolved
+            } else {
+                ListAfter.Left
+            }
 
     // Back to the start, unless work is running or a title may still be on the list.
     fun dismiss() = shown.update { if (it.settled) Recording.Idle else it }
@@ -269,9 +398,9 @@ class SignedInRecorder internal constructor(
         get() =
             when (this) {
                 is Recording.Checked, is Recording.NotStarted, is Recording.ReadRecorded, is Recording.ReadStopped -> true
-                is Recording.Recorded -> list != ListAfter.Left
-                is Recording.Stopped -> list != ListAfter.Left
-                is Recording.Leftover -> list != ListAfter.Left
+                is Recording.Recorded -> !list.needsRecovery
+                is Recording.Stopped -> !list.needsRecovery
+                is Recording.Leftover -> !list.needsRecovery
                 else -> false
             }
 
@@ -280,16 +409,25 @@ class SignedInRecorder internal constructor(
         work.launch {
             if (!busy.tryLock()) return@launch
             try {
-                if (manga?.active != true) block()
+                guardingJournal(block)
             } finally {
                 busy.unlock()
             }
         }
 
+    private suspend fun guardingJournal(block: suspend () -> Unit) {
+        try {
+            block()
+        } catch (_: Journal.Unreadable) {
+            shown.value = Recording.NotStarted(Halt.JournalUnreadable)
+        }
+    }
+
     private fun begin(title: RecordedTitle?) {
         sent = 0
         stored = 0
         running = title
+        mangaRequest = RUN
     }
 
     private suspend fun checked(id: Long): Recording =
@@ -374,6 +512,325 @@ class SignedInRecorder internal constructor(
             ?.takeIf { it > offset && (capture != ReadCapture.MangaList || it - offset == entries.size) } ?: throw invalid
     }
 
+    private suspend fun checkedManga(
+        id: Long,
+        owner: SessionOwner,
+    ): Recording =
+        try {
+            begin(null)
+            val answer = askManga(CHECK, get("manga/$id?fields=id,title"), owner, ::knownOrNot)
+            if (answer.status == NOT_FOUND) throw Halted(Halt.NoSuchTitle, CHECK)
+            val page = answer.mangaObject ?: throw Halted(Halt.Unexpected(answer.status), CHECK)
+            val name = page.text("title")
+            if (id <= 0 || page.number("id") != id || name == null) throw Halted(Halt.Unexpected(answer.status), CHECK)
+            val title = RecordedTitle(id, name, 0, RecorderMedia.Manga)
+            if (mangaMembership(title, owner, ABSENT).present) throw Halted(Halt.OnTheList, ABSENT)
+            Recording.Checked(title)
+        } catch (halted: Halted) {
+            Recording.NotStarted(halted.halt)
+        }
+
+    private suspend fun runManga(
+        title: RecordedTitle,
+        owner: SessionOwner,
+        files: MangaRecordingFiles,
+    ) {
+        begin(title)
+        shown.value = Recording.Running(title, 0, MangaRecordingAnswers)
+        val first = PatchAttempt()
+        val edit = PatchAttempt()
+        var pending: File? = null
+        var left: Journal.Left? = null
+        var priorToEdit: Journal.Left? = null
+        var continuityMatched = false
+        var list = ListAfter.Untouched
+        var failure: Halted? = null
+        var cleanupHalt: Halt? = null
+        var published = false
+        try {
+            val user = mangaUser(owner)
+            watchMangaOwner(files)
+            val directory = asMangaOwner(owner, RUN) { filed(RUN) { files.start(owner) } }
+            pending = directory
+            val before = mangaMembership(title, owner, ABSENT)
+            if (before.present) throw Halted(Halt.OnTheList, ABSENT)
+            saveManga(MANGA_ABSENT, before.kept(MANGA_ABSENT), directory)
+            val intent = Journal.Left(title, user)
+            asMangaOwner(owner, JOURNAL) {
+                filed(JOURNAL) { journal.write(intent) }
+                left = intent
+                list = ListAfter.Unresolved
+            }
+            for ((index, write) in MangaWrites.withIndex()) {
+                val (name, form) = write
+                val attempt = if (index == 0) first else edit
+                if (index != 0) {
+                    val verified = checkNotNull(left)
+                    val guard = verified.copy(mangaPendingEdit = true)
+                    asMangaOwner(owner, JOURNAL) {
+                        filed(JOURNAL) { journal.write(guard) }
+                        left = guard
+                        priorToEdit = verified
+                        list = ListAfter.Unresolved
+                    }
+                    val current = mangaMembership(title, owner, MANGA_BEFORE_EDIT)
+                    continuityMatched = current.proof == verified.mangaProof
+                    saveManga(MANGA_BEFORE_EDIT, current.kept(MANGA_BEFORE_EDIT), directory)
+                    if (!continuityMatched) throw Halted(Halt.Unconfirmed, MANGA_BEFORE_EDIT)
+                }
+                val reply = send(name, patch(title.id, form, title.media), owner, manga = true, attempt = attempt)
+                val values = reply.checkpoint?.takeIf { it.keys.any { key -> key != MANGA_VERSION } }
+                val kept = mangaReply(name, reply.status, values)
+                verifyMangaReply(name, reply, kept, directory, ::ok)
+                if (values == null || !values.agreeWith(form)) {
+                    saveManga(name, kept, directory)
+                    throw Halted(Halt.Unconfirmed, name)
+                }
+                val at = "${name}_read"
+                val read = mangaMembership(title, owner, at)
+                val proof = read.proof?.takeIf { it.matches(form) && values.agreesWithReadBack(it) }
+                if (proof != null) {
+                    asMangaOwner(owner, JOURNAL) {
+                        val confirmed = intent.copy(mangaProof = proof)
+                        filed(JOURNAL) { journal.write(confirmed) }
+                        left = confirmed
+                        list = ListAfter.Left
+                    }
+                }
+                saveManga(name, kept, directory)
+                saveManga(at, read.kept(at), directory)
+                if (proof == null) throw Halted(Halt.Unconfirmed, at)
+            }
+            val reply = send(MANGA_REMOVED, delete(title.id, title.media), owner, manga = true)
+            val kept = mangaReply(MANGA_REMOVED, reply.status, if (reply.literalNull) JsonNull else reply.values)
+            verifyMangaReply(MANGA_REMOVED, reply, kept, directory, ::mangaDeleted)
+            saveManga(MANGA_REMOVED, kept, directory)
+            val after = mangaMembership(title, owner, MANGA_REMOVED_READ)
+            if (after.present) throw Halted(Halt.StillOnTheList, MANGA_REMOVED_READ)
+            if (!reply.validDeletion) {
+                saveManga(MANGA_REMOVED_READ, after.kept(MANGA_REMOVED_READ), directory)
+                throw Halted(Halt.Unconfirmed, MANGA_REMOVED)
+            }
+            filed(JOURNAL) { journal.deleteConfirmed() }
+            left = null
+            list = ListAfter.Removed
+            saveManga(MANGA_REMOVED_READ, after.kept(MANGA_REMOVED_READ), directory)
+            asMangaOwner(owner, RUN) {
+                val complete = filed(RUN) { files.complete(directory) }
+                published = true
+                shown.value = Recording.Recorded(title, stored, complete, list)
+            }
+        } catch (halted: Halted) {
+            failure = halted
+            val reservation = left
+            if (reservation?.removableMangaProof != null &&
+                mangaRequest != MANGA_REMOVED &&
+                mangaRequest != MANGA_REMOVED_READ &&
+                (halted.halt == Halt.Storage || halted.halt == Halt.Unconfirmed || halted.halt is Halt.Unexpected)
+            ) {
+                val recovered = removeManga(reservation, owner, verifiedUser = true)
+                list = recovered.list
+                cleanupHalt = recovered.halt
+            }
+        } finally {
+            val previous = priorToEdit
+            if (left?.mangaPendingEdit == true && previous != null && !edit.uncertain && continuityMatched) {
+                try {
+                    filed(JOURNAL) { journal.write(previous) }
+                    list = ListAfter.Left
+                } catch (_: Halted) {
+                    cleanupHalt = Halt.Storage
+                }
+            }
+            if (left?.let { it.mangaProof == null } == true && !first.uncertain) {
+                try {
+                    filed(JOURNAL) { journal.deleteConfirmed() }
+                    list = ListAfter.Untouched
+                } catch (_: Halted) {
+                    cleanupHalt = Halt.JournalRetained
+                }
+            }
+            val interrupted = !published && !currentCoroutineContext().isActive
+            if (interrupted || failure?.halt == Halt.NotSignedIn || cleanupHalt == Halt.NotSignedIn) {
+                pending?.let(files::discard)
+                pending = null
+            }
+            val halt = failure
+            if (interrupted || halt != null) {
+                files.report(owner, pending) { folder ->
+                    shown.value =
+                        Recording.Stopped(
+                            title,
+                            if (interrupted) mangaRequest else checkNotNull(halt).at,
+                            if (interrupted) Halt.Interrupted else checkNotNull(halt).halt,
+                            if (folder == null) 0 else stored,
+                            folder,
+                            list,
+                            cleanupHalt,
+                        )
+                }
+            }
+        }
+    }
+
+    private class PatchAttempt {
+        var uncertain = false
+    }
+
+    private fun verifyMangaReply(
+        name: String,
+        reply: Answer,
+        kept: Kept,
+        directory: File,
+        expected: (Int) -> Boolean,
+    ) {
+        val halt =
+            when {
+                reply.refused -> Halt.Refused(reply.status)
+                !expected(reply.status) -> Halt.Unexpected(reply.status)
+                else -> return
+            }
+        try {
+            saveManga(name, kept, directory)
+        } catch (_: Halted) {
+            if (!reply.refused) throw Halted(Halt.Storage, name)
+        }
+        throw Halted(halt, name)
+    }
+
+    private suspend fun removeManga(
+        left: Journal.Left,
+        owner: SessionOwner? = null,
+        verifiedUser: Boolean = false,
+        readOnly: Boolean = false,
+    ): Recording.Leftover {
+        var list = if (readOnly) ListAfter.Unresolved else left.recoveryStatus
+        return try {
+            val initiating =
+                owner ?: session.value.run {
+                    currentSession()
+                    signedInOwner()
+                } ?: throw Halted(Halt.NotSignedIn, USER)
+            if (!verifiedUser && mangaUser(initiating) != left.user) throw Halted(Halt.AnotherAccount, USER)
+            val proof = left.removableMangaProof
+            if (proof != null && !left.mangaExplicitRemoval) {
+                filed(JOURNAL) { journal.write(left.copy(mangaExplicitRemoval = true)) }
+                list = ListAfter.Unresolved
+            }
+            val current = mangaMembership(left.title, initiating, READ)
+            if (current.present) {
+                if (proof == null || current.proof != proof) {
+                    return Recording.Leftover(left.title, ListAfter.Unresolved, null)
+                }
+                if (readOnly) return Recording.Leftover(left.title, ListAfter.Left, null)
+                list = ListAfter.Left
+                val reply = askManga(REMOVED, delete(left.title.id, left.title.media), initiating) { mangaDeleted(it) || it == NOT_FOUND }
+                if (mangaMembership(left.title, initiating, READ).present) throw Halted(Halt.StillOnTheList, READ)
+                if (reply.status != NOT_FOUND && !reply.validDeletion) throw Halted(Halt.Unconfirmed, REMOVED)
+            }
+            filed(JOURNAL) { journal.deleteConfirmed() }
+            list = if (left.removableMangaProof != null) ListAfter.Removed else ListAfter.Absent
+            Recording.Leftover(left.title, list, null)
+        } catch (halted: Halted) {
+            Recording.Leftover(left.title, list, halted.halt)
+        }
+    }
+
+    private suspend fun mangaUser(owner: SessionOwner): String {
+        val answer = askManga(USER, get("users/@me?fields=id"), owner)
+        if ((answer.mangaObject?.number("id") ?: 0) <= 0) throw Halted(Halt.Unexpected(answer.status), USER)
+        return checkNotNull(userOf(answer))
+    }
+
+    private suspend fun <T : Any> asMangaOwner(
+        owner: SessionOwner,
+        at: String,
+        action: () -> T,
+    ): T {
+        val caller = currentCoroutineContext()
+        val accepted =
+            session.value.withOwner(owner) {
+                caller.ensureActive()
+                if (owner.id?.let(session.value::mayWriteAs) != true) throw Halted(Halt.NotSignedIn, at)
+                action()
+            }
+        return accepted ?: throw Halted(Halt.AnotherAccount, at)
+    }
+
+    private suspend fun mangaMembership(
+        title: RecordedTitle,
+        owner: SessionOwner,
+        at: String,
+    ): MangaMembership {
+        val seen = mutableSetOf<Long>()
+        var offset = 0
+        var pages = 0
+        var present = false
+        var values: JsonObject? = null
+        var proof: JsonObject? = null
+        do {
+            val url = address("users/@me/mangalist").newBuilder().addQueryParameter("offset", offset.toString())
+            MangaListQuery.forEach { (key, value) -> url.addQueryParameter(key, value) }
+            val answer = askManga(at, Request.Builder().url(url.build()), owner)
+            val page =
+                runCatching { answer.mangaObject?.mangaListPage(offset) }.getOrNull()
+                    ?: throw Halted(Halt.Unexpected(answer.status), at)
+            for (row in page.entries) {
+                if (!seen.add(row.id.value)) throw Halted(Halt.Unexpected(answer.status), at)
+                if (row.id.value == title.id) {
+                    present = true
+                    val fields = row.fields.getValue("list_status").jsonObject
+                    values = fields.projectMangaCheckpoint()?.takeUnless(answer.hasSecret)
+                    proof = values?.takeIf { MANGA_VERSION in it }
+                }
+            }
+            pages++
+            offset = page.next ?: return MangaMembership(pages, present, values, proof)
+        } while (pages < MOST_PAGES)
+        throw Halted(Halt.Unexpected(OK), at)
+    }
+
+    private suspend fun askManga(
+        name: String,
+        request: Request.Builder,
+        owner: SessionOwner,
+        expected: (Int) -> Boolean = ::ok,
+    ): Answer {
+        val answer = send(name, request, owner, manga = true)
+        if (answer.refused) throw Halted(Halt.Refused(answer.status), name)
+        if (!expected(answer.status)) throw Halted(Halt.Unexpected(answer.status), name)
+        return answer
+    }
+
+    private fun saveManga(
+        at: String,
+        reply: Kept,
+        directory: File,
+    ) {
+        filed(at) { storePrivateAnswer(directory, reply, writePrivateFile, tempDirectory = directory) }
+        stored++
+        running?.let { shown.value = Recording.Running(it, stored, MangaRecordingAnswers) }
+    }
+
+    private class MangaMembership(
+        val pages: Int,
+        val present: Boolean,
+        val values: JsonObject?,
+        val proof: JsonObject?,
+    ) {
+        fun kept(name: String): Kept =
+            mangaReply(
+                name,
+                OK,
+                buildJsonObject {
+                    put("pages", pages)
+                    put("complete", true)
+                    put("present", present)
+                    values?.let { put("list_status", it) }
+                },
+            )
+    }
+
     private suspend fun ran(checked: RecordedTitle): Recording {
         begin(checked)
         shown.value = Recording.Running(checked, 0, SignedInAnswers.size)
@@ -392,7 +849,7 @@ class SignedInRecorder internal constructor(
             filed(RUN) { keep(files.run, files.recorded) }
             return Recording.Recorded(title, stored, files.recorded, compared(title, user, before))
         } catch (halted: Halted) {
-            val left = journal.read()
+            val left = if (written) journal.read() else null
             val list =
                 when {
                     !written -> ListAfter.Untouched
@@ -419,11 +876,22 @@ class SignedInRecorder internal constructor(
         ask("removed_again", delete(title.id), expected = ::knownOrNot)
     }
 
-    private suspend fun leftover(left: Journal.Left): Recording {
+    private suspend fun leftover(
+        left: Journal.Left,
+        readOnly: Boolean = false,
+    ): Recording.Leftover {
         begin(null)
-        shown.value = Recording.Removing(left.title)
-        val halt = removed(left)
-        return Recording.Leftover(left.title, if (halt == null) ListAfter.Removed else ListAfter.Left, halt)
+        val manga = left.title.media == RecorderMedia.Manga
+        shown.value = Recording.Removing(left.title, checking = manga)
+        try {
+            if (manga) return removeManga(left, readOnly = readOnly)
+            val halt = removed(left)
+            return Recording.Leftover(left.title, if (halt == null) ListAfter.Removed else ListAfter.Left, halt)
+        } finally {
+            if (manga && !currentCoroutineContext().isActive) {
+                shown.value = Recording.Leftover(left.title, ListAfter.Unresolved, Halt.Interrupted)
+            }
+        }
     }
 
     // Null once the title is off the list of the user the recording was made as; another user's list is not touched.
@@ -571,15 +1039,39 @@ class SignedInRecorder internal constructor(
     private fun patch(
         id: Long,
         form: Map<String, String>,
-    ) = Request.Builder().url(address("anime/$id/my_list_status")).patch(FormBody.Builder().apply { form.forEach(::add) }.build())
+        media: RecorderMedia = RecorderMedia.Anime,
+    ) = Request.Builder().url(address("${media.name.lowercase()}/$id/my_list_status")).patch(
+        FormBody
+            .Builder()
+            .apply {
+                form.forEach(::add)
+            }.build(),
+    )
 
-    private fun delete(id: Long) = Request.Builder().url(address("anime/$id/my_list_status")).delete()
+    private fun delete(
+        id: Long,
+        media: RecorderMedia = RecorderMedia.Anime,
+    ) = Request.Builder().url(address("${media.name.lowercase()}/$id/my_list_status")).delete()
 
     private class Answer(
         val status: Int,
         val kept: Kept,
         val page: JsonObject? = null,
-    )
+        val jsonType: Boolean = false,
+        val empty: Boolean = false,
+        val literalNull: Boolean = false,
+        val refused: Boolean = false,
+        val hasSecret: (JsonObject?) -> Boolean = { false },
+    ) {
+        val mangaObject: JsonObject? get() = page?.takeIf { jsonType && "error" !in it }
+        val values: JsonObject? get() = mangaObject?.projectMangaValues()?.takeUnless(hasSecret)
+        val checkpoint: JsonObject? get() = mangaObject?.projectMangaCheckpoint()?.takeUnless(hasSecret)
+        val validDeletion: Boolean get() {
+            val projected = values
+            return empty ||
+                (status == OK && jsonType && (literalNull || (projected != null && (page?.isEmpty() == true || projected.isNotEmpty()))))
+        }
+    }
 
     // The run ends here, at the request [at].
     private class Halted(
@@ -614,21 +1106,45 @@ class SignedInRecorder internal constructor(
         name: String,
         request: Request.Builder,
         owner: SessionOwner? = null,
+        manga: Boolean = false,
+        attempt: PatchAttempt? = null,
     ): Answer {
+        if (manga) mangaRequest = name
         if (sent++ > 0) pause()
+        val caller = currentCoroutineContext()
+        caller.ensureActive()
+
+        fun maySend(): Boolean =
+            caller.isActive &&
+                owner != null &&
+                session.value.isCurrentOwner(owner) &&
+                (!manga || owner.id?.let(session.value::mayWriteAs) == true)
         val outcome =
             session.value.authorised(owner?.id) { accessToken ->
                 try {
+                    val mark = if (manga) http.backOff.mark() else null
+                    if (mark != null && !http.refusedFor().isZero) {
+                        return@authorised Attempt.Answered(Outcome.Failure(DataError.Refused))
+                    }
                     request.header(AUTHORIZATION, bearer(accessToken))
                     val call =
                         if (owner == null) {
                             http.callFactory.newCall(request.build())
                         } else {
-                            request.tag(Sends::class.java, Sends(1, maySendRead = { session.value.isCurrentOwner(owner) }))
+                            request.tag(
+                                Sends::class.java,
+                                Sends(
+                                    1,
+                                    maySendRead = ::maySend,
+                                    maySendWrite = (::maySend).takeIf { manga },
+                                    onWriteDispatch = attempt?.let { { it.uncertain = true } },
+                                ),
+                            )
                             http.newCallWithoutRedirects(request.build())
                         }
                     call.execute().use { response ->
-                        if (owner != null && !session.value.isCurrentOwner(owner)) {
+                        if (mark != null) return@use mangaAnswer(name, response, accessToken, mark, ::maySend, attempt)
+                        if (owner != null && !maySend()) {
                             return@use Attempt.Answered(Outcome.Failure(DataError.ListEnded))
                         }
                         if (owner != null && response.code in 300..399) return@use statusOnly(name, response.code)
@@ -663,6 +1179,7 @@ class SignedInRecorder internal constructor(
                     Attempt.Answered(Outcome.Failure(DataError.NoConnection))
                 }
             }
+        caller.ensureActive()
         return when (outcome) {
             is Outcome.Success -> outcome.value
             is Outcome.Failure ->
@@ -670,12 +1187,66 @@ class SignedInRecorder internal constructor(
                     when (outcome.error) {
                         DataError.SessionExpired -> Halt.NotSignedIn
                         DataError.StorageError -> Halt.Storage
-                        DataError.ListEnded -> Halt.AnotherAccount
+                        DataError.Refused -> if (manga) Halt.BackingOff else Halt.NoAnswer
+                        DataError.ListEnded ->
+                            if (manga && owner != null && session.value.isCurrentOwner(owner)) Halt.NotSignedIn else Halt.AnotherAccount
                         else -> Halt.NoAnswer
                     },
                     name,
                 )
         }
+    }
+
+    private fun mangaAnswer(
+        name: String,
+        response: Response,
+        accessToken: String,
+        mark: Long,
+        maySend: () -> Boolean,
+        attempt: PatchAttempt?,
+    ): Attempt<Answer> {
+        val status = response.code
+        if (status == UNAUTHORIZED) {
+            attempt?.uncertain = false
+            return if (maySend()) Attempt.Rejected else Attempt.Answered(Outcome.Failure(DataError.ListEnded))
+        }
+        if (status in 300..399) return statusOnly(name, status)
+        val limit = if (response.request.method == "GET") MAX_MANGA_PAGE else MAX_MANGA_ACK
+        val body =
+            try {
+                if (response.body.source().request(limit + 1L)) null else response.body.string()
+            } catch (_: IOException) {
+                null
+            }
+        val mediaType =
+            response.headers
+                .values("Content-Type")
+                .singleOrNull()
+                ?.toMediaTypeOrNull()
+        val jsonType = mediaType?.type == "application" && mediaType.subtype == "json"
+        val objectBody = if (jsonType) body?.uniqueMangaObject() else null
+        val errorBody = body.takeIf { objectBody?.mangaText("error") != null }
+        val refused = http.recordRefusal(status, response.headers, errorBody)
+        if (refused || (status in DefinitiveMangaRejections && errorBody != null)) attempt?.uncertain = false
+        if (!maySend()) return Attempt.Answered(Outcome.Failure(DataError.ListEnded))
+        val sanitiser = Sanitiser(mapOf(accessToken to "access-token", http.clientId to "client-id"))
+        val answer =
+            Answer(
+                status = status,
+                kept = mangaReply(name, status, null),
+                page = objectBody,
+                jsonType = jsonType,
+                empty = body == "",
+                literalNull = jsonType && body?.trim() == "null",
+                refused = refused,
+                hasSecret = { values -> values != null && sanitiser.asSent(values.toString()) != values.toString() },
+            )
+        if ((status == OK && answer.mangaObject != null) ||
+            (response.request.method == "DELETE" && mangaDeleted(status) && answer.validDeletion)
+        ) {
+            http.backOff.answered(mark)
+        }
+        return Attempt.Answered(Outcome.Success(answer))
     }
 
     private fun statusOnly(
@@ -703,20 +1274,26 @@ class SignedInRecorder internal constructor(
         stored++
     }
 
-    private inline fun filed(
+    private inline fun <T> filed(
         at: String,
-        write: () -> Unit,
-    ) = try {
-        write()
-    } catch (_: IOException) {
-        throw Halted(Halt.Storage, at)
-    }
+        write: () -> T,
+    ): T =
+        try {
+            write()
+        } catch (_: IOException) {
+            throw Halted(Halt.Storage, at)
+        } catch (_: SecurityException) {
+            throw Halted(Halt.Storage, at)
+        }
 
     private companion object {
+        const val MAX_MANGA_ACK = 16_384
+        const val MAX_MANGA_PAGE = 4 * 1024 * 1024
         const val OK = 200
         const val UNAUTHORIZED = 401
         const val NOT_FOUND = 404
         val REFUSALS = setOf(403, 429)
+        val DefinitiveMangaRejections = setOf(400, 404, 422)
         const val PAGES = 3
         const val LARGEST_PAGE = 1000
         const val MOST_PAGES = 50

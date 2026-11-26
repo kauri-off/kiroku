@@ -14,7 +14,6 @@ import io.github.kauri_off.kiroku.data.network.MalJson
 import io.github.kauri_off.kiroku.data.network.ReadAdmission
 import io.github.kauri_off.kiroku.data.session.MalSession
 import io.github.kauri_off.kiroku.data.session.authorised
-import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
@@ -72,9 +71,7 @@ internal class MalMangaList(
         val form = patch.form()
         if (form.isEmpty()) return Outcome.Failure(DataError.InvalidRequest)
         return request(expectedOwner, write = true, onHttpFailure = onHttpFailure) { authorization ->
-            api.patch(id.value, form, authorization).writeAnswer().also {
-                currentCoroutineContext()[MangaMutationExchange]?.write(id, it, form, authorization, http.clientId)
-            }
+            api.patch(id.value, form, authorization).writeAnswer()
         }
     }
 
@@ -85,9 +82,7 @@ internal class MalMangaList(
     ): Outcome<MangaListWriteAnswer> {
         if (id.value <= 0) return Outcome.Failure(DataError.NotFound)
         return request(expectedOwner, write = true, onHttpFailure = onHttpFailure) { authorization ->
-            api.delete(id.value, authorization).writeAnswer().also {
-                currentCoroutineContext()[MangaMutationExchange]?.write(id, it, emptyMap(), authorization, http.clientId)
-            }
+            api.delete(id.value, authorization).writeAnswer()
         }
     }
 
@@ -95,26 +90,16 @@ internal class MalMangaList(
         offset: Int,
         expectedOwner: SignInId,
         firstRead: (() -> ReadAdmission)?,
-    ): Outcome<Page> =
+    ): Outcome<MangaListPage> =
         request(expectedOwner, firstRead) { authorization ->
-            val response = api.page(Asked + ("offset" to offset.toString()), authorization)
+            val response = api.page(MangaListQuery + ("offset" to offset.toString()), authorization)
             response.checkUnredirectedSuccess()
             val payload =
                 checkNotNull(response.body()).use {
                     check(response.code() == 200) { "The manga list page did not return OK" }
                     it.string()
                 }
-            val json = MalJson.parseToJsonElement(payload).jsonObject
-            val data = json.getValue("data") as JsonArray
-            check(data.size <= MAX_ENTRIES - offset) { "The manga list exceeds its bound" }
-            val end = offset + data.size
-            val next = json.getValue("paging").jsonObject.mangaNextOffset()
-            check(next == null || (data.isNotEmpty() && next == end && next < MAX_ENTRIES)) {
-                "The next manga list page does not follow this one"
-            }
-            Page(data.map { it.jsonObject.membership() }, next).also {
-                currentCoroutineContext()[MangaMutationExchange]?.page(payload, it.entries, next == null, authorization, http.clientId)
-            }
+            MalJson.parseToJsonElement(payload).jsonObject.mangaListPage(offset)
         }
 
     private suspend fun <T> request(
@@ -133,18 +118,27 @@ internal class MalMangaList(
             else -> answer
         }
     }
+}
 
-    private class Page(
-        val entries: List<MangaListRow>,
-        val next: Int?,
-    )
+private const val MAX_ENTRIES = 100_000
+private const val VALUES = "status,score,num_chapters_read,num_volumes_read,updated_at"
+private const val FIELDS = "id,title,main_picture,alternative_titles,media_type,status,num_chapters,num_volumes,list_status{$VALUES}"
+internal val MangaListQuery = mapOf("fields" to FIELDS, "nsfw" to "true", "sort" to "manga_title", "limit" to "1000")
 
-    private companion object {
-        const val MAX_ENTRIES = 100_000
-        const val VALUES = "status,score,num_chapters_read,num_volumes_read,updated_at"
-        const val FIELDS = "id,title,main_picture,alternative_titles,media_type,status,num_chapters,num_volumes,list_status{$VALUES}"
-        val Asked = mapOf("fields" to FIELDS, "nsfw" to "true", "sort" to "manga_title", "limit" to "1000")
+internal class MangaListPage(
+    val entries: List<MangaListRow>,
+    val next: Int?,
+)
+
+internal fun JsonObject.mangaListPage(offset: Int): MangaListPage {
+    val data = getValue("data") as JsonArray
+    check(data.size <= MAX_ENTRIES - offset) { "The manga list exceeds its bound" }
+    val end = offset + data.size
+    val next = getValue("paging").jsonObject.mangaNextOffset()
+    check(next == null || (data.isNotEmpty() && next == end && next < MAX_ENTRIES)) {
+        "The next manga list page does not follow this one"
     }
+    return MangaListPage(data.map { it.jsonObject.membership() }, next)
 }
 
 // Membership-checked rows still require private field mapping before cache replacement.

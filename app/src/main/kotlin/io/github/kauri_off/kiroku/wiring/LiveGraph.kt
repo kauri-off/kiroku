@@ -173,7 +173,7 @@ internal class LiveGraph(
     val recorder = liveRecorder(parts, built)
 
     private val mangaReader =
-        lazy { RoomMangaList({ parts.database }, account, parts.http, clock, liveMangaObserver(this), ::wasRetiredOnDisk) }
+        lazy { RoomMangaList({ parts.database }, account, parts.http, clock, ::wasRetiredOnDisk) }
     override val mangaList: RoomMangaList
         get() {
             startMangaCleanup()

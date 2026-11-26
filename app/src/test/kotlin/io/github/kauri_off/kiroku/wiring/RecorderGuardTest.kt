@@ -43,6 +43,10 @@ class RecorderGuardTest {
         val release = File(projectDir, "app/src/release/kotlin/io/github/kauri_off/kiroku/wiring/LiveRecorder.kt").readText()
 
         assertTrue(release, release.trimEnd().endsWith("): Nothing? = null"))
-        assertTrue(release, release.contains("fun liveMangaObserver(graph: LiveGraph): Nothing? = null"))
+        val app = File(projectDir, "app/build.gradle.kts").readText()
+        val data = File(projectDir, "data/build.gradle.kts").readText()
+        assertTrue(app, app.contains("kotlin.directories += \"src/debug/kotlin\""))
+        assertTrue(app, app.contains("res.directories += \"src/debug/res\""))
+        assertTrue(data, data.contains("kotlin.directories += \"src/debug/kotlin\""))
     }
 }

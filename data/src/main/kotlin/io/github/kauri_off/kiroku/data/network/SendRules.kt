@@ -65,6 +65,7 @@ internal class Sends(
     val maySendRead: (() -> Boolean)? = null,
     private val firstRead: (() -> ReadAdmission)? = null,
     val maySendWrite: (() -> Boolean)? = null,
+    val onWriteDispatch: (() -> Unit)? = null,
 ) {
     private var readAdmitted = false
     private val reads = ConcurrentHashMap<HttpUrl, AtomicInteger>()
@@ -144,6 +145,7 @@ internal object SendLimits : Interceptor {
         val allowed =
             if (request.isRead) sends?.mayRead(request.url) != false else !wire.written.getAndSet(true)
         if (!allowed) throw NotSentAgain(wire.status, wire.failure)
+        if (!request.isRead) sends?.onWriteDispatch?.invoke()
         wire.tried = true
         wire.status = null
         wire.failure = null

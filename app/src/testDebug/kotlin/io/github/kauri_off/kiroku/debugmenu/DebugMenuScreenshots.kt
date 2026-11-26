@@ -13,20 +13,17 @@ import io.github.kauri_off.kiroku.core.airing.airingAt
 import io.github.kauri_off.kiroku.core.fixtures.FixtureAnime
 import io.github.kauri_off.kiroku.core.fixtures.Fixtures
 import io.github.kauri_off.kiroku.core.model.Anime
-import io.github.kauri_off.kiroku.core.model.MangaId
 import io.github.kauri_off.kiroku.core.model.Session
 import io.github.kauri_off.kiroku.core.model.SignInId
 import io.github.kauri_off.kiroku.core.model.TitleLanguage
 import io.github.kauri_off.kiroku.core.notify.Recheck
 import io.github.kauri_off.kiroku.core.notify.RunEnd
 import io.github.kauri_off.kiroku.core.notify.RunTrigger
-import io.github.kauri_off.kiroku.data.manga.MangaMutationMethod
 import io.github.kauri_off.kiroku.data.recorder.Halt
 import io.github.kauri_off.kiroku.data.recorder.ListAfter
-import io.github.kauri_off.kiroku.data.recorder.MangaCaptureState
-import io.github.kauri_off.kiroku.data.recorder.MangaCaptureStop
-import io.github.kauri_off.kiroku.data.recorder.MangaCaptureTarget
+import io.github.kauri_off.kiroku.data.recorder.MangaRecordingAnswers
 import io.github.kauri_off.kiroku.data.recorder.RecordedTitle
+import io.github.kauri_off.kiroku.data.recorder.RecorderMedia
 import io.github.kauri_off.kiroku.data.recorder.Recording
 import io.github.kauri_off.kiroku.data.sandbox.Planted
 import io.github.kauri_off.kiroku.list.FixtureListScreen
@@ -102,42 +99,29 @@ class DebugMenuScreenshots : ScreenshotRegistry() {
                     runs = NotificationLogState(MANY_RUNS),
                 )
             },
-            case("recorder-confirm") { Menu(ScenarioState.Unavailable, recorder = RecorderState(Recording.Checked(TITLE), "1")) },
+            case("recorder-confirm") {
+                Menu(ScenarioState.Unavailable, recorder = RecorderState(Recording.Checked(TITLE), "1", mangaAvailable = true))
+            },
             case("recorder-manga-signed-out") {
                 Menu(
                     ScenarioState.Unavailable,
                     signOut = SignOutState.Account(Session.SignedOut),
-                    recorder = RecorderState(Recording.Idle, manga = MangaCaptureState.Ready, mangaId = "17", mangaSignedIn = false),
+                    recorder = RecorderState(Recording.Idle, mangaAvailable = true, mangaId = "17", mangaSignedIn = false),
                 )
             },
-            case("recorder-manga-ready") {
-                Menu(ScenarioState.Unavailable, recorder = RecorderState(Recording.Idle, manga = MangaCaptureState.Ready, mangaId = "17"))
-            },
-            case("recorder-manga-armed") {
-                val target = MangaCaptureTarget(MangaId(17), MangaMutationMethod.Delete)
-                Menu(ScenarioState.Unavailable, recorder = RecorderState(Recording.Idle, manga = MangaCaptureState.Armed(target)))
-            },
-            case("recorder-manga-capturing") {
-                val target = MangaCaptureTarget(MangaId(17), MangaMutationMethod.Patch)
-                Menu(ScenarioState.Unavailable, recorder = RecorderState(Recording.Idle, manga = MangaCaptureState.Capturing(target)))
-            },
-            case("recorder-manga-publishing") {
-                val target = MangaCaptureTarget(MangaId(17), MangaMutationMethod.Patch)
-                val publishing = MangaCaptureState.Capturing(target, canDisarm = false)
-                Menu(ScenarioState.Unavailable, recorder = RecorderState(Recording.Idle, manga = publishing))
-            },
+            case("recorder-manga-ready") { MangaRecorder(Recording.Idle) },
+            case("recorder-manga-confirm") { MangaRecorder(Recording.Checked(MANGA)) },
+            case("recorder-manga-running") { MangaRecorder(Recording.Running(MANGA, 3, MangaRecordingAnswers)) },
             case("recorder-manga-complete") {
-                val target = MangaCaptureTarget(MangaId(17), MangaMutationMethod.Patch)
                 val directory =
                     File("/data/user/0/io.github.kauri_off.kiroku.debug/no_backup/account.private-manga-mutations/capture-example")
-                Menu(
-                    ScenarioState.Unavailable,
-                    recorder = RecorderState(Recording.Idle, manga = MangaCaptureState.Complete(target, directory)),
-                )
+                MangaRecorder(Recording.Recorded(MANGA, MangaRecordingAnswers, directory, ListAfter.Removed))
             },
             case("recorder-manga-stopped") {
-                val stopped = MangaCaptureState.Stopped(MangaCaptureStop.Unconfirmed)
-                Menu(ScenarioState.Unavailable, recorder = RecorderState(Recording.Idle, manga = stopped, mangaId = "17"))
+                MangaRecorder(Recording.Stopped(MANGA, "manga_edit", Halt.NotSignedIn, 3, null, ListAfter.Left))
+            },
+            case("recorder-manga-unresolved") {
+                MangaRecorder(Recording.Leftover(MANGA, ListAfter.Unresolved, null))
             },
             case("recorder-read-running") {
                 Menu(ScenarioState.Unavailable, recorder = RecorderState(Recording.Reading))
@@ -179,10 +163,15 @@ class DebugMenuScreenshots : ScreenshotRegistry() {
             case("marker-several-on-list") { OverList(several) },
         )
 
+    @Composable
+    private fun MangaRecorder(recording: Recording) =
+        Menu(ScenarioState.Unavailable, recorder = RecorderState(recording, mangaAvailable = true, mangaId = "17"))
+
     private companion object {
         const val HASH = "72e26f6"
         const val SIGN_IN = "sign-in"
         val BUILD = BuildInfo("preview", "0.1.0", Commit(HASH, dirty = false), Instant.parse("2026-11-12T09:41:00Z"), hasClientId = true)
+        val MANGA = RecordedTitle(17, "A manga title", 0, RecorderMedia.Manga)
         val TITLE = RecordedTitle(1, "Cowboy Bebop", 26)
         val FIXTURES = Fixtures.reference
         val COUNTS = AiringCountsState.Read(airingCounts(FIXTURES.entries, FIXTURES.airing, FIXTURES.schedules, TitleLanguage.Romaji))
@@ -333,7 +322,17 @@ class DebugMenuScreenshots : ScreenshotRegistry() {
             ).let { SourceState(it, it) },
         signOut: SignOutState =
             if (scenarios == ScenarioState.Unavailable) SignOutState.Account(Session.SignedIn(SignInId(SIGN_IN))) else SignOutState.Demo,
-        recorder: RecorderState = RecorderState(if (scenarios == ScenarioState.Unavailable) Recording.Idle else null),
+        recorder: RecorderState =
+            RecorderState(
+                if (scenarios ==
+                    ScenarioState.Unavailable
+                ) {
+                    Recording.Idle
+                } else {
+                    null
+                },
+                mangaAvailable = scenarios == ScenarioState.Unavailable,
+            ),
         reports: List<Report> = emptyList(),
         airingCounts: AiringCountsState = COUNTS,
         samples: NotificationSamplesState = NotificationSamplesState(),

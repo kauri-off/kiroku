@@ -65,8 +65,6 @@ internal fun liveRecorder(
         privateMutations = if (parts.source === LiveSource.Account) ({ mangaCaptureRoot(parts.context) }) else null,
     )
 
-internal fun liveMangaObserver(graph: LiveGraph) = graph.recorder.manga
-
 internal fun forgetMangaCaptures(graph: LiveGraph) {
-    graph.recorder.manga?.forget()
+    graph.recorder.forgetMangaCaptures()
 }
