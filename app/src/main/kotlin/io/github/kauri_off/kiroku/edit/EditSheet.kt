@@ -218,7 +218,7 @@ internal fun EditSheet(
             // Out of the scroll, so Save is on screen whenever the keyboard is closed.
             if (!WindowInsets.isImeVisible) {
                 Spacer(Modifier.height(Spacing.xl))
-                Actions(
+                EditActions(
                     remove =
                         if (state.isNew) {
                             null
@@ -246,7 +246,7 @@ internal fun EditSheet(
     when (val dialog = state.dialog) {
         is EditDialog.PickDate -> DateDialog(dialog.field, state, onEvent)
         EditDialog.ConfirmRemove ->
-            Confirmation(
+            EditConfirmation(
                 title = stringResource(R.string.edit_remove_title),
                 text = stringResource(R.string.edit_remove_text),
                 confirm = stringResource(R.string.edit_remove_confirm),
@@ -255,7 +255,7 @@ internal fun EditSheet(
                 onDismiss = { onEvent(EditSheetEvent.DialogDismissed) },
             )
         EditDialog.ConfirmDiscard ->
-            Confirmation(
+            EditConfirmation(
                 title = stringResource(R.string.edit_discard_title),
                 text = null,
                 confirm = stringResource(R.string.edit_discard_confirm),
@@ -269,7 +269,7 @@ internal fun EditSheet(
 
 // A stock dialog that keeps the window's side margin however wide its text grows.
 @Composable
-private fun Confirmation(
+internal fun EditConfirmation(
     title: String,
     text: String?,
     confirm: String,
@@ -289,7 +289,7 @@ private fun Confirmation(
 // Remove at the start and Save at the end of one line; when they do not fit, Save above Remove, both at the end.
 // Remove's text, not its padding, lines up with the content edge.
 @Composable
-private fun Actions(
+internal fun EditActions(
     remove: (@Composable () -> Unit)?,
     save: @Composable () -> Unit,
 ) {
@@ -391,7 +391,7 @@ private fun ScoreSlider(
 }
 
 @Composable
-private fun scoreText(score: Int): String {
+internal fun scoreText(score: Int): String {
     val name =
         stringResource(
             when (score) {

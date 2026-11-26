@@ -329,6 +329,7 @@ Not to forget:
 - [x] Manga title pages from MyAnimeList links.
 - [x] Manga search and ranking.
 - [x] Read the personal manga list.
+- [x] Standalone manga entry edit sheet.
 - [x] Switch between Anime and Manga in My list.
 - [ ] Edit status, chapter and volume progress, and score on the personal manga list.
 - [ ] Remove entries from the personal manga list.
