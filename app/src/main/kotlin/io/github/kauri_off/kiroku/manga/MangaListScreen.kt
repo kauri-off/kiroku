@@ -2,6 +2,7 @@ package io.github.kauri_off.kiroku.manga
 
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -29,7 +30,7 @@ import io.github.kauri_off.kiroku.notShown
 import io.github.kauri_off.kiroku.title.countText
 import io.github.kauri_off.kiroku.title.message
 import io.github.kauri_off.kiroku.titlesub.SubScreenBody
-import io.github.kauri_off.kiroku.titlesub.SubScreenContent
+import io.github.kauri_off.kiroku.titlesub.SubScreenList
 import io.github.kauri_off.kiroku.titlesub.errorState
 
 internal data class MangaListState(
@@ -105,7 +106,10 @@ internal fun MangaListBody(
                     }
                 }
         }
-    SubScreenContent(body, padding)
+    when (body) {
+        is SubScreenBody.State -> ScreenState(body.state, Modifier.padding(padding))
+        is SubScreenBody.List -> SubScreenList(body, padding)
+    }
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
