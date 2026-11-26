@@ -9,6 +9,8 @@ import io.github.kauri_off.kiroku.core.model.MangaListEntry
 import io.github.kauri_off.kiroku.core.model.MangaReadingStatus
 import io.github.kauri_off.kiroku.core.model.TitleLanguage
 import io.github.kauri_off.kiroku.core.model.Titles
+import io.github.kauri_off.kiroku.list.ListPane
+import io.github.kauri_off.kiroku.list.ListScreen
 import io.github.kauri_off.kiroku.screenshots.ScreenshotRegistry
 import io.github.kauri_off.kiroku.screenshots.WindowSize
 import io.github.kauri_off.kiroku.screenshots.case
@@ -19,16 +21,16 @@ import io.github.kauri_off.kiroku.shell.ShellScreen
 import io.github.kauri_off.kiroku.shell.ShellState
 
 class MangaListScreenshots : ScreenshotRegistry() {
-    override val content = contentCase { Screen(rows()) }
+    override val content = contentCase { Screen(mangaListFixture()) }
     override val loading = shown { Screen(MangaListContent.Loading) }
-    override val empty = shown { Screen(rows(emptyList())) }
+    override val empty = shown { Screen(mangaListFixture(emptyList())) }
     override val error = shown { Screen(MangaListContent.Failed(DataError.NoConnection)) }
 
     override val cases =
         listOf(
             case("signed-out") { Screen(MangaListContent.SignedOut) },
-            case("wide", window = WindowSize(840, 600)) { Screen(rows()) },
-            case("expired") { Screen(rows(), expired = true) },
+            case("wide", window = WindowSize(840, 600), largeText = true) { Screen(mangaListFixture()) },
+            case("expired") { Screen(mangaListFixture(), expired = true) },
         )
 }
 
@@ -63,7 +65,7 @@ private val listEntries =
         ),
     )
 
-private fun rows(entries: List<MangaListEntry> = listEntries) = MangaListContent.Ready(entries, TitleLanguage.Romaji)
+internal fun mangaListFixture(entries: List<MangaListEntry> = listEntries) = MangaListContent.Ready(entries, TitleLanguage.Romaji)
 
 @Composable
 private fun Screen(
@@ -71,6 +73,10 @@ private fun Screen(
     expired: Boolean = false,
 ) {
     ShellScreen(ShellState(Destination.List), {}) {
-        MangaListScreen(MangaListState(content = content, sessionExpired = expired), {}, remember { SnackbarHostState() }, onMode = {})
+        ListScreen(
+            ListPane.Manga(MangaListState(content = content, sessionExpired = expired), {}),
+            remember { SnackbarHostState() },
+            onMode = {},
+        )
     }
 }

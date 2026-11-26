@@ -1,15 +1,14 @@
 package io.github.kauri_off.kiroku.manga
 
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.ListItem
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
-import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.painterResource
@@ -26,8 +25,6 @@ import io.github.kauri_off.kiroku.design.component.PosterSize
 import io.github.kauri_off.kiroku.design.component.ScreenState
 import io.github.kauri_off.kiroku.design.component.StateAction
 import io.github.kauri_off.kiroku.design.component.TitleText
-import io.github.kauri_off.kiroku.list.ListFrame
-import io.github.kauri_off.kiroku.list.ListMode
 import io.github.kauri_off.kiroku.notShown
 import io.github.kauri_off.kiroku.title.countText
 import io.github.kauri_off.kiroku.title.message
@@ -67,59 +64,48 @@ internal sealed interface MangaListEvent {
     ) : MangaListEvent
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-internal fun MangaListScreen(
+internal fun MangaListBody(
     state: MangaListState,
     onEvent: (MangaListEvent) -> Unit,
-    snackbars: SnackbarHostState,
-    onMode: (ListMode) -> Unit,
+    padding: PaddingValues,
 ) {
     val refresh = { onEvent(MangaListEvent.Refresh) }
     val scroll = rememberLazyListState()
-    ListFrame(
-        ListMode.Manga,
-        onMode,
-        state.sessionExpired,
-        onSignIn = { onEvent(MangaListEvent.SignIn) },
-        snackbars,
-        topBar = { TopAppBar(title = { Text(stringResource(R.string.list_title)) }) },
-    ) { padding ->
-        val body =
-            when (val content = state.content) {
-                MangaListContent.Loading -> SubScreenBody.State(ScreenState.Loading)
-                MangaListContent.SignedOut ->
-                    SubScreenBody.State(
-                        ScreenState.Empty(
-                            stringResource(R.string.manga_list_signed_out),
-                            StateAction(stringResource(R.string.list_sign_in)) { onEvent(MangaListEvent.SignIn) },
-                        ),
-                    )
-                is MangaListContent.Failed ->
-                    SubScreenBody.State(
-                        if (state.sessionExpired) {
-                            ScreenState.Empty(stringResource(content.error.message()))
-                        } else {
-                            errorState(content.error, refresh)
-                        },
-                    )
-                is MangaListContent.Ready ->
-                    SubScreenBody.List(content.refreshing, onRefresh = refresh.takeUnless { state.sessionExpired }, scroll = scroll) {
-                        if (content.entries.isEmpty()) {
-                            item {
-                                Box(Modifier.fillParentMaxSize()) {
-                                    ScreenState(ScreenState.Empty(stringResource(R.string.manga_list_empty)))
-                                }
-                            }
-                        } else {
-                            items(content.entries, key = { it.id.value }) { entry ->
-                                MangaListRow(entry, content.language) { onEvent(MangaListEvent.Open(entry)) }
+    val body =
+        when (val content = state.content) {
+            MangaListContent.Loading -> SubScreenBody.State(ScreenState.Loading)
+            MangaListContent.SignedOut ->
+                SubScreenBody.State(
+                    ScreenState.Empty(
+                        stringResource(R.string.manga_list_signed_out),
+                        StateAction(stringResource(R.string.list_sign_in)) { onEvent(MangaListEvent.SignIn) },
+                    ),
+                )
+            is MangaListContent.Failed ->
+                SubScreenBody.State(
+                    if (state.sessionExpired) {
+                        ScreenState.Empty(stringResource(content.error.message()))
+                    } else {
+                        errorState(content.error, refresh)
+                    },
+                )
+            is MangaListContent.Ready ->
+                SubScreenBody.List(content.refreshing, onRefresh = refresh.takeUnless { state.sessionExpired }, scroll = scroll) {
+                    if (content.entries.isEmpty()) {
+                        item {
+                            Box(Modifier.fillParentMaxSize()) {
+                                ScreenState(ScreenState.Empty(stringResource(R.string.manga_list_empty)))
                             }
                         }
+                    } else {
+                        items(content.entries, key = { it.id.value }) { entry ->
+                            MangaListRow(entry, content.language) { onEvent(MangaListEvent.Open(entry)) }
+                        }
                     }
-            }
-        SubScreenContent(body, padding)
-    }
+                }
+        }
+    SubScreenContent(body, padding)
 }
 
 @OptIn(ExperimentalMaterial3Api::class)

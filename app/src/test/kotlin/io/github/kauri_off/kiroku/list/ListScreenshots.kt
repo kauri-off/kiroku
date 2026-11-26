@@ -11,6 +11,8 @@ import androidx.compose.ui.semantics.SemanticsNode
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.semantics.getOrNull
 import io.github.kauri_off.kiroku.design.MotionBounds
+import io.github.kauri_off.kiroku.manga.MangaListState
+import io.github.kauri_off.kiroku.manga.mangaListFixture
 import io.github.kauri_off.kiroku.screenshots.ScreenshotRegistry
 import io.github.kauri_off.kiroku.screenshots.Transition
 import io.github.kauri_off.kiroku.screenshots.WindowSize
@@ -28,6 +30,7 @@ private const val TAB_SWITCH = MotionBounds.ENTER
 private const val FRAME = 16L
 private const val PHONE_LONG_SIDE = 891
 private const val PHONE_SHORT_SIDE = 411
+private val compact = WindowSize(360, 760)
 
 class ListScreenshots : ScreenshotRegistry() {
     private fun screen(
@@ -48,9 +51,12 @@ class ListScreenshots : ScreenshotRegistry() {
 
     override val cases =
         listOf(
-            case("anime-mode", largeText = true) { AnimeMode(ListFixtureStates.watching) },
-            case("anime-mode-wide", window = WindowSize(840, 600)) { AnimeMode(ListFixtureStates.watching) },
-            case("anime-mode-filtering", keyboard = true) { AnimeMode(ListFixtureStates.filtering) },
+            case("anime-mode", window = compact, largeText = true) { MyListMode() },
+            case("manga-mode", window = compact, largeText = true) { MyListMode(manga = true) },
+            case("anime-mode-wide", window = WindowSize(840, 600), largeText = true) { MyListMode() },
+            case("anime-mode-filtering", window = compact, keyboard = true, largeText = true) {
+                MyListMode(anime = ListFixtureStates.filtering)
+            },
             case("planned", content = screen(ListFixtureStates.planned)),
             case("completed", content = screen(ListFixtureStates.completed)),
             case("on-hold", content = screen(ListFixtureStates.onHold)),
@@ -96,6 +102,14 @@ class ListScreenshots : ScreenshotRegistry() {
     // "+1" completes the top title: its row fades out and the rows below close up, a change inside the list.
     override val transitions =
         listOf(
+            Transition(
+                "manga-mode",
+                start = "anime-mode",
+                millis = MotionBounds.SCREEN,
+                at = listOf(FRAME, MotionBounds.CHANGE / 3, MotionBounds.CHANGE, MotionBounds.SCREEN),
+            ) { changed ->
+                MyListMode(manga = changed)
+            },
             Transition("completed-row", start = "last-updated", millis = MotionBounds.CHANGE) { changed ->
                 FixtureListScreen(if (changed) ListFixtureStates.completedRow else ListFixtureStates.lastUpdated)
             },
@@ -160,8 +174,13 @@ private fun SemanticsNode.isTab() = config.getOrNull(SemanticsProperties.Role) =
 private const val LAYOUT_FRAMES = 10
 
 @Composable
-private fun AnimeMode(state: ListState) {
+private fun MyListMode(
+    manga: Boolean = false,
+    anime: ListState = ListFixtureStates.watching,
+) {
     ShellScreen(ShellState(Destination.List), {}) {
-        ListScreen(state, {}, rememberHostShowing(null), onMode = {})
+        val pane =
+            if (manga) ListPane.Manga(MangaListState(content = mangaListFixture()), {}) else ListPane.Anime(anime, {})
+        ListScreen(pane, rememberHostShowing(null), onMode = {})
     }
 }

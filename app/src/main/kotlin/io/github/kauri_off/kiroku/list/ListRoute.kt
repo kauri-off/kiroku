@@ -3,7 +3,6 @@ package io.github.kauri_off.kiroku.list
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.saveable.rememberSaveableStateHolder
 import androidx.lifecycle.createSavedStateHandle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import io.github.kauri_off.kiroku.CountAsShown
@@ -12,8 +11,8 @@ import io.github.kauri_off.kiroku.collectAsScreenState
 import io.github.kauri_off.kiroku.core.model.AnimeId
 import io.github.kauri_off.kiroku.edit.EditSheetRoute
 import io.github.kauri_off.kiroku.edit.editSheetViewModel
-import io.github.kauri_off.kiroku.manga.MangaListRoute
 import io.github.kauri_off.kiroku.manga.MangaTitleKey
+import io.github.kauri_off.kiroku.manga.mangaListPane
 import io.github.kauri_off.kiroku.shell.ShellMessages
 import io.github.kauri_off.kiroku.title.TitleSummary
 import io.github.kauri_off.kiroku.wiring.AppGraph
@@ -32,27 +31,23 @@ internal fun ListRoute(
     onOpenMangaTitle: (MangaTitleKey) -> Unit,
 ) {
     val manga = graph.mangaList
-    val selected = if (manga == null) ListMode.Anime else mode
-    val screens = rememberSaveableStateHolder()
-    screens.SaveableStateProvider(selected.name) {
-        if (manga != null && selected == ListMode.Manga) {
-            MangaListRoute(manga, graph, messages, snackbars, onMode, onSignIn, onOpenMangaTitle)
+    val pane =
+        if (manga != null && mode == ListMode.Manga) {
+            mangaListPane(manga, graph, messages, onSignIn, onOpenMangaTitle)
         } else {
-            AnimeListRoute(graph, messages, snackbars, onOpenTitle, onSearch, onSignIn, onMode.takeIf { manga != null })
+            animeListPane(graph, messages, onOpenTitle, onSearch, onSignIn)
         }
-    }
+    ListScreen(pane, snackbars, onMode = onMode.takeIf { manga != null })
 }
 
 @Composable
-private fun AnimeListRoute(
+private fun animeListPane(
     graph: AppGraph,
     messages: ShellMessages,
-    snackbars: SnackbarHostState,
     onOpenTitle: (AnimeId, TitleSummary?) -> Unit,
     onSearch: () -> Unit,
     onSignIn: () -> Unit,
-    onMode: ((ListMode) -> Unit)?,
-) {
+): ListPane.Anime {
     val list =
         viewModel {
             ListViewModel(
@@ -73,7 +68,8 @@ private fun AnimeListRoute(
     val state by list.state.collectAsScreenState()
     CountAsShown(list.shown)
     if (state.content == ListContent.Loading) KeepSplash()
-    ListScreen(
+    EditSheetRoute(editor, messages)
+    return ListPane.Anime(
         state = state.copy(typed = list.filterInput),
         onEvent = { event ->
             when (event) {
@@ -84,8 +80,5 @@ private fun AnimeListRoute(
                 else -> list.onEvent(event)
             }
         },
-        snackbars = snackbars,
-        onMode = onMode,
     )
-    EditSheetRoute(editor, messages)
 }

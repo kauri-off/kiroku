@@ -4,9 +4,11 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.remember
+import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.SemanticsMatcher
+import androidx.compose.ui.test.assertIsFocused
 import androidx.compose.ui.test.assertIsSelected
 import androidx.compose.ui.test.getUnclippedBoundsInRoot
 import androidx.compose.ui.test.hasAnyDescendant
@@ -15,9 +17,13 @@ import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.StateRestorationTester
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performKeyInput
 import androidx.compose.ui.test.performScrollToIndex
+import androidx.compose.ui.test.performSemanticsAction
 import androidx.compose.ui.test.performTextReplacement
+import androidx.compose.ui.test.pressKey
 import androidx.lifecycle.ViewModelStore
 import androidx.lifecycle.ViewModelStoreOwner
 import androidx.lifecycle.viewmodel.compose.LocalViewModelStoreOwner
@@ -72,21 +78,7 @@ class ListModesRouteTest {
     @Test
     fun `the List modes restore their own controls and positions after switching and process death`() {
         var reads = 0
-        val graph =
-            object : AppGraph by demo {
-                override val mangaList =
-                    object : MangaListReader {
-                        override suspend fun stored(owner: SignInId): Outcome<MangaListSnapshot?> {
-                            reads++
-                            return Outcome.Success(MangaListSnapshot(owner, entries, demo.clock.instant()))
-                        }
-
-                        override suspend fun refresh(
-                            owner: SignInId,
-                            canDispatch: () -> Boolean,
-                        ): Outcome<MangaListSnapshot>? = error("The snapshot is fresh")
-                    }
-            }
+        val graph = graphWithManga { reads++ }
         var owner = newOwner()
         lateinit var navigator: ShellNavigator
         val restoration = StateRestorationTester(compose)
@@ -101,7 +93,11 @@ class ListModesRouteTest {
 
         val plannedTitle = FixtureAnime.premiereTimeSoon.titles.romaji
         val planned = compose.onNodeWithText("Planned")
-        compose.onNodeWithText("Anime").assertIsSelected()
+        val anime = compose.onNodeWithText("Anime")
+        val manga = compose.onNodeWithText("Manga")
+        anime.assertIsSelected()
+        compose.onNodeWithText("My list").assertDoesNotExist()
+        compose.onNodeWithContentDescription("Sort").assertExists()
         planned.performClick()
         planned.assertIsSelected()
         scrollTo(plannedTitle, 3)
@@ -113,9 +109,12 @@ class ListModesRouteTest {
                 .take(3)
         val filter = compose.onNode(hasSetTextAction() and hasText(query))
         compose.onNode(hasSetTextAction()).performTextReplacement(query)
+        filter.assertIsFocused()
+        anime.assertDoesNotExist()
+        manga.assertDoesNotExist()
+        compose.onNodeWithContentDescription("Clear").performClick()
         assertEquals(0, reads)
 
-        val manga = compose.onNodeWithText("Manga")
         manga.performClick()
         manga.assertIsSelected()
         filter.assertDoesNotExist()
@@ -124,9 +123,10 @@ class ListModesRouteTest {
         val mangaRow = compose.onNodeWithText(entries[10].titles.romaji)
         val mangaTop = mangaRow.getUnclippedBoundsInRoot().top
 
-        compose.onNodeWithText("Anime").performClick()
-        filter.assertExists()
-        compose.onNodeWithText("Manga").performClick()
+        anime.performClick()
+        planned.assertIsSelected()
+        assertEquals(animePosition, scrollPosition(FixtureAnime.premiereMonth.titles.romaji))
+        manga.performClick()
         assertEquals(mangaTop, mangaRow.getUnclippedBoundsInRoot().top)
         mangaRow.performClick()
         assertEquals(listOf(ListRoot, MangaTitleKey(entries[10].id.value)), navigator.stack)
@@ -141,11 +141,33 @@ class ListModesRouteTest {
         compose.onNodeWithText("List").performClick()
         manga.assertIsSelected()
         assertEquals(mangaTop, mangaRow.getUnclippedBoundsInRoot().top)
-        compose.onNodeWithText("Anime").performClick()
-        filter.assertExists()
-        compose.onNodeWithContentDescription("Clear").performClick()
+        anime.performClick()
         planned.assertIsSelected()
         assertEquals(animePosition, scrollPosition(FixtureAnime.premiereMonth.titles.romaji))
+    }
+
+    @Test
+    fun `D-pad and keyboard activation keep the same focused mode segments`() {
+        val graph = graphWithManga()
+        compose.setContent {
+            KirokuTheme(dark = false, dynamicColor = false) { AppRoute(graph) }
+        }
+        val anime = compose.onNodeWithText("Anime")
+        val manga = compose.onNodeWithText("Manga")
+        val ids = listOf(anime, manga).map { it.fetchSemanticsNode().id }
+        anime.performSemanticsAction(SemanticsActions.RequestFocus)
+        anime.assertIsFocused()
+        compose.onRoot().performKeyInput { pressKey(Key.DirectionRight) }
+        manga.assertIsFocused()
+        compose.onRoot().performKeyInput { pressKey(Key.DirectionCenter) }
+        manga.assertIsSelected().assertIsFocused()
+        assertEquals(ids, listOf(anime, manga).map { it.fetchSemanticsNode().id })
+
+        compose.onRoot().performKeyInput { pressKey(Key.DirectionLeft) }
+        anime.assertIsFocused()
+        compose.onRoot().performKeyInput { pressKey(Key.Enter) }
+        anime.assertIsSelected().assertIsFocused()
+        assertEquals(ids, listOf(anime, manga).map { it.fetchSemanticsNode().id })
     }
 
     @Test
@@ -182,6 +204,22 @@ class ListModesRouteTest {
             assertEquals(setOf(1 to ListMode.Anime), presented)
         }
     }
+
+    private fun graphWithManga(onRead: () -> Unit = {}): AppGraph =
+        object : AppGraph by demo {
+            override val mangaList =
+                object : MangaListReader {
+                    override suspend fun stored(owner: SignInId): Outcome<MangaListSnapshot?> {
+                        onRead()
+                        return Outcome.Success(MangaListSnapshot(owner, entries, demo.clock.instant()))
+                    }
+
+                    override suspend fun refresh(
+                        owner: SignInId,
+                        canDispatch: () -> Boolean,
+                    ): Outcome<MangaListSnapshot>? = error("The snapshot is fresh")
+                }
+        }
 
     private fun scrollTo(
         title: String,

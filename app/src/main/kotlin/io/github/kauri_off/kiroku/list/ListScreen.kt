@@ -103,6 +103,9 @@ import io.github.kauri_off.kiroku.design.component.withoutAutofill
 import io.github.kauri_off.kiroku.design.theme.Sizes
 import io.github.kauri_off.kiroku.design.theme.Spacing
 import io.github.kauri_off.kiroku.design.theme.settleMillis
+import io.github.kauri_off.kiroku.manga.MangaListBody
+import io.github.kauri_off.kiroku.manga.MangaListEvent
+import io.github.kauri_off.kiroku.manga.MangaListState
 import io.github.kauri_off.kiroku.notShown
 import io.github.kauri_off.kiroku.text.statusName
 import io.github.kauri_off.kiroku.title.countText
@@ -110,84 +113,114 @@ import kotlinx.coroutines.flow.first
 import java.time.Instant
 import kotlin.math.roundToInt
 
-// The screen owns the pager, so the tab row follows the finger; the tab the pager settles on is sent as SelectTab.
-@OptIn(ExperimentalMaterial3Api::class)
+internal sealed interface ListPane {
+    data class Anime(
+        val state: ListState,
+        val onEvent: (ListEvent) -> Unit,
+    ) : ListPane
+
+    data class Manga(
+        val state: MangaListState,
+        val onEvent: (MangaListEvent) -> Unit,
+    ) : ListPane
+}
+
 @Composable
 internal fun ListScreen(
     state: ListState,
     onEvent: (ListEvent) -> Unit,
     snackbars: SnackbarHostState,
     modifier: Modifier = Modifier,
+) = ListScreen(ListPane.Anime(state, onEvent), snackbars, modifier)
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+internal fun ListScreen(
+    pane: ListPane,
+    snackbars: SnackbarHostState,
+    modifier: Modifier = Modifier,
     onMode: ((ListMode) -> Unit)? = null,
 ) {
-    val filtering = state.filterText != null
-    BackHandler(enabled = filtering) { onEvent(ListEvent.EndFilter) }
-    val tabs = state.content as? ListContent.Tabs
-    // Before the tabs are known, a tab of a status the app does not know stands where it will be.
-    val statuses = tabs?.statuses ?: tabOrder(listOf(state.tab))
+    val anime = pane as? ListPane.Anime
+    val manga = pane as? ListPane.Manga
+    val mode = if (anime != null) ListMode.Anime else ListMode.Manga
+    val state = anime?.state
+    val filtering = state?.filterText != null
+    BackHandler(enabled = filtering) { anime?.onEvent?.invoke(ListEvent.EndFilter) }
+    val tabs = state?.content as? ListContent.Tabs
     val motion =
-        if (!filtering) {
+        if (state != null && !filtering) {
+            val statuses = tabs?.statuses ?: tabOrder(listOf(state.tab))
             rememberListTabMotion(rememberPagerState(initialPage = statuses.indexOf(state.tab)) { statuses.size })
         } else {
             null
         }
     val positions = rememberSaveableStateHolder()
     ListFrame(
-        ListMode.Anime,
-        onMode,
-        state.sessionExpired,
-        onSignIn = { onEvent(ListEvent.SignIn) },
-        snackbars,
-        modifier = modifier.withoutTravelledTaps(),
-        ime = WindowInsets.ime,
-        topBar = {
-            key(state.activeFilterSession) {
-                TopBar(
-                    state.filterText,
-                    state.owner,
-                    subtitleOf(state),
-                    showActions = tabs != null,
-                    onEvent = onEvent,
-                )
+        sessionExpired = state?.sessionExpired ?: (manga?.state?.sessionExpired == true),
+        onSignIn = {
+            when (pane) {
+                is ListPane.Anime -> pane.onEvent(ListEvent.SignIn)
+                is ListPane.Manga -> pane.onEvent(MangaListEvent.SignIn)
             }
         },
-        statusTabs = { if (motion != null && tabs != null) ListTabs(motion, tabs.statuses, onEvent) },
+        snackbars,
+        modifier = if (anime != null) modifier.withoutTravelledTaps() else modifier,
+        ime = if (anime != null) WindowInsets.ime else null,
+        topBar = { ListTopBar(anime, mode, onMode) },
+        statusTabs = { if (anime != null && motion != null && tabs != null) ListTabs(motion, tabs.statuses, anime.onEvent) },
     ) { padding ->
-        val body = Modifier.belowBars(padding)
-        when (val content = state.content) {
-            ListContent.Loading -> ScreenState(ScreenState.Loading, body)
-            ListContent.SignedOut ->
-                ScreenState(
-                    ScreenState.Empty(
-                        stringResource(R.string.list_signed_out),
-                        StateAction(stringResource(R.string.list_sign_in)) { onEvent(ListEvent.SignIn) },
-                    ),
-                    body,
-                )
-            is ListContent.Failed -> ScreenState(failedState(content.failure, onEvent), body)
-            is ListContent.Tabs ->
-                RefreshBox(
-                    isRefreshing = state.refreshing,
-                    onRefresh = { onEvent(ListEvent.Refresh) },
-                    modifier = body.fillMaxSize(),
-                ) {
-                    val bottomPadding = PaddingValues(bottom = padding.calculateBottomPadding())
-                    if (motion != null) {
-                        positions.SaveableStateProvider(TAB_POSITIONS) {
-                            Pages(content.statuses, state.tab, Shown(content, state.owner, state.now), motion, bottomPadding, onEvent)
-                        }
-                    } else {
-                        val matches = state.matches.takeIf { state.activeFilterSession == state.filterSession }
-                        val waitingForMatches = matches.isNullOrEmpty() && state.reading != null && !state.readingAgain
-                        key(state.activeFilterSession, state.filter) {
-                            FilterResults(matches.takeUnless { waitingForMatches }, state.owner, state.now, bottomPadding, onEvent)
-                        }
-                    }
-                }
+        positions.SaveableStateProvider(mode.name) {
+            when (pane) {
+                is ListPane.Anime -> AnimeListBody(pane.state, pane.onEvent, motion, padding)
+                is ListPane.Manga -> key(pane.state.owner) { MangaListBody(pane.state, pane.onEvent, padding) }
+            }
         }
     }
-    val page = state.page
-    if (!filtering && state.sortSheetOpen && page != null) SortSheet(page, onEvent)
+    val page = state?.page
+    if (anime != null && !filtering && anime.state.sortSheetOpen && page != null) SortSheet(page, anime.onEvent)
+}
+
+@Composable
+private fun AnimeListBody(
+    state: ListState,
+    onEvent: (ListEvent) -> Unit,
+    motion: ListTabMotion?,
+    padding: PaddingValues,
+) {
+    val positions = rememberSaveableStateHolder()
+    val body = Modifier.belowBars(padding)
+    when (val content = state.content) {
+        ListContent.Loading -> ScreenState(ScreenState.Loading, body)
+        ListContent.SignedOut ->
+            ScreenState(
+                ScreenState.Empty(
+                    stringResource(R.string.list_signed_out),
+                    StateAction(stringResource(R.string.list_sign_in)) { onEvent(ListEvent.SignIn) },
+                ),
+                body,
+            )
+        is ListContent.Failed -> ScreenState(failedState(content.failure, onEvent), body)
+        is ListContent.Tabs ->
+            RefreshBox(
+                isRefreshing = state.refreshing,
+                onRefresh = { onEvent(ListEvent.Refresh) },
+                modifier = body.fillMaxSize(),
+            ) {
+                val bottomPadding = PaddingValues(bottom = padding.calculateBottomPadding())
+                if (motion != null) {
+                    positions.SaveableStateProvider(TAB_POSITIONS) {
+                        Pages(content.statuses, state.tab, Shown(content, state.owner, state.now), motion, bottomPadding, onEvent)
+                    }
+                } else {
+                    val matches = state.matches.takeIf { state.activeFilterSession == state.filterSession }
+                    val waitingForMatches = matches.isNullOrEmpty() && state.reading != null && !state.readingAgain
+                    key(state.activeFilterSession, state.filter) {
+                        FilterResults(matches.takeUnless { waitingForMatches }, state.owner, state.now, bottomPadding, onEvent)
+                    }
+                }
+            }
+    }
 }
 
 // What every page shows besides its own rows; a tab switch changes none of it, so no page or row is composed again.
@@ -427,36 +460,39 @@ private const val LONGEST_COUNT = 99_999
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun TopBar(
-    filter: String?,
-    owner: ListOwner,
-    subtitle: String?,
-    showActions: Boolean,
-    onEvent: (ListEvent) -> Unit,
+private fun ListTopBar(
+    anime: ListPane.Anime?,
+    mode: ListMode,
+    onMode: ((ListMode) -> Unit)?,
 ) {
+    val state = anime?.state
     val title: @Composable () -> Unit = {
+        val filter = state?.filterText
+        val owner = state?.owner
         when {
-            filter != null -> FilterField(filter, onEvent)
+            filter != null -> key(state.activeFilterSession) { FilterField(filter, anime.onEvent) }
             owner is ListOwner.Other -> Text(stringResource(R.string.list_title_other, owner.name))
+            onMode != null -> ListModeSwitch(mode, onMode)
             else -> Text(stringResource(R.string.list_title))
         }
     }
     val navigationIcon: @Composable () -> Unit = {
         when {
-            filter != null -> BackButton { onEvent(ListEvent.EndFilter) }
-            owner is ListOwner.Other -> BackButton { onEvent(ListEvent.Back) }
+            state?.filterText != null -> BackButton { anime.onEvent(ListEvent.EndFilter) }
+            state?.owner is ListOwner.Other -> BackButton { anime.onEvent(ListEvent.Back) }
         }
     }
     val actions: @Composable RowScope.() -> Unit = {
-        if (showActions && filter == null) {
-            IconButton(onClick = { onEvent(ListEvent.StartFilter) }, shapes = IconButtonDefaults.shapes()) {
+        if (state?.content is ListContent.Tabs && state.filterText == null) {
+            IconButton(onClick = { anime.onEvent(ListEvent.StartFilter) }, shapes = IconButtonDefaults.shapes()) {
                 Icon(painterResource(R.drawable.ic_filter), contentDescription = stringResource(R.string.list_filter))
             }
-            IconButton(onClick = { onEvent(ListEvent.OpenSort) }, shapes = IconButtonDefaults.shapes()) {
+            IconButton(onClick = { anime.onEvent(ListEvent.OpenSort) }, shapes = IconButtonDefaults.shapes()) {
                 Icon(painterResource(R.drawable.ic_sort), contentDescription = stringResource(R.string.list_sort))
             }
         }
     }
+    val subtitle = state?.let { subtitleOf(it) }
     if (subtitle != null) {
         TopAppBar(title = title, subtitle = { Subtitle(subtitle) }, navigationIcon = navigationIcon, actions = actions)
     } else {

@@ -85,7 +85,7 @@ class SandboxMangaRouteTest {
     private fun openList() {
         shows("Manga")
         compose.onNodeWithText("Manga").performClick()
-        shows("My list")
+        shows("Manga")
         compose.onNodeWithText("Manga").assertIsSelected()
     }
 
@@ -124,7 +124,7 @@ class SandboxMangaRouteTest {
         compose.activityRule.scenario.recreate()
         shows("Manga\u00A0· Finished")
         compose.runOnUiThread { compose.activity.onBackPressedDispatcher.onBackPressed() }
-        shows("My list")
+        shows("Manga")
         compose.onNodeWithText("Manga").assertIsSelected()
         shows("Paper Observatory")
 
@@ -156,7 +156,7 @@ class SandboxMangaRouteTest {
             }
             signingOut.await()
         }
-        shows("My list")
+        shows("Anime")
         compose.onNodeWithText("Anime").assertIsSelected()
         compose.onNodeWithText("Paper Observatory").assertDoesNotExist()
 
