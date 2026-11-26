@@ -333,6 +333,56 @@ class MangaEditingTest {
         }
 
     @Test
+    fun ordinaryRefreshSettlesRemovalRecoveryWithoutDownloadingAgain() =
+        runTest {
+            for (matches in listOf(true, false)) {
+                val baseline = entry.copy(updatedAt = Instant.EPOCH)
+                val backend = Backend(baseline)
+                val subject = start(backend)
+                subject.confirmRemove()
+                runCurrent()
+                backend.removalAnswer.complete(MangaListRemovalResult.Failed(DataError.Refused))
+                runCurrent()
+
+                assertTrue((subject.open.form.submission as MangaEditSubmission.Failed).canReconcile)
+                val refreshed = if (matches) baseline else baseline.copy(chaptersRead = 21)
+                backend.cache.value = snapshot(owner, refreshed)
+                subject.editing.listRefreshed(owner)
+                runCurrent()
+
+                val failure = subject.open.form.submission as MangaEditSubmission.Failed
+                assertEquals(matches, failure.canRetry)
+                assertFalse(failure.canReconcile)
+                assertEquals(1, backend.removals.size)
+                assertTrue(backend.reads.isEmpty())
+            }
+        }
+
+    @Test
+    fun discardedRetrySettlesWhenAnotherRefreshConfirmedTheEdit() =
+        runTest {
+            val backend = Backend()
+            val subject = start(backend)
+            subject.event(MangaEditSheetEvent.ChaptersTyped("26"))
+            subject.save()
+            runCurrent()
+            backend.answer.complete(MangaListEditResult.Failed(DataError.Refused))
+            runCurrent()
+            backend.answer = CompletableDeferred()
+            subject.event(MangaEditSheetEvent.Retry)
+            runCurrent()
+            assertEquals(2, backend.sent.size)
+            backend.cache.value = snapshot(owner, entry.copy(chaptersRead = 26))
+            subject.editing.listRefreshed(owner)
+            runCurrent()
+            backend.answer.complete(MangaListEditResult.Discarded)
+            runCurrent()
+
+            assertTrue(subject.open.form.closing)
+            assertNull(subject.messages.current.value)
+        }
+
+    @Test
     fun withdrawalOfRemovalRetryOnAnObservedChangePreventsAStaleAction() =
         runTest {
             val baseline = entry.copy(updatedAt = Instant.EPOCH)
