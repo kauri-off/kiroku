@@ -41,6 +41,7 @@ import io.github.kauri_off.kiroku.design.registered
 import io.github.kauri_off.kiroku.design.theme.KirokuTheme
 import io.github.kauri_off.kiroku.screenshots.SystemBars
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 import org.junit.rules.TestRule
@@ -209,9 +210,21 @@ class MangaEditSheetTest {
     }
 
     @Test
+    fun bothSteppersFitOnOneLineAtNormalTextSize() {
+        sheet(MangaEditFixtures.paired)
+        val chapter = chapters.fetchSemanticsNode().boundsInRoot
+        val volume = volumes.fetchSemanticsNode().boundsInRoot
+        assertEquals(chapter.top, volume.top, 0.5f)
+        assertTrue(chapter.right < volume.left)
+    }
+
+    @Test
     @Config(qualifiers = "en-w360dp-h640dp", fontScale = 2f)
     fun compactFormScrollsToTheVolumeStepperAndScoreSlider() {
         sheet()
+        val chapter = chapters.fetchSemanticsNode().positionInRoot
+        val volume = volumes.fetchSemanticsNode().positionInRoot
+        assertTrue(chapter.y < volume.y)
         chapters.performScrollTo().enterCount("15")
         volumes.performScrollTo().performClick()
         applyImeInsets(visible = true)

@@ -29,6 +29,7 @@ class MangaTitleScreenshots : ScreenshotRegistry() {
         listOf(
             case("membership-offline", largeText = true) { Screen(mangaFixture.shown(), membershipError = DataError.NoConnection) },
             case("on-personal-list", largeText = true) { Screen(mangaFixture.shown(), mangaEntry.copy(score = 8)) },
+            case("partial-stats") { Screen(mangaFixture.copy(meanScore = null, rank = null).shown()) },
             case("paired-owned", largeText = true) { Screen(pairedManga.shown(), mangaEntry.copy(score = 8)) },
             case("paired-owned-wide", window = WindowSize(840, 600)) { Screen(pairedManga.shown(), mangaEntry.copy(score = 8)) },
             case("opened-with-summary") { Screen(openingSummary) },
@@ -44,6 +45,8 @@ class MangaTitleScreenshots : ScreenshotRegistry() {
                             chapters = null,
                             volumes = null,
                             meanScore = null,
+                            rank = null,
+                            members = null,
                             synopsis = null,
                             publication = MangaPublication.Known.Publishing,
                         ).shown(),
@@ -69,12 +72,22 @@ internal val mangaFixture =
         volumes = 18,
         chapters = 162,
         meanScore = 9.16,
+        rank = 18,
+        members = 299_750,
     )
 
 private val openingSummary =
     mangaFixture
-        .copy(synopsis = null, format = null, publication = null, volumes = null, chapters = null, meanScore = null)
-        .shown()
+        .copy(
+            synopsis = null,
+            format = null,
+            publication = null,
+            volumes = null,
+            chapters = null,
+            meanScore = null,
+            rank = null,
+            members = null,
+        ).let { MangaTitleContent.Shown(it, it.titles.romaji) }
 
 private val pairedManga =
     FixtureAnime.exactToWatch.let { anime ->
@@ -84,11 +97,16 @@ private val pairedManga =
             chapters = anime.malEpisodes,
             volumes = 6,
             meanScore = anime.meanScore,
+            rank = anime.rank,
+            members =
+                Fixtures.reference.details[anime.id]
+                    ?.statistics
+                    ?.members,
             synopsis = Fixtures.reference.details[anime.id]?.synopsis,
         )
     }
 
-private fun MangaDetails.shown() = MangaTitleContent.Shown(this, titles.romaji)
+private fun MangaDetails.shown() = MangaTitleContent.Shown(this, titles.romaji, detailsRead = true)
 
 @Composable
 private fun Screen(

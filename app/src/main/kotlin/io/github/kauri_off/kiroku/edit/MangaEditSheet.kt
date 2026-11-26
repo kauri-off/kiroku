@@ -3,6 +3,8 @@ package io.github.kauri_off.kiroku.edit
 import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.relocation.BringIntoViewRequester
@@ -56,7 +58,7 @@ internal fun MangaEditSheet(
     onEvent: (MangaEditSheetEvent) -> Unit,
 ) = MangaEditSheet(state, focusVolumes = false, onEvent)
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
 internal fun MangaEditSheet(
     state: MangaEditSheetState,
@@ -107,7 +109,10 @@ internal fun MangaEditSheet(
                 Spacer(Modifier.height(Spacing.l))
                 MangaStatusChoice(state, Modifier.focusRequester(statusFocus), edit)
                 Spacer(Modifier.height(Spacing.l))
-                Column(verticalArrangement = Arrangement.spacedBy(Spacing.m)) {
+                FlowRow(
+                    horizontalArrangement = Arrangement.spacedBy(Spacing.m),
+                    verticalArrangement = Arrangement.spacedBy(Spacing.m),
+                ) {
                     MangaCountStepper(
                         state.chapters,
                         state.totals.chapters,

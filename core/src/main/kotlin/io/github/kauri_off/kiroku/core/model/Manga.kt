@@ -16,6 +16,8 @@ data class MangaDetails(
     val volumes: Int?,
     val chapters: Int?,
     val meanScore: Double?,
+    val rank: Int? = null,
+    val members: Int? = null,
 )
 
 sealed interface MangaFormat {

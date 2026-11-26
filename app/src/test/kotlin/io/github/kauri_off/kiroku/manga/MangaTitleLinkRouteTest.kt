@@ -163,6 +163,19 @@ class MangaTitleLinkRouteTest {
     private val app get() = RuntimeEnvironment.getApplication() as StartedByMangaLinkApplication
 
     @Test
+    fun `public manga shows score rank and members in the anime order without list ownership`() {
+        compose.onNodeWithText("Retry").performClick()
+        val score = compose.onNodeWithText("MAL score").fetchSemanticsNode().boundsInRoot
+        val rank = compose.onNodeWithText("Rank").fetchSemanticsNode().boundsInRoot
+        val members = compose.onNodeWithText("Members").fetchSemanticsNode().boundsInRoot
+        assertTrue(score.left < rank.left && rank.left < members.left)
+        compose.onNodeWithText("9.16").assertExists()
+        compose.onNodeWithText("#18").assertExists()
+        compose.onNodeWithText("299,750").assertExists()
+        compose.onNode(hasText("Reading") and hasClickAction()).assertDoesNotExist()
+    }
+
+    @Test
     fun `cold manga link offers retry, restores the page, and goes back to the List`() {
         compose.onNodeWithText("This title is not on MyAnimeList").assertExists()
         compose.onNodeWithText("Retry").performClick()

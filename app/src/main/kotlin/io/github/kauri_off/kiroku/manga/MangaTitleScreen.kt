@@ -33,10 +33,11 @@ import io.github.kauri_off.kiroku.design.component.SectionHeader
 import io.github.kauri_off.kiroku.design.component.TitleSelection
 import io.github.kauri_off.kiroku.design.component.TitleText
 import io.github.kauri_off.kiroku.design.theme.Spacing
+import io.github.kauri_off.kiroku.title.MalScore
+import io.github.kauri_off.kiroku.title.PublicTitleStats
 import io.github.kauri_off.kiroku.title.TitleStatusButton
 import io.github.kauri_off.kiroku.title.countText
 import io.github.kauri_off.kiroku.title.message
-import io.github.kauri_off.kiroku.title.scoreText
 import io.github.kauri_off.kiroku.titlesub.SubScreen
 import io.github.kauri_off.kiroku.titlesub.SubScreenBody
 
@@ -60,6 +61,7 @@ internal sealed interface MangaTitleContent {
         val refreshing: Boolean = false,
         val coverAttempt: Int = 0,
         val detailsError: DataError? = null,
+        val detailsRead: Boolean = false,
     ) : MangaTitleContent
 }
 
@@ -178,13 +180,8 @@ private fun MangaHeader(content: MangaTitleContent.Shown) {
                 textAlign = TextAlign.Center,
             )
         }
-        details.meanScore?.let {
-            Text(
-                stringResource(R.string.design_mal_score, scoreText(it)),
-                style = MaterialTheme.typography.labelLarge,
-                textAlign = TextAlign.Center,
-            )
-        }
+        val score = details.meanScore?.let(MalScore::Given) ?: if (content.detailsRead) MalScore.None else MalScore.NotKnownYet
+        PublicTitleStats(score, details.rank, details.members)
     }
 }
 

@@ -177,6 +177,8 @@ internal fun JsonObject.toManga(
         volumes = count("num_volumes"),
         chapters = count("num_chapters"),
         meanScore = field("mean") { (it as? JsonPrimitive)?.doubleOrNull?.takeIf { score -> score in 0.0..10.0 } }?.takeIf { it > 0 },
+        rank = count("rank"),
+        members = field("num_list_users") { (it as? JsonPrimitive)?.intOrNull?.takeIf { n -> n >= 0 } },
     )
 }
 
@@ -195,6 +197,8 @@ internal fun MangaDetails.toRow(fetchedAt: Long): MangaRow =
         chapters,
         meanScore,
         fetchedAt,
+        rank,
+        members,
     )
 
 private fun stringValue(value: JsonElement): String? = (value as? JsonPrimitive)?.takeIf { it.isString }?.content
@@ -212,6 +216,8 @@ internal fun MangaRow.toStored(): StoredManga =
             volumes,
             chapters,
             meanScore,
+            rank,
+            members,
         ),
         instantOf(fetchedAt),
     )

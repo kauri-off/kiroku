@@ -283,17 +283,18 @@ private fun Header(page: TitlePage) {
             Spacer(Modifier.height(Spacing.xs))
             SupportingText(facts, textAlign = TextAlign.Center)
         }
-        Numbers(page)
+        PublicTitleStats(page.score, page.anime.rank, page.details?.statistics?.members)
     }
 }
 
 // MAL's score, the rank and the members in equal shares of the width. A score not known yet is left out, so nothing
 // claims that MAL has none; the members come with the details.
 @Composable
-private fun Numbers(page: TitlePage) {
-    val score = page.score
-    val rank = page.anime.rank
-    val members = page.details?.statistics?.members
+internal fun PublicTitleStats(
+    score: MalScore,
+    rank: Int?,
+    members: Int?,
+) {
     if (score == MalScore.NotKnownYet && rank == null && members == null) return
     Spacer(Modifier.height(Spacing.l))
     val centre = Alignment.CenterHorizontally
