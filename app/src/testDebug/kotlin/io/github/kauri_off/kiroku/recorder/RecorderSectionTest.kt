@@ -6,14 +6,11 @@ import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTextInput
-import io.github.kauri_off.kiroku.core.model.MangaId
-import io.github.kauri_off.kiroku.data.manga.MangaMutationMethod
 import io.github.kauri_off.kiroku.data.recorder.Halt
 import io.github.kauri_off.kiroku.data.recorder.ListAfter
-import io.github.kauri_off.kiroku.data.recorder.MangaCaptureState
-import io.github.kauri_off.kiroku.data.recorder.MangaCaptureTarget
 import io.github.kauri_off.kiroku.data.recorder.ReadCapture
 import io.github.kauri_off.kiroku.data.recorder.RecordedTitle
+import io.github.kauri_off.kiroku.data.recorder.RecorderMedia
 import io.github.kauri_off.kiroku.data.recorder.Recording
 import io.github.kauri_off.kiroku.data.recorder.RecordingRequests
 import io.github.kauri_off.kiroku.design.composeRule
@@ -51,58 +48,57 @@ class RecorderSectionTest {
     private fun startsOn(source: DataSource) = check(SourceChoice(RuntimeEnvironment.getApplication()).choose(source))
 
     @Test
-    fun `manga capture selects the editor action`() {
-        compose.setContent {
-            Column {
-                RecorderSection(RecorderState(Recording.Idle, manga = MangaCaptureState.Ready, mangaId = "17")) { events += it }
-            }
-        }
-        compose.onNodeWithText("Arm capture for Save").performClick()
-        compose.onNodeWithText("Arm capture for Remove").performClick()
-        assertEquals(
-            listOf(RecorderEvent.ArmManga(MangaMutationMethod.Patch), RecorderEvent.ArmManga(MangaMutationMethod.Delete)),
-            events,
-        )
+    fun `checking manga emits only a check and leaves both read modes usable`() {
+        showManga(Recording.Idle)
+
+        compose.onNodeWithText("Check manga title").performClick()
+        compose.onNodeWithText("Record anime suggestions").assertIsEnabled()
+        compose.onNodeWithText("Record my manga list").assertIsEnabled()
+        assertEquals(listOf(RecorderEvent.CheckManga), events)
     }
 
     @Test
-    fun `authorized manga capture disables disarm while publishing`() {
-        val target = MangaCaptureTarget(MangaId(17), MangaMutationMethod.Delete)
-        compose.setContent {
-            Column {
-                val publishing = MangaCaptureState.Capturing(target, canDisarm = false)
-                RecorderSection(RecorderState(Recording.Idle, manga = publishing)) { events += it }
-            }
-        }
-        compose.onNodeWithText("Saving the confirmed manga capture").assertExists()
-        compose.onNodeWithText("Disarm capture").assertIsNotEnabled()
-    }
+    fun `manga uses the shared confirmation and records the checked title only on confirm`() {
+        val manga = title.copy(episodes = 0, media = RecorderMedia.Manga)
+        showManga(Recording.Checked(manga))
 
-    @Test
-    fun `signed out manga capture cannot be armed`() {
-        compose.setContent {
-            Column {
-                RecorderSection(RecorderState(Recording.Idle, manga = MangaCaptureState.Ready, mangaId = "17", mangaSignedIn = false)) {
-                    events += it
-                }
-            }
-        }
-        compose.onNodeWithText("Arm capture for Save").assertIsNotEnabled()
-        compose.onNodeWithText("Arm capture for Remove").assertIsNotEnabled()
+        compose.onNodeWithText("Record on this title?").assertExists()
+        compose.onNodeWithText("“Cowboy Bebop”").assertExists()
+        compose.onNodeWithText("chapters read, volumes read and score", substring = true).assertExists()
         assertEquals(emptyList<RecorderEvent>(), events)
+        compose.onNodeWithText("Cancel").performClick()
+        compose.onNodeWithText("Record").performClick()
+        assertEquals(listOf(RecorderEvent.Dismiss, RecorderEvent.Record(manga)), events)
     }
 
     @Test
-    fun `armed manga capture shows the selected action and can be disarmed`() {
-        val target = MangaCaptureTarget(MangaId(17), MangaMutationMethod.Delete)
-        compose.setContent {
-            Column { RecorderSection(RecorderState(Recording.Idle, manga = MangaCaptureState.Armed(target))) { events += it } }
-        }
-        compose.onNodeWithText("DELETE capture armed for manga ID\u00A017", substring = true).assertExists()
-        compose.onNodeWithText("Arm capture for Save").assertDoesNotExist()
+    fun `manga cleanup uses the manga link and blocks every new run`() {
+        val manga = title.copy(episodes = 0, media = RecorderMedia.Manga)
+        showManga(Recording.Stopped(manga, "manga_edit", Halt.Unconfirmed, 3, null, ListAfter.Left))
+
+        compose.onNodeWithText("myanimelist.net/manga/1", substring = true).assertExists()
+        compose.onNodeWithText("Check manga title").assertIsNotEnabled()
+        compose.onNodeWithText("Check title").assertIsNotEnabled()
         compose.onNodeWithText("Record my manga list").assertIsNotEnabled()
-        compose.onNodeWithText("Disarm capture").performClick()
-        assertEquals(listOf(RecorderEvent.DisarmManga(target)), events)
+        compose.onNodeWithText("Remove now").performClick()
+        assertEquals(listOf(RecorderEvent.Remove), events)
+    }
+
+    @Test
+    fun `signed out manga cannot be checked`() {
+        showManga(Recording.Idle, signedIn = false)
+        compose.onNodeWithText("Check manga title").assertIsNotEnabled()
+    }
+
+    private fun showManga(
+        recording: Recording,
+        signedIn: Boolean = true,
+    ) = compose.setContent {
+        Column {
+            RecorderSection(RecorderState(recording, "1", mangaAvailable = true, mangaId = "17", mangaSignedIn = signedIn)) {
+                events += it
+            }
+        }
     }
 
     @Test
@@ -250,7 +246,7 @@ class RecorderSectionTest {
         startsOn(DataSource.Account)
         compose.setContent { Column { RecorderRoute() } }
 
-        compose.onNodeWithText("Title id on MyAnimeList").performTextInput("5x1")
+        compose.onNodeWithText("Anime id on MyAnimeList").performTextInput("5x1")
         compose.onNodeWithText("51").assertExists()
         compose.onNodeWithText("Check title").performClick()
 

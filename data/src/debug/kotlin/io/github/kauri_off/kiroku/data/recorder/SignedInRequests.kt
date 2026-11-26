@@ -1,5 +1,8 @@
 package io.github.kauri_off.kiroku.data.recorder
 
+import io.github.kauri_off.kiroku.core.repository.MangaListEdit
+import io.github.kauri_off.kiroku.core.repository.MangaListStatus
+import io.github.kauri_off.kiroku.data.manga.form
 import io.github.kauri_off.kiroku.data.network.MalFields
 
 enum class ReadCapture(
@@ -26,6 +29,10 @@ enum class ReadCapture(
 internal fun isSignedInAnswer(name: String): Boolean =
     name in SignedInAnswers ||
         name in MangaMutationAnswers ||
+        name == MANGA_ABSENT ||
+        name == MANGA_REMOVED ||
+        name == MANGA_REMOVED_READ ||
+        MangaWrites.any { name == it.first || name == "${it.first}_read" } ||
         name == "suggestions_first" ||
         name == "suggestions_next" ||
         (name.startsWith("manga_list_") && name.removePrefix("manga_list_").toIntOrNull()?.let { it > 0 } == true)
@@ -83,3 +90,17 @@ internal val SignedInAnswers: List<String> =
     listOf(TOKEN_GRANTED, "profile", "own_list_1", "own_list_2", "own_list_3", "entry_absent") +
         OwnTitleWrites.flatMap { listOf(it.name, "${it.name}_read") } +
         listOf("entry_full", "removed", "removed_read", "removed_again")
+
+internal val MangaWrites =
+    listOf(
+        "manga_add" to MangaListEdit(status = MangaListStatus.PlanToRead).form(),
+        "manga_edit" to MangaListEdit(status = MangaListStatus.Reading, chaptersRead = 1, volumesRead = 1, score = 7).form(),
+    )
+
+internal const val MANGA_ABSENT = "manga_entry_absent"
+internal const val MANGA_REMOVED = "manga_removed"
+internal const val MANGA_REMOVED_READ = "manga_removed_read"
+
+val MangaRecordingAnswers: Int = 3 + 2 * MangaWrites.size
+
+internal fun mangaDeleted(status: Int) = status == 200 || status == 204

@@ -42,7 +42,14 @@ internal class Journal(
         val episodes = (values[EPISODES] as? JsonPrimitive)?.intOrNull ?: return null
         val name = (values[NAME] as? JsonPrimitive)?.content ?: return null
         val user = (values[USER] as? JsonPrimitive)?.content ?: return null
-        return Left(RecordedTitle(id, name, episodes), user)
+        val media =
+            if (MEDIA in values) {
+                val value = (values[MEDIA] as? JsonPrimitive)?.content
+                RecorderMedia.entries.singleOrNull { it.name == value } ?: return null
+            } else {
+                RecorderMedia.Anime
+            }
+        return Left(RecordedTitle(id, name, episodes, media), user)
     }
 
     // On the disk when this returns: a write to the list never goes out before it.
@@ -53,6 +60,7 @@ internal class Journal(
                 put(EPISODES, left.title.episodes)
                 put(NAME, left.title.name)
                 put(USER, left.user)
+                if (left.title.media != RecorderMedia.Anime) put(MEDIA, left.title.media.name)
             }.toString()
         val next = File(file.path + NEXT)
         try {
@@ -72,7 +80,13 @@ internal class Journal(
         file.delete()
     }
 
+    fun deleteConfirmed() {
+        Files.deleteIfExists(file.toPath())
+        file.absoluteFile.parentFile?.let(synced)
+    }
+
     private companion object {
+        const val MEDIA = "media"
         const val ID = "id"
         const val EPISODES = "episodes"
         const val NAME = "name"

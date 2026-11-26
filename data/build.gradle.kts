@@ -121,17 +121,11 @@ val ownerRecordings: String =
         .get()
 
 val mangaMutationCapture = providers.gradleProperty("kiroku.mangaMutationCapture")
-val mangaMutationExpected = providers.gradleProperty("kiroku.mangaMutationExpected")
 
 tasks.withType<Test>().configureEach {
-    for ((property, selected) in listOf(
-        "kiroku.mangaMutationCapture" to mangaMutationCapture,
-        "kiroku.mangaMutationExpected" to mangaMutationExpected,
-    )) {
-        selected.orNull?.let { path ->
-            systemProperty(property, path)
-            inputs.files(file(path)).withPropertyName(property)
-        }
+    mangaMutationCapture.orNull?.let { path ->
+        systemProperty("kiroku.mangaMutationCapture", path)
+        inputs.files(file(path)).withPropertyName("kiroku.mangaMutationCapture")
     }
     systemProperty("kiroku.ownerRecordings", ownerRecordings)
     systemProperty("kiroku.ownerRecordings.explicit", selectedOwnerRecordings.isPresent)
