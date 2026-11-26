@@ -143,7 +143,7 @@ class RecorderStartTest {
             val partial = checkNotNull(stopped.folder)
             assertEquals(root, partial.parentFile?.parentFile)
             assertTrue(completed.folder.resolve("suggestions_first.200.json").isFile)
-            assertTrue(partial.resolve("manga_list_1.404.json").isFile)
+            assertTrue(partial.resolve("manga_list_1.404.txt").isFile)
             val shared = checkNotNull(context.getExternalFilesDir(null))
             assertFalse(shared.walkTopDown().any { it.name.startsWith("suggestions_first.") || it.name.startsWith("manga_list_1.") })
         }

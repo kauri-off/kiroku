@@ -24,6 +24,8 @@ import io.github.kauri_off.kiroku.source.StartsOn
 import io.github.kauri_off.kiroku.wiring.AppEnds
 import io.github.kauri_off.kiroku.wiring.KeysInMemory
 import io.github.kauri_off.kiroku.wiring.appGraph
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
@@ -142,7 +144,15 @@ class SandboxMangaRouteTest {
         openList()
         shows("Paper Observatory")
         val before = (waited { manga.stored(old.signIn) } as Outcome.Success).value
-        waited { graph.signOut(old) }
+        runBlocking {
+            val current = graph
+            val signingOut = async(Dispatchers.Default) { current.signOut(old) }
+            compose.waitUntil(WAIT) {
+                shadowOf(Looper.getMainLooper()).idle()
+                signingOut.isCompleted
+            }
+            signingOut.await()
+        }
         shows("My list")
         compose.onNodeWithText("Paper Observatory").assertDoesNotExist()
 

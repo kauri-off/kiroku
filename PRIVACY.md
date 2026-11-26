@@ -10,8 +10,8 @@ reporting. [App wiring][KirokuApplication.kt] · [Dependencies][gradle/libs.vers
   the flag on search, browse and title-detail requests, where it changes recommendations. List reads request
   adult entries independently. Live Search sends nonempty text after a pause in typing, even without submitting. Kiroku can also sync your list with MAL and refresh your access
   token in the background. Public requests use the build's MAL
-  client ID. Reads of your own list and profile and writes to your list use a bearer access token. List changes
-  send the title ID and updated fields such as status, score, watched episodes, or dates. Removing an entry sends
+  client ID. Reads of your own anime and manga lists and profile use a bearer access token, as do changes to
+  your anime list. Anime list changes send the title ID and updated fields such as status, score, watched episodes, or dates. Removing an entry sends
   its title ID. [API host][MalHosts.kt] · [Client ID header][SendRules.kt] · [Search and browse][MalSearch.kt] ·
   [Live search][SearchViewModel.kt] · [Background sync][PeriodicWork.kt] · [Lists][MalLists.kt] · [Profile][MalProfiles.kt] · [List writes][MalRemoteList.kt]
 - **MyAnimeList sign-in (`myanimelist.net`).** Your browser opens MAL's OAuth page with the client ID, redirect URI,
@@ -38,7 +38,7 @@ identify the app and version in the `User-Agent` header. [HTTP client][MalHttp.k
 
 ## Data on your device
 
-- The app's database keeps title details, related titles and recommendations, your anime list and profile
+- The app's database keeps title details, related titles and recommendations, your anime and manga lists and profile
   (including your name, avatar URL, join date and statistics), tracked airing schedules, and notification tracking
   and history. [Database][KirokuDatabase.kt] · [Profile fields][ProfileRows.kt]
 - App-private files store title language, the adult-content preference, list sort choices, recently opened profile

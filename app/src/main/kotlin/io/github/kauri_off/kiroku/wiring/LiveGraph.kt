@@ -20,6 +20,7 @@ import io.github.kauri_off.kiroku.data.anime.MalSearch
 import io.github.kauri_off.kiroku.data.db.KirokuDatabase
 import io.github.kauri_off.kiroku.data.manga.MalMangaCatalogue
 import io.github.kauri_off.kiroku.data.manga.MalMangaRepository
+import io.github.kauri_off.kiroku.data.manga.RoomMangaList
 import io.github.kauri_off.kiroku.data.network.AndroidDevice
 import io.github.kauri_off.kiroku.data.network.Device
 import io.github.kauri_off.kiroku.data.network.MalHosts
@@ -37,8 +38,13 @@ import io.github.kauri_off.kiroku.notify.MarkWatchedWork
 import io.github.kauri_off.kiroku.signin.SignInOwner
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.CoroutineStart
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import okhttp3.Interceptor
 import okio.FileSystem
 import java.io.File
@@ -121,7 +127,7 @@ internal class LiveParts(
 
 // The app over one live source. Each area is in its own file and is built when it is first asked for.
 internal class LiveGraph(
-    parts: LiveParts,
+    private val parts: LiveParts,
     listStore: (LiveParts) -> LocalList = ::liveListStore,
     ownProfile: (LiveParts, MalSession) -> MalOwnProfile = ::ownProfileOf,
     notificationStore: (LiveParts, StoredPreferences) -> NotificationStore = ::liveNotificationStore,
@@ -147,6 +153,11 @@ internal class LiveGraph(
             { user },
             { notifications },
             runLog,
+            forgetManga = {
+                withContext(Dispatchers.IO) {
+                    !hasDatabase() || mangaList.forgetBeforeSignOut() is Outcome.Success
+                }
+            },
         )
     }
     override val session: SessionRepository get() = sessionWithCleanup
@@ -158,6 +169,34 @@ internal class LiveGraph(
     override val list by lazy { liveList(parts, account, listStore) { preferences.forgetUsersChoices() } }
     override val anime by lazy { liveTitles(parts, preferences = { preferences }) }
     override val mangaCatalogue by lazy { MalMangaCatalogue(parts.http) }
+    private val mangaReader = lazy { RoomMangaList({ parts.database }, account, parts.http, clock, ::wasRetiredOnDisk) }
+    override val mangaList: RoomMangaList
+        get() {
+            startMangaCleanup()
+            return mangaReader.value
+        }
+
+    internal fun wasRetiredOnDisk(owner: SignInId) = imageCache.wasRecorded(owner)
+
+    private fun hasDatabase() = parts.context.getDatabasePath(parts.databaseName).isFile
+
+    private val mangaCleanup =
+        parts.scope.launch(Dispatchers.IO, start = CoroutineStart.LAZY) {
+            account.observeOwner().collectLatest { owner ->
+                if (hasDatabase()) mangaReader.value.sweepRetired(owner)
+            }
+        }
+
+    init {
+        parts.scope.launch(Dispatchers.IO) {
+            if (hasDatabase()) startMangaCleanup()
+        }
+    }
+
+    internal fun startMangaCleanup() {
+        mangaCleanup.start()
+    }
+
     override val manga by lazy {
         val database = lazy { parts.database }
         MalMangaRepository(parts.http, { database.onFirstUse(parts.scope) }, parts.clock, account) {
@@ -264,6 +303,7 @@ private class SignOutForgets(
     private val user: () -> LiveUser,
     private val notifications: () -> LiveNotifications,
     private val runs: KeptRuns?,
+    private val forgetManga: suspend () -> Boolean,
 ) : SessionRepository by account {
     private val signingOut = mutableSetOf<SignInId?>()
 
@@ -284,6 +324,7 @@ private class SignOutForgets(
                 cancelTaps()
                 airing().retire(owner)
                 user().forgetPublicLists()
+                if (!forgetManga()) images.recordRetirement(owner)
                 images.retire(owner)
             }
         if (!signedOut) return

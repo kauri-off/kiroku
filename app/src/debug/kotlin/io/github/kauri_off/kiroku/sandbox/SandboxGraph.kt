@@ -6,9 +6,7 @@ import io.github.kauri_off.kiroku.core.error.Outcome
 import io.github.kauri_off.kiroku.core.fixtures.FixtureAnime
 import io.github.kauri_off.kiroku.core.fixtures.Fixtures
 import io.github.kauri_off.kiroku.core.model.AnimeId
-import io.github.kauri_off.kiroku.core.model.Session
 import io.github.kauri_off.kiroku.core.model.SignInId
-import io.github.kauri_off.kiroku.core.model.owner
 import io.github.kauri_off.kiroku.core.repository.BrowseList
 import io.github.kauri_off.kiroku.core.repository.BrowseSession
 import io.github.kauri_off.kiroku.core.repository.MangaCatalogue
@@ -17,7 +15,6 @@ import io.github.kauri_off.kiroku.core.repository.MangaRepository
 import io.github.kauri_off.kiroku.core.repository.Page
 import io.github.kauri_off.kiroku.core.repository.Ranked
 import io.github.kauri_off.kiroku.core.repository.SearchRepository
-import io.github.kauri_off.kiroku.core.repository.SessionRepository
 import io.github.kauri_off.kiroku.core.repository.SignIn
 import io.github.kauri_off.kiroku.core.repository.SignInBrowser
 import io.github.kauri_off.kiroku.data.network.AndroidDevice
@@ -48,8 +45,6 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.combine
-import kotlinx.coroutines.flow.distinctUntilChanged
-import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
@@ -87,33 +82,13 @@ class SandboxGraph internal constructor(
             sandbox.mal,
             poster = { id -> notShown("${FixtureAnime.POSTER_URL}$id.jpg") },
             unexpected = parts.unexpected,
+            retired = live::wasRetiredOnDisk,
         )
     }
 
     override val manga: MangaRepository get() = mangaFixtures
 
-    override val mangaList: MangaListReader get() = mangaFixtures
-
-    init {
-        parts.scope.launch(Dispatchers.IO) {
-            live.account.observeSession().map { it.owner }.distinctUntilChanged().collect { owner ->
-                if (parts.context.getDatabasePath(parts.databaseName).isFile) mangaFixtures.forgetRetired(owner)
-            }
-        }
-    }
-
-    override val session: SessionRepository by lazy {
-        object : SessionRepository by live.session {
-            override suspend fun signOut() {
-                live.account.currentSession()?.let { this@SandboxGraph.signOut(it) }
-            }
-        }
-    }
-
-    override suspend fun signOut(expected: Session) {
-        live.signOut(expected)
-        live.account.currentSession()?.let { mangaFixtures.forgetRetired(it.owner) }
-    }
+    override val mangaList: MangaListReader get() = mangaFixtures.also { live.startMangaCleanup() }
 
     override val search: SearchRepository by lazy {
         val fixtures = SearchFixtureStates.standIn(Fixtures.at(clock))

@@ -5,6 +5,7 @@ import io.github.kauri_off.kiroku.core.error.Outcome
 import io.github.kauri_off.kiroku.core.model.SignInId
 import io.github.kauri_off.kiroku.data.network.MalAnswer
 import io.github.kauri_off.kiroku.data.network.MalHttp
+import io.github.kauri_off.kiroku.data.network.ReadAdmission
 import io.github.kauri_off.kiroku.data.network.bearer
 import kotlinx.coroutines.CoroutineScope
 import okhttp3.ResponseBody
@@ -30,16 +31,22 @@ fun malSession(
 internal suspend fun <T> MalSession.authorised(
     http: MalHttp,
     expectedOwner: SignInId? = null,
+    firstRead: (() -> ReadAdmission)? = null,
     request: suspend (authorization: String) -> T,
-): Outcome<T> =
-    authorised(expectedOwner) { accessToken ->
+): Outcome<T> {
+    var admission = firstRead
+    return authorised(expectedOwner) { accessToken ->
         val maySendRead = expectedOwner?.let { owner -> { isSignedInAs(owner) } }
-        when (val answer = http.call(maySendRead = maySendRead) { request(bearer(accessToken)) }) {
+        when (val answer = http.call(maySendRead = maySendRead, firstRead = admission) { request(bearer(accessToken)) }) {
             is MalAnswer.Success -> Attempt.Answered(Outcome.Success(answer.value))
             is MalAnswer.Failed -> Attempt.Answered(Outcome.Failure(answer.error))
-            MalAnswer.Rejected -> Attempt.Rejected
+            MalAnswer.Rejected -> {
+                admission = null
+                Attempt.Rejected
+            }
         }
     }
+}
 
 private interface TokenApi {
     @FormUrlEncoded
