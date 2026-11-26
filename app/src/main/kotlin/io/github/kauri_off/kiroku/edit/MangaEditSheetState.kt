@@ -39,6 +39,10 @@ internal sealed interface MangaEditSubmission {
 
     data object Reconciling : MangaEditSubmission
 
+    data object Removing : MangaEditSubmission
+
+    data object CheckingRemoval : MangaEditSubmission
+
     data class Failed(
         val canRetry: Boolean,
         @param:StringRes val message: Int = R.string.shell_could_not_save,
@@ -56,9 +60,11 @@ internal data class MangaEditSheetState(
     val submission: MangaEditSubmission = MangaEditSubmission.Editing,
     val confirmDiscard: Boolean = false,
     val closing: Boolean = false,
+    val canRemove: Boolean = false,
+    val confirmRemove: Boolean = false,
 ) {
     val canRestoreStatus: Boolean get() = status != null && MangaEditStatus.entries.none { it.readingStatus == baseline.status }
-    val editable: Boolean get() = submission == MangaEditSubmission.Editing && !closing && !confirmDiscard
+    val editable: Boolean get() = submission == MangaEditSubmission.Editing && !closing && !confirmDiscard && !confirmRemove
     val chaptersInvalid: Boolean get() = !chapters.isValidCount(baseline.chaptersRead)
     val volumesInvalid: Boolean get() = !volumes.isValidCount(baseline.volumesRead)
 
@@ -85,9 +91,12 @@ internal data class MangaEditSheetState(
             is MangaEditSheetEvent.ScoreChosen ->
                 if (editable && (event.score?.let { it in 0..10 } ?: (baseline.score == null))) copy(score = event.score) else this
             MangaEditSheetEvent.DismissAsked -> if (mayLeave) this else copy(confirmDiscard = true)
+            MangaEditSheetEvent.RemoveAsked -> if (canRemove && editable) copy(confirmRemove = true) else this
+            MangaEditSheetEvent.CancelRemove -> copy(confirmRemove = false)
             MangaEditSheetEvent.KeepEditing -> copy(confirmDiscard = false)
             MangaEditSheetEvent.Discard -> if (confirmDiscard) copy(confirmDiscard = false, closing = true) else this
             is MangaEditSheetEvent.Save, MangaEditSheetEvent.Retry, MangaEditSheetEvent.Reconcile, MangaEditSheetEvent.Dismissed -> this
+            MangaEditSheetEvent.RemoveConfirmed -> this
         }
 }
 
@@ -119,6 +128,12 @@ internal sealed interface MangaEditSheetEvent {
     data object Retry : MangaEditSheetEvent
 
     data object Reconcile : MangaEditSheetEvent
+
+    data object RemoveAsked : MangaEditSheetEvent
+
+    data object CancelRemove : MangaEditSheetEvent
+
+    data object RemoveConfirmed : MangaEditSheetEvent
 
     data object DismissAsked : MangaEditSheetEvent
 

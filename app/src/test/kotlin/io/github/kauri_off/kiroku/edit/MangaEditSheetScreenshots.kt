@@ -28,6 +28,37 @@ class MangaEditSheetScreenshots : ScreenshotRegistry() {
             case("invalid-count", largeText = true) { MangaEditSheet(MangaEditFixtures.existing.copy(chapters = "2147483648")) {} },
             case("score-cleared") { MangaEditSheet(MangaEditFixtures.existing.copy(score = 0)) {} },
             case("saving", largeText = true) { MangaEditSheet(MangaEditFixtures.saving) {} },
+            case("removable", largeText = true) {
+                MangaEditSheet(MangaEditFixtures.changed.copy(canRemove = true)) {}
+            },
+            case("confirm-removal", largeText = true) {
+                MangaEditSheet(MangaEditFixtures.existing.copy(canRemove = true, confirmRemove = true)) {}
+            },
+            case("removing") {
+                MangaEditSheet(MangaEditFixtures.existing.copy(submission = MangaEditSubmission.Removing)) {}
+            },
+            case("checking-removal") {
+                MangaEditSheet(MangaEditFixtures.existing.copy(submission = MangaEditSubmission.CheckingRemoval)) {}
+            },
+            case("removal-refresh", largeText = true) {
+                MangaEditSheet(
+                    MangaEditFixtures.existing.copy(
+                        submission =
+                            MangaEditSubmission.Failed(
+                                canRetry = false,
+                                message = R.string.manga_edit_removal_unconfirmed,
+                                canReconcile = true,
+                            ),
+                    ),
+                ) {}
+            },
+            case("removal-retry", largeText = true) {
+                MangaEditSheet(
+                    MangaEditFixtures.existing.copy(
+                        submission = MangaEditSubmission.Failed(canRetry = true, message = R.string.manga_edit_could_not_remove),
+                    ),
+                ) {}
+            },
             case("checking-save") {
                 MangaEditSheet(MangaEditFixtures.saving.copy(submission = MangaEditSubmission.Reconciling)) {}
             },

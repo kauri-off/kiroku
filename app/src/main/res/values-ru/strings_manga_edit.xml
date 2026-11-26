@@ -12,4 +12,10 @@
     <string name="manga_edit_unconfirmed">Не удалось подтвердить сохранение</string>
     <string name="manga_edit_refresh_list">Обновить список</string>
     <string name="manga_edit_checking_save">Проверка сохранения…</string>
+    <string name="manga_edit_remove_title">Удалить «%1$s» из списка?</string>
+    <string name="manga_edit_remove_text">Прогресс и оценка будут потеряны</string>
+    <string name="manga_edit_removing">Удаление…</string>
+    <string name="manga_edit_checking_removal">Проверка удаления…</string>
+    <string name="manga_edit_removal_unconfirmed">Не удалось подтвердить удаление</string>
+    <string name="manga_edit_could_not_remove">Не удалось удалить</string>
 </resources>

@@ -12,4 +12,10 @@
     <string name="manga_edit_unconfirmed">Could not confirm save</string>
     <string name="manga_edit_refresh_list">Refresh list</string>
     <string name="manga_edit_checking_save">Checking save…</string>
+    <string name="manga_edit_remove_title">Remove %1$s from your list?</string>
+    <string name="manga_edit_remove_text">Progress and score will be lost</string>
+    <string name="manga_edit_removing">Removing…</string>
+    <string name="manga_edit_checking_removal">Checking removal…</string>
+    <string name="manga_edit_removal_unconfirmed">Could not confirm removal</string>
+    <string name="manga_edit_could_not_remove">Could not remove</string>
 </resources>

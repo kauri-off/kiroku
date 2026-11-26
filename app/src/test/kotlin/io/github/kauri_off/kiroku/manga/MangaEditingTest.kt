@@ -11,6 +11,7 @@ import io.github.kauri_off.kiroku.core.model.SignInId
 import io.github.kauri_off.kiroku.core.repository.MangaListEdit
 import io.github.kauri_off.kiroku.core.repository.MangaListEditResult
 import io.github.kauri_off.kiroku.core.repository.MangaListEditor
+import io.github.kauri_off.kiroku.core.repository.MangaListRemovalResult
 import io.github.kauri_off.kiroku.edit.MangaEditSheetEvent
 import io.github.kauri_off.kiroku.edit.MangaEditSubmission
 import io.github.kauri_off.kiroku.shell.ShellMessage
@@ -59,6 +60,8 @@ class MangaEditingTest {
         val cache = MutableStateFlow(snapshot(owner, baseline))
         val sessions = MutableStateFlow<Session>(Session.SignedIn(owner))
         var answer = CompletableDeferred<MangaListEditResult>()
+        var removalAnswer = CompletableDeferred<MangaListRemovalResult>()
+        val removals = mutableListOf<Triple<SignInId, MangaListEntry, Boolean>>()
         var refreshed: Outcome<MangaListSnapshot> = Outcome.Failure(DataError.NoConnection)
         val sent = mutableListOf<Sent>()
         val reads = mutableListOf<SignInId>()
@@ -74,6 +77,15 @@ class MangaEditingTest {
             if (!canDispatch()) return null
             reads += owner
             return refreshed.also { if (it is Outcome.Success) cache.value = it.value }
+        }
+
+        override suspend fun remove(
+            owner: SignInId,
+            baseline: MangaListEntry,
+            retry: Boolean,
+        ): MangaListRemovalResult {
+            removals += Triple(owner, baseline, retry)
+            return removalAnswer.await()
         }
 
         override suspend fun edit(
@@ -247,6 +259,133 @@ class MangaEditingTest {
             assertNull(quotedZero.recordedScore)
             assertNull(absent.displayBaseline().score)
         }
+
+    @Test
+    fun removeRequiresConfirmationAndClosesWhenAbsenceIsConfirmed() =
+        runTest {
+            val backend = Backend()
+            val subject = start(backend)
+            subject.event(MangaEditSheetEvent.RemoveConfirmed)
+            subject.event(MangaEditSheetEvent.RemoveAsked)
+            assertTrue(subject.open.form.confirmRemove)
+            subject.event(MangaEditSheetEvent.CancelRemove)
+            runCurrent()
+            assertTrue(backend.removals.isEmpty())
+
+            subject.confirmRemove()
+            subject.event(MangaEditSheetEvent.RemoveConfirmed)
+            runCurrent()
+            assertEquals(MangaEditSubmission.Removing, subject.open.form.submission)
+            assertEquals(listOf(Triple(owner, entry, false)), backend.removals)
+            assertEquals(
+                entry,
+                subject.editing.state.value.snapshot
+                    ?.entries
+                    ?.single(),
+            )
+            backend.cache.value = backend.cache.value.copy(entries = emptyList())
+            backend.removalAnswer.complete(MangaListRemovalResult.Removed)
+            runCurrent()
+            assertTrue(subject.open.form.closing)
+            assertEquals(
+                emptyList<MangaListEntry>(),
+                subject.editing.state.value.snapshot
+                    ?.entries,
+            )
+        }
+
+    @Test
+    fun removalRefusalNeedsACompleteReadAndGuardedRetry() =
+        runTest {
+            val baseline = entry.copy(updatedAt = Instant.EPOCH)
+            val backend = Backend(baseline)
+            val subject = start(backend)
+            subject.confirmRemove()
+            runCurrent()
+            backend.removalAnswer.complete(MangaListRemovalResult.Failed(DataError.Refused, needsRefresh = true))
+            runCurrent()
+            subject.event(MangaEditSheetEvent.Retry)
+            runCurrent()
+            assertEquals(1, backend.removals.size)
+
+            subject.event(MangaEditSheetEvent.Reconcile)
+            runCurrent()
+            assertTrue((subject.open.form.submission as MangaEditSubmission.Failed).canReconcile)
+            backend.refreshed = Outcome.Success(snapshot(owner, baseline))
+            subject.event(MangaEditSheetEvent.Reconcile)
+            runCurrent()
+            assertEquals(listOf(owner, owner), backend.reads)
+            assertTrue((subject.open.form.submission as MangaEditSubmission.Failed).canRetry)
+            backend.removalAnswer = CompletableDeferred()
+            subject.event(MangaEditSheetEvent.Retry)
+            runCurrent()
+            assertEquals(Triple(owner, baseline, true), backend.removals.last())
+        }
+
+    @Test
+    fun withdrawalOfRemovalRetryOnAnObservedChangePreventsAStaleAction() =
+        runTest {
+            val baseline = entry.copy(updatedAt = Instant.EPOCH)
+            val backend = Backend(baseline)
+            val subject = start(backend)
+            subject.confirmRemove()
+            runCurrent()
+            backend.removalAnswer.complete(MangaListRemovalResult.StillPresent(canRetry = true))
+            runCurrent()
+            val stale = checkNotNull(subject.messages.current.value)
+            assertTrue((subject.open.form.submission as MangaEditSubmission.Failed).canRetry)
+            backend.cache.value = snapshot(owner, baseline.copy(chaptersRead = 21))
+            runCurrent()
+            assertFalse((subject.open.form.submission as MangaEditSubmission.Failed).canRetry)
+            assertNull(subject.messages.current.value)
+            subject.messages.ended(stale, actionPerformed = true)
+            subject.event(MangaEditSheetEvent.Retry)
+            runCurrent()
+            assertEquals(1, backend.removals.size)
+        }
+
+    @Test
+    fun removalRefreshCanEstablishAbsenceWithNoResend() =
+        runTest {
+            val backend = Backend()
+            val subject = start(backend)
+            subject.confirmRemove()
+            runCurrent()
+            backend.removalAnswer.complete(MangaListRemovalResult.ReadRequired(DataError.NoConnection))
+            runCurrent()
+            backend.refreshed = Outcome.Success(backend.cache.value.copy(entries = emptyList()))
+            subject.event(MangaEditSheetEvent.Reconcile)
+            runCurrent()
+            assertTrue(subject.open.form.closing)
+            assertEquals(1, backend.removals.size)
+        }
+
+    @Test
+    fun replacementRejectsAFormerOwnersRemovalConfirmationAndDelayedRecovery() =
+        runTest {
+            val backend = Backend()
+            val subject = start(backend)
+            subject.confirmRemove()
+            val old = subject.open
+            runCurrent()
+            backend.sessions.value = Session.SignedIn(next)
+            backend.cache.value = snapshot(next, entry)
+            runCurrent()
+            subject.editing.open(next, entry.id, entry.titles.romaji)
+            subject.editing.event(old, MangaEditSheetEvent.RemoveConfirmed)
+            backend.removalAnswer.complete(MangaListRemovalResult.ReadRequired(DataError.NoConnection))
+            runCurrent()
+            assertEquals(next, subject.open.owner)
+            assertTrue(subject.open.form.canRemove)
+            assertNull(subject.messages.current.value)
+            assertEquals(listOf(Triple(owner, entry, false)), backend.removals)
+            assertTrue(backend.reads.isEmpty())
+        }
+
+    private fun Subject.confirmRemove() {
+        event(MangaEditSheetEvent.RemoveAsked)
+        event(MangaEditSheetEvent.RemoveConfirmed)
+    }
 
     private fun Subject.saveIfStillAvailable() {
         val changes = open.form.saveChanges ?: return

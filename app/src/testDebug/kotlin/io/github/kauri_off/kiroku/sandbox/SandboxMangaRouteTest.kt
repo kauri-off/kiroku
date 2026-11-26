@@ -250,6 +250,50 @@ class SandboxMangaRouteTest {
         compose.onNodeWithText("Retry").assertDoesNotExist()
     }
 
+    @Test
+    fun `removal can be cancelled then reconciled and retried and the replacement starts intact`() {
+        val first = signIn()
+        openList()
+        shows("Paper Observatory")
+        compose.onNodeWithText("Paper Observatory").performClick()
+        shows("Change")
+        compose.onNodeWithText("Change").performClick()
+        shows("Remove from list")
+        compose.onNodeWithText("Remove from list").performClick()
+        shows("Remove Paper Observatory from your list?")
+        compose.onNodeWithText("Cancel").performClick()
+        val before = chapters(first)
+        assertEquals(12, before)
+
+        graph.scenarios.set(Scenario(writes = WriteFault.Refused))
+        compose.onNodeWithText("Remove from list").performClick()
+        compose.onNodeWithText("Remove").performClick()
+        shows("Could not confirm removal")
+        compose.onNodeWithText("Retry").assertDoesNotExist()
+        assertEquals(before, chapters(first))
+        graph.scenarios.set(Scenario())
+        compose.onNodeWithText("Refresh list").performClick()
+        shows("Retry")
+        compose.onNodeWithText("Retry").performClick()
+        awaitEditClosed()
+        compose.onNodeWithText("Change").assertDoesNotExist()
+        compose.onNode(isHeading() and hasText("Paper Observatory")).assertExists()
+        compose.runOnUiThread { compose.activity.onBackPressedDispatcher.onBackPressed() }
+        shows("Manga")
+        compose.onNodeWithText("Manga").assertIsSelected()
+        compose.onNodeWithText("Paper Observatory").assertDoesNotExist()
+        assertEquals(null, chapters(first))
+        compose.activityRule.scenario.recreate()
+        shows("Manga")
+        compose.onNodeWithText("Paper Observatory").assertDoesNotExist()
+        signOut(first)
+        val replacement = signIn()
+        openList()
+        shows("Paper Observatory")
+        assertEquals(before, chapters(replacement))
+        compose.onNodeWithText("Retry").assertDoesNotExist()
+    }
+
     private fun signOut(old: Session.SignedIn) {
         runBlocking {
             val current = graph
@@ -279,7 +323,7 @@ class SandboxMangaRouteTest {
         (waited { manga.stored(account.signIn) } as Outcome.Success)
             .value
             ?.entries
-            ?.first { it.titles.romaji == "Paper Observatory" }
+            ?.firstOrNull { it.titles.romaji == "Paper Observatory" }
             ?.chaptersRead
 
     private fun waitForChapters(

@@ -78,6 +78,8 @@ fun text(text: ShellMessage.Text): String =
             )
         ShellMessage.Text.CouldNotSave -> stringResource(R.string.shell_could_not_save)
         ShellMessage.Text.MangaUnconfirmed -> stringResource(R.string.manga_edit_unconfirmed)
+        ShellMessage.Text.MangaRemovalUnconfirmed -> stringResource(R.string.manga_edit_removal_unconfirmed)
+        ShellMessage.Text.MangaCouldNotRemove -> stringResource(R.string.manga_edit_could_not_remove)
     }
 
 @Composable

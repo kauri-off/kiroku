@@ -13,7 +13,9 @@ import io.github.kauri_off.kiroku.core.model.owner
 import io.github.kauri_off.kiroku.core.repository.MangaListEdit
 import io.github.kauri_off.kiroku.core.repository.MangaListEditResult
 import io.github.kauri_off.kiroku.core.repository.MangaListEditor
+import io.github.kauri_off.kiroku.core.repository.MangaListRemovalResult
 import io.github.kauri_off.kiroku.core.repository.MangaListStatus
+import io.github.kauri_off.kiroku.core.repository.matchesRemovalRetry
 import io.github.kauri_off.kiroku.core.repository.readingStatus
 import io.github.kauri_off.kiroku.edit.MangaEditBaseline
 import io.github.kauri_off.kiroku.edit.MangaEditChanges
@@ -63,12 +65,13 @@ internal class MangaEditing(
     private data class Operation(
         val owner: SignInId,
         val baseline: MangaListEntry,
-        val changes: MangaListEdit,
+        val changes: MangaListEdit?,
         val form: MangaEditSheetState,
         val phase: Phase,
         val action: ShellMessage.Action.MangaRecovery? = null,
     ) {
         val id get() = baseline.id
+        val removing get() = changes == null
     }
 
     private val mutable = MutableStateFlow(MangaEditingState())
@@ -91,8 +94,16 @@ internal class MangaEditing(
                             is Outcome.Success -> {
                                 val snapshot = result.value?.takeIf { it.owner == owner }
                                 mutable.value = mutable.value.copy(snapshot = snapshot, observed = true)
-                                operations.values.toList().filter { it.phase == Phase.Retry }.forEach { op ->
-                                    if (snapshot != null) readyToRetry(op, snapshot)
+                                if (snapshot != null) {
+                                    operations.values.toList().forEach { op ->
+                                        when {
+                                            op.phase == Phase.Retry -> readyToRetry(op, snapshot)
+                                            op.removing &&
+                                                op.phase == Phase.Refresh &&
+                                                snapshot.syncedAt != null &&
+                                                snapshot.entries.none { it.id == op.id } -> finish(op)
+                                        }
+                                    }
                                 }
                             }
                             is Outcome.Failure ->
@@ -113,7 +124,7 @@ internal class MangaEditing(
     suspend fun loadMembership(owner: SignInId) {
         val caller = currentCoroutineContext()
         val state = mutable.value
-        if (state.snapshot?.syncedAt == null && state.pending.isEmpty() && active(owner)) {
+        if (state.snapshot?.syncedAt == null && operations.isEmpty() && active(owner)) {
             editor.refresh(owner) { caller.isActive && mutable.value.owner == owner }
         }
     }
@@ -129,7 +140,7 @@ internal class MangaEditing(
                 ?.entries
                 ?.find { it.id == id } ?: return
         val operation = operations[id]
-        val form = operation?.form?.copy(title = title) ?: MangaEditSheetState(title, entry.displayBaseline())
+        val form = operation?.form?.copy(title = title) ?: MangaEditSheetState(title, entry.displayBaseline(), canRemove = true)
         mutable.value = mutable.value.copy(open = OpenMangaEditor(++instance, owner, operation?.baseline ?: entry, form))
     }
 
@@ -143,6 +154,11 @@ internal class MangaEditing(
             is MangaEditSheetEvent.Save -> {
                 if (event.changes != current.form.saveChanges || operations[current.baseline.id] != null) return
                 val op = Operation(current.owner, current.baseline, event.changes.toEdit(), current.form, Phase.Writing)
+                write(op, retry = false)
+            }
+            MangaEditSheetEvent.RemoveConfirmed -> {
+                if (!current.form.canRemove || !current.form.confirmRemove || operations[current.baseline.id] != null) return
+                val op = Operation(current.owner, current.baseline, null, current.form.showing(current.baseline), Phase.Writing)
                 write(op, retry = false)
             }
             MangaEditSheetEvent.Retry, MangaEditSheetEvent.Reconcile -> {
@@ -165,7 +181,11 @@ internal class MangaEditing(
         val open = state.open?.let { if (it.baseline.id == op.id) it.copy(form = op.form.copy(title = it.form.title)) else it }
         mutable.value =
             state.copy(
-                pending = operations.values.filter { it.phase == Phase.Writing }.associate { it.id to it.changes },
+                pending =
+                    operations.values
+                        .mapNotNull { writing ->
+                            writing.changes?.takeIf { writing.phase == Phase.Writing }?.let { writing.id to it }
+                        }.toMap(),
                 open = open,
             )
     }
@@ -174,11 +194,17 @@ internal class MangaEditing(
         op: Operation,
         retry: Boolean,
     ) {
-        val writing = op.copy(phase = Phase.Writing, form = op.form.copy(submission = MangaEditSubmission.Saving), action = null)
+        val submission = if (op.removing) MangaEditSubmission.Removing else MangaEditSubmission.Saving
+        val writing = op.copy(phase = Phase.Writing, form = op.form.copy(submission = submission), action = null)
         reserve(writing)
         scope.launch {
             if (!active(writing.owner)) return@launch
-            val result = editor.edit(writing.owner, writing.id, writing.changes, writing.baseline.takeIf { retry })
+            val changes = writing.changes
+            if (changes == null) {
+                remove(writing, retry)
+                return@launch
+            }
+            val result = editor.edit(writing.owner, writing.id, changes, writing.baseline.takeIf { retry })
             if (!active(writing.owner) || operations[writing.id] !== writing) return@launch
             when (result) {
                 is MangaListEditResult.Confirmed -> settle(writing)
@@ -197,6 +223,36 @@ internal class MangaEditing(
                     }
                 MangaListEditResult.RefreshRequired -> offer(writing, Phase.Refresh)
                 MangaListEditResult.Discarded -> finish(writing, failed = true)
+            }
+        }
+    }
+
+    private suspend fun remove(
+        op: Operation,
+        retry: Boolean,
+    ) {
+        val result = editor.remove(op.owner, op.baseline, retry)
+        if (!active(op.owner) || operations[op.id] !== op) return
+        when (result) {
+            MangaListRemovalResult.Removed -> settle(op)
+            is MangaListRemovalResult.Failed ->
+                when (result.error) {
+                    DataError.ListEnded, DataError.SessionExpired -> retire()
+                    else -> offer(op, Phase.Refresh)
+                }
+            is MangaListRemovalResult.ReadRequired, MangaListRemovalResult.RefreshRequired -> offer(op, Phase.Refresh)
+            is MangaListRemovalResult.StillPresent -> if (result.canRetry) fromStore(op) else finish(op, failed = true)
+            MangaListRemovalResult.Discarded -> {
+                val result = editor.stored(op.owner)
+                if (!active(op.owner) || operations[op.id] !== op) return
+                if (result == Outcome.Failure(DataError.ListEnded)) {
+                    retire()
+                    return
+                }
+                val stored = (result as? Outcome.Success)?.value?.takeIf { it.owner == op.owner }
+                stored?.let(::showSnapshot)
+                val removed = stored?.syncedAt != null && stored.entries.none { it.id == op.id }
+                finish(op, failed = !removed)
             }
         }
     }
@@ -238,18 +294,31 @@ internal class MangaEditing(
         snapshot: MangaListSnapshot,
     ) {
         val entry = snapshot.entries.find { it.id == op.id }
-        val remaining = entry?.let { op.changes.remainingAfter(op.baseline, it) }
+        val changes = op.changes
+        val remaining = if (entry != null) changes?.remainingAfter(op.baseline, entry) else null
         when {
             snapshot.syncedAt == null -> offer(op, Phase.Refresh)
+            changes == null ->
+                when {
+                    entry == null -> finish(op)
+                    !op.baseline.matchesRemovalRetry(entry) -> finish(op, failed = true)
+                    op.phase != Phase.Retry -> offer(op, Phase.Retry)
+                }
             entry == null || remaining == null || remaining.isEmpty -> finish(op, failed = true)
-            op.phase != Phase.Retry || remaining != op.changes ->
+            op.phase != Phase.Retry || remaining != changes ->
                 offer(op.copy(changes = remaining, form = op.form.showing(remaining.appliedTo(entry))), Phase.Retry)
         }
     }
 
     private fun recover(op: Operation) {
         if (operations[op.id] !== op || mutable.value.owner != op.owner) return
-        val submission = if (op.phase == Phase.Retry) MangaEditSubmission.Saving else MangaEditSubmission.Reconciling
+        val submission =
+            when {
+                op.removing && op.phase == Phase.Retry -> MangaEditSubmission.Removing
+                op.removing -> MangaEditSubmission.CheckingRemoval
+                op.phase == Phase.Retry -> MangaEditSubmission.Saving
+                else -> MangaEditSubmission.Reconciling
+            }
         val reading = op.copy(phase = Phase.Reading, form = op.form.copy(submission = submission), action = null)
         reserve(reading)
         scope.launch {
@@ -263,16 +332,23 @@ internal class MangaEditing(
             val snapshot = (result as? Outcome.Success)?.value?.takeIf { it.owner == op.owner }
             snapshot?.let(::showSnapshot)
             val entry = snapshot?.entries?.find { it.id == op.id }
+            val changes = op.changes
             when {
                 snapshot == null -> offer(reading, if (op.phase == Phase.Retry) Phase.Refresh else op.phase)
                 snapshot.syncedAt == null -> offer(reading, if (op.phase == Phase.RefreshAccepted) op.phase else Phase.Refresh)
+                changes == null ->
+                    if (op.phase == Phase.Retry && entry != null && op.baseline.matchesRemovalRetry(entry)) {
+                        write(reading, retry = true)
+                    } else {
+                        readyToRetry(reading, snapshot)
+                    }
                 op.phase == Phase.RefreshAccepted ->
-                    if (entry == null || op.changes.hasEvidenceIn(entry)) finish(reading) else offer(reading, Phase.RefreshAccepted)
+                    if (entry == null || changes.hasEvidenceIn(entry)) finish(reading) else offer(reading, Phase.RefreshAccepted)
                 entry == null -> finish(reading, failed = true)
-                op.phase == Phase.Refresh && op.changes.isPresentIn(entry) -> finish(reading)
+                op.phase == Phase.Refresh && changes.isPresentIn(entry) -> finish(reading)
                 op.phase == Phase.Refresh -> readyToRetry(reading, snapshot)
                 else -> {
-                    val remaining = op.changes.remainingAfter(op.baseline, entry)
+                    val remaining = changes.remainingAfter(op.baseline, entry)
                     if (remaining.isEmpty) {
                         finish(reading, failed = true)
                     } else {
@@ -288,13 +364,26 @@ internal class MangaEditing(
         phase: Phase,
     ) {
         val refresh = phase != Phase.Retry
-        val text = if (refresh) ShellMessage.Text.MangaUnconfirmed else ShellMessage.Text.CouldNotSave
+        val text =
+            when {
+                op.removing && refresh -> ShellMessage.Text.MangaRemovalUnconfirmed
+                op.removing -> ShellMessage.Text.MangaCouldNotRemove
+                refresh -> ShellMessage.Text.MangaUnconfirmed
+                else -> ShellMessage.Text.CouldNotSave
+            }
+        val label =
+            when {
+                op.removing && refresh -> R.string.manga_edit_removal_unconfirmed
+                op.removing -> R.string.manga_edit_could_not_remove
+                refresh -> R.string.manga_edit_unconfirmed
+                else -> R.string.shell_could_not_save
+            }
         lateinit var available: Operation
         val action = ShellMessage.Action.MangaRecovery(refresh) { recover(available) }
         val failure =
             MangaEditSubmission.Failed(
                 canRetry = !refresh,
-                message = if (refresh) R.string.manga_edit_unconfirmed else R.string.shell_could_not_save,
+                message = label,
                 canReconcile = refresh,
             )
         available = op.copy(phase = phase, form = op.form.copy(submission = failure), action = action)
@@ -315,7 +404,8 @@ internal class MangaEditing(
                 } else {
                     val form =
                         if (failed) {
-                            it.form.copy(submission = MangaEditSubmission.Failed(canRetry = false))
+                            val label = if (op.removing) R.string.manga_edit_could_not_remove else R.string.shell_could_not_save
+                            it.form.copy(submission = MangaEditSubmission.Failed(canRetry = false, message = label))
                         } else {
                             it.form.copy(closing = true)
                         }
@@ -327,7 +417,7 @@ internal class MangaEditing(
     }
 }
 
-private fun MangaEditSheetState.showing(entry: MangaListEntry) = MangaEditSheetState(title, entry.displayBaseline())
+private fun MangaEditSheetState.showing(entry: MangaListEntry) = MangaEditSheetState(title, entry.displayBaseline(), canRemove = true)
 
 internal fun MangaListEntry.displayBaseline(): MangaEditBaseline =
     MangaEditBaseline(status, chaptersRead, volumesRead, score ?: 0.takeIf { explicitlyUnrated })

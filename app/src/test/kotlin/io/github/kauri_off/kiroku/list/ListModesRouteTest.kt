@@ -42,6 +42,7 @@ import io.github.kauri_off.kiroku.core.repository.MangaListEdit
 import io.github.kauri_off.kiroku.core.repository.MangaListEditResult
 import io.github.kauri_off.kiroku.core.repository.MangaListEditor
 import io.github.kauri_off.kiroku.core.repository.MangaListReader
+import io.github.kauri_off.kiroku.core.repository.MangaListRemovalResult
 import io.github.kauri_off.kiroku.design.composeRule
 import io.github.kauri_off.kiroku.design.registered
 import io.github.kauri_off.kiroku.design.theme.KirokuTheme
@@ -242,6 +243,12 @@ class ListModesRouteTest {
                     saved.value = saved.value.copy(chaptersRead = 24)
                     return stored(owner)
                 }
+
+                override suspend fun remove(
+                    owner: SignInId,
+                    baseline: MangaListEntry,
+                    retry: Boolean,
+                ): MangaListRemovalResult = error("This test only saves changes")
 
                 override suspend fun edit(
                     owner: SignInId,

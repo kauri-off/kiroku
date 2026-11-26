@@ -332,8 +332,7 @@ Not to forget:
 - [x] Switch between Anime and Manga in My list.
 - [x] Edit personal manga list entries.
   - [x] Owner-bound edits and read-back reconciliation.
-- [ ] Remove entries from the personal manga list.
-  - [x] Owner-bound removal and read-back reconciliation.
+- [x] Remove entries from the personal manga list.
 - [x] Delete individual recent searches.
 - [x] Open anime from MyAnimeList links pasted in Search.
 

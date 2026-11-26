@@ -153,6 +153,17 @@ internal fun MangaEditSheet(
         }
     }
 
+    if (state.confirmRemove) {
+        EditConfirmation(
+            title = stringResource(R.string.manga_edit_remove_title, state.title),
+            text = stringResource(R.string.manga_edit_remove_text),
+            confirm = stringResource(R.string.edit_remove_confirm),
+            dismiss = stringResource(R.string.edit_cancel),
+            onConfirm = { onEvent(MangaEditSheetEvent.RemoveConfirmed) },
+            onDismiss = { onEvent(MangaEditSheetEvent.CancelRemove) },
+        )
+    }
+
     if (state.confirmDiscard) {
         EditConfirmation(
             title = stringResource(R.string.edit_discard_title),
@@ -289,7 +300,17 @@ private fun MangaEditFooter(
     when (val submission = state.submission) {
         MangaEditSubmission.Editing -> {
             val changes = state.saveChanges
-            EditActions(remove = null) {
+            val remove: (@Composable () -> Unit)? =
+                if (state.canRemove) {
+                    {
+                        TextButton(onClick = { onEvent(MangaEditSheetEvent.RemoveAsked) }, enabled = state.editable) {
+                            Text(stringResource(R.string.edit_remove))
+                        }
+                    }
+                } else {
+                    null
+                }
+            EditActions(remove = remove) {
                 Button(
                     onClick = { changes?.let { onEvent(MangaEditSheetEvent.Save(it)) } },
                     shapes = ButtonDefaults.shapes(),
@@ -299,13 +320,19 @@ private fun MangaEditFooter(
                 }
             }
         }
-        MangaEditSubmission.Saving, MangaEditSubmission.Reconciling ->
+        MangaEditSubmission.Saving, MangaEditSubmission.Reconciling, MangaEditSubmission.Removing, MangaEditSubmission.CheckingRemoval ->
             LineOrStack(
                 gap = Spacing.s,
                 centred = true,
                 modifier = Modifier.semantics(mergeDescendants = true) { liveRegion = LiveRegionMode.Polite },
             ) {
-                val label = if (submission == MangaEditSubmission.Saving) R.string.manga_edit_saving else R.string.manga_edit_checking_save
+                val label =
+                    when (submission) {
+                        MangaEditSubmission.Removing -> R.string.manga_edit_removing
+                        MangaEditSubmission.CheckingRemoval -> R.string.manga_edit_checking_removal
+                        MangaEditSubmission.Reconciling -> R.string.manga_edit_checking_save
+                        else -> R.string.manga_edit_saving
+                    }
                 Text(stringResource(label))
                 WaitIndicator()
             }

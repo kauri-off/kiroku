@@ -45,6 +45,10 @@ data class ShellMessage(
         data object CouldNotSave : Text
 
         data object MangaUnconfirmed : Text
+
+        data object MangaRemovalUnconfirmed : Text
+
+        data object MangaCouldNotRemove : Text
     }
 
     sealed interface Action {
