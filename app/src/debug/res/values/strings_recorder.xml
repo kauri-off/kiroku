@@ -58,6 +58,7 @@
     <string name="recorder_manga_armed_patch">PATCH capture armed for manga ID\u00A0%1$d. Open the entry and tap Save after making your changes</string>
     <string name="recorder_manga_armed_delete">DELETE capture armed for manga ID\u00A0%1$d. Open the entry and confirm Remove from list</string>
     <string name="recorder_manga_capturing">Waiting for manga ID\u00A0%1$d\u00A0to be verified on MyAnimeList</string>
+    <string name="recorder_manga_saving">Saving the confirmed manga capture</string>
     <string name="recorder_manga_patch_complete">PATCH and read-back captured for manga ID\u00A0%1$d</string>
     <string name="recorder_manga_delete_complete">DELETE and read-back captured for manga ID\u00A0%1$d</string>
     <string name="recorder_manga_missing">This manga ID is missing from the saved list. Open My list and refresh before arming</string>

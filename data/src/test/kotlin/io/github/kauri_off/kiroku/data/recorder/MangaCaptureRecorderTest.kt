@@ -29,6 +29,7 @@ import kotlinx.coroutines.withTimeout
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertThrows
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
@@ -64,6 +65,7 @@ class MangaCaptureRecorderTest {
     private var writeFile: (File, String) -> Unit = { file, payload -> file.writeText(payload) }
     private var eraseFiles: (File) -> Boolean = File::deleteRecursively
     private var renameDirectory: (File, File) -> Unit = ::moveCaptureDirectory
+    private var markDirectory: (File) -> Unit = ::markCaptureComplete
     private val recorder by lazy {
         MangaCaptureRecorder(
             lazy { session },
@@ -73,6 +75,7 @@ class MangaCaptureRecorderTest {
             time,
             erase = { eraseFiles(it) },
             rename = { from, to -> renameDirectory(from, to) },
+            markComplete = { markDirectory(it) },
         )
     }
     private val list by lazy { RoomMangaList({ database }, session, network.http, network.clock, recorder) { false } }
@@ -107,7 +110,10 @@ class MangaCaptureRecorderTest {
             network.api.enqueue(answer(body = page(row(17, 0))))
             assertTrue(list.edit(owner, id, MangaListEdit(score = 0)) is MangaListEditResult.Confirmed)
             val patched = completed()
-            assertEquals(setOf("manga_mutation_patch.200.json", "manga_mutation_read_back.200.json"), patched.list().orEmpty().toSet())
+            assertEquals(
+                setOf("manga_mutation_patch.200.json", "manga_mutation_read_back.200.json", MANGA_CAPTURE_COMPLETE),
+                patched.list().orEmpty().toSet(),
+            )
             assertEquals("""{"score":0}""", File(patched, "manga_mutation_patch.200.json").readText())
             assertEquals(
                 """{"pages":2,"complete":true,"present":true,"list_status":{"status":"reading","score":0}}""",
@@ -289,9 +295,9 @@ class MangaCaptureRecorderTest {
             val renaming = CountDownLatch(1)
             val release = CountDownLatch(1)
             renameDirectory = { from, to ->
+                moveCaptureDirectory(from, to)
                 renaming.countDown()
                 check(release.await(5, TimeUnit.SECONDS))
-                moveCaptureDirectory(from, to)
             }
             network.api.enqueue(answer(204, ""))
             network.api.enqueue(answer(body = page("")))
@@ -305,6 +311,11 @@ class MangaCaptureRecorderTest {
                         recorder.disarm(target)
                     }
                     assertEquals(MangaCaptureState.Stopped(MangaCaptureStop.Ended), recorder.state.value)
+                    val moved = checkNotNull(root.listFiles()).single()
+                    assertTrue(moved.name.startsWith("capture-"))
+                    assertTrue(File(moved, "manga_mutation_delete.204.txt").isFile)
+                    assertTrue(File(moved, "manga_mutation_read_back.200.json").isFile)
+                    assertThrows(IllegalStateException::class.java) { validateMangaMutationPair(moved, null) }
                     network.api.enqueue(answer(body = page(row(19, 2))))
                     assertTrue(list.refresh(owner) is Outcome.Success)
                 }
@@ -316,6 +327,76 @@ class MangaCaptureRecorderTest {
             assertTrue(root.listFiles().isNullOrEmpty())
             assertEquals(listOf("GET", "DELETE", "GET", "GET"), List(network.api.requestCount) { network.api.received().method })
         }
+
+    @Test
+    fun `caller cancellation before authorization leaves the renamed pair unusable`() =
+        runBlocking {
+            val owner = signIn()
+            val baseline = load(owner)
+            arm(MangaMutationMethod.Delete)
+            val moved = CountDownLatch(1)
+            val release = CountDownLatch(1)
+            renameDirectory = { from, to ->
+                moveCaptureDirectory(from, to)
+                moved.countDown()
+                check(release.await(5, TimeUnit.SECONDS))
+            }
+            network.api.enqueue(answer(204, ""))
+            network.api.enqueue(answer(body = page("")))
+            val deleting = async { list.remove(owner, baseline) }
+            try {
+                withContext(Dispatchers.IO) { assertTrue(moved.await(5, TimeUnit.SECONDS)) }
+                deleting.cancel()
+                val pair = checkNotNull(root.listFiles()).single()
+                assertThrows(IllegalStateException::class.java) { validateMangaMutationPair(pair, null) }
+            } finally {
+                release.countDown()
+                deleting.cancelAndJoin()
+            }
+            assertEquals(MangaCaptureState.Stopped(MangaCaptureStop.Ended), recorder.state.value)
+            assertTrue(root.listFiles().isNullOrEmpty())
+            assertEquals(3, network.api.requestCount)
+        }
+
+    @Test
+    fun `authorization wins over a stale disarm before the completion marker is created`() =
+        runBlocking {
+            val owner = signIn()
+            val baseline = load(owner)
+            arm(MangaMutationMethod.Delete)
+            val marking = CountDownLatch(1)
+            val release = CountDownLatch(1)
+            markDirectory = { directory ->
+                marking.countDown()
+                check(release.await(5, TimeUnit.SECONDS))
+                markCaptureComplete(directory)
+            }
+            network.api.enqueue(answer(204, ""))
+            network.api.enqueue(answer(body = page("")))
+            val deleting = async { list.remove(owner, baseline) }
+            try {
+                withContext(Dispatchers.IO) { assertTrue(marking.await(5, TimeUnit.SECONDS)) }
+                val state = recorder.state.value as MangaCaptureState.Capturing
+                assertEquals(false, state.canDisarm)
+                recorder.disarm(state.target)
+                assertEquals(state, recorder.state.value)
+                val pair = checkNotNull(root.listFiles()).single()
+                assertThrows(IllegalStateException::class.java) { validateMangaMutationPair(pair, null) }
+            } finally {
+                release.countDown()
+            }
+            assertEquals(MangaListRemovalResult.Removed, deleting.await())
+            validateMangaMutationPair(completed(), null)
+            assertEquals(3, network.api.requestCount)
+        }
+
+    @Test
+    fun `marker creation does not recreate a retired directory`() {
+        val retired = folder.newFolder()
+        assertTrue(retired.delete())
+        assertThrows(IOException::class.java) { markCaptureComplete(retired) }
+        assertEquals(false, retired.exists())
+    }
 
     @Test
     fun `retirement during the final rename cannot report completion for a replaced sign in`() =

@@ -66,6 +66,19 @@ class RecorderSectionTest {
     }
 
     @Test
+    fun `authorized manga capture disables disarm while publishing`() {
+        val target = MangaCaptureTarget(MangaId(17), MangaMutationMethod.Delete)
+        compose.setContent {
+            Column {
+                val publishing = MangaCaptureState.Capturing(target, canDisarm = false)
+                RecorderSection(RecorderState(Recording.Idle, manga = publishing)) { events += it }
+            }
+        }
+        compose.onNodeWithText("Saving the confirmed manga capture").assertExists()
+        compose.onNodeWithText("Disarm capture").assertIsNotEnabled()
+    }
+
+    @Test
     fun `signed out manga capture cannot be armed`() {
         compose.setContent {
             Column {

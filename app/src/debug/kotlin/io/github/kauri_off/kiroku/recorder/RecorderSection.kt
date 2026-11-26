@@ -207,7 +207,15 @@ private fun MangaCaptureSection(
             MangaCaptureLine(stringResource(label, state.target.id.value))
             MangaCaptureLine(pluralStringResource(R.plurals.recorder_manga_window, MANGA_CAPTURE_MINUTES, MANGA_CAPTURE_MINUTES))
         }
-        is MangaCaptureState.Capturing -> Progress(null, stringResource(R.string.recorder_manga_capturing, state.target.id.value))
+        is MangaCaptureState.Capturing -> {
+            val line =
+                if (state.canDisarm) {
+                    stringResource(R.string.recorder_manga_capturing, state.target.id.value)
+                } else {
+                    stringResource(R.string.recorder_manga_saving)
+                }
+            Progress(null, line)
+        }
         is MangaCaptureState.Complete -> {
             val label =
                 if (state.target.method ==
@@ -232,6 +240,7 @@ private fun MangaCaptureSection(
     if (active != null) {
         OutlinedButton(
             onClick = { onEvent(RecorderEvent.DisarmManga(active)) },
+            enabled = (state as? MangaCaptureState.Capturing)?.canDisarm != false,
             modifier = Modifier.padding(horizontal = Spacing.l),
         ) {
             Text(stringResource(R.string.recorder_manga_disarm))

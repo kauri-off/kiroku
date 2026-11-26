@@ -34,6 +34,7 @@ import kotlin.time.TimeSource
 import kotlin.time.toKotlinDuration
 
 const val MANGA_CAPTURE_MINUTES = 10
+internal const val MANGA_CAPTURE_COMPLETE = "manga_mutation_complete"
 
 data class MangaCaptureTarget(
     val id: MangaId,
@@ -49,6 +50,7 @@ sealed interface MangaCaptureState {
 
     data class Capturing(
         val target: MangaCaptureTarget,
+        val canDisarm: Boolean = true,
     ) : MangaCaptureState
 
     data class Complete(
@@ -71,6 +73,7 @@ class MangaCaptureRecorder internal constructor(
     private val time: TimeSource = TimeSource.Monotonic,
     private val erase: (File) -> Boolean = File::deleteRecursively,
     private val rename: (File, File) -> Unit = ::moveCaptureDirectory,
+    private val markComplete: (File) -> Unit = ::markCaptureComplete,
 ) : MangaMutationObserver {
     private val root by lazy(directory)
     private val shown = MutableStateFlow<MangaCaptureState>(MangaCaptureState.Ready)
@@ -91,6 +94,7 @@ class MangaCaptureRecorder internal constructor(
         val target: MangaCaptureTarget,
         val deadline: TimeMark,
         var claimed: Boolean = false,
+        var authorized: Boolean = false,
     )
 
     internal val active: Boolean get() = synchronized(lock) { reservation != null }
@@ -170,7 +174,7 @@ class MangaCaptureRecorder internal constructor(
         expiry =
             scope.launch {
                 delay(lifetime)
-                synchronized(lock) { if (reservation === next) stop(MangaCaptureStop.Ended) }
+                synchronized(lock) { if (reservation === next && !next.authorized) stop(MangaCaptureStop.Ended) }
             }
         if (!watching) {
             watching = true
@@ -191,7 +195,7 @@ class MangaCaptureRecorder internal constructor(
 
     fun disarm(target: MangaCaptureTarget) {
         synchronized(lock) {
-            if (reservation?.target === target) stop(MangaCaptureStop.Ended)
+            if (reservation?.let { it.target === target && !it.authorized } == true) stop(MangaCaptureStop.Ended)
         }
     }
 
@@ -232,7 +236,7 @@ class MangaCaptureRecorder internal constructor(
 
     private fun current(run: Reservation): Boolean =
         reservation === run &&
-            !run.deadline.hasPassedNow() &&
+            (run.authorized || !run.deadline.hasPassedNow()) &&
             session.value.isCurrentOwner(run.owner) &&
             run.owner.id?.let(session.value::mayWriteAs) == true
 
@@ -269,16 +273,35 @@ class MangaCaptureRecorder internal constructor(
                             destination
                         }
                     }
-                session.value.withOwner(run.owner) {
-                    synchronized(lock) {
-                        if (current(run)) {
+                val authorized =
+                    session.value.withOwner(run.owner) {
+                        synchronized(lock) {
+                            if (!current(run)) return@synchronized false
                             caller.ensureActive()
                             if (completed == null) {
                                 stop(MangaCaptureStop.Storage)
-                            } else {
-                                unpublished = null
-                                clear()
-                                shown.value = MangaCaptureState.Complete(run.target, completed)
+                                return@synchronized false
+                            }
+                            run.authorized = true
+                            shown.value = MangaCaptureState.Capturing(run.target, canDisarm = false)
+                            true
+                        }
+                    } == true
+                if (authorized && completed != null) {
+                    withContext(NonCancellable) marking@{
+                        if (!synchronized(lock) { current(run) }) return@marking
+                        val marked = storage { markComplete(completed) } != null
+                        session.value.withOwner(run.owner) {
+                            synchronized(lock) {
+                                if (current(run)) {
+                                    if (marked) {
+                                        unpublished = null
+                                        clear()
+                                        shown.value = MangaCaptureState.Complete(run.target, completed)
+                                    } else {
+                                        stop(MangaCaptureStop.Storage)
+                                    }
+                                }
                             }
                         }
                     }
@@ -358,4 +381,8 @@ internal fun moveCaptureDirectory(
     to: File,
 ) {
     Files.move(from.toPath(), to.toPath(), StandardCopyOption.ATOMIC_MOVE)
+}
+
+internal fun markCaptureComplete(directory: File) {
+    Files.createFile(directory.toPath().resolve(MANGA_CAPTURE_COMPLETE))
 }

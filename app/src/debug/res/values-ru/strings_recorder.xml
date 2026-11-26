@@ -62,6 +62,7 @@
     <string name="recorder_manga_armed_patch">Запись PATCH включена для манги с ID\u00A0%1$d. Откройте запись, измените данные и нажмите «Сохранить»</string>
     <string name="recorder_manga_armed_delete">Запись DELETE включена для манги с ID\u00A0%1$d. Откройте запись и подтвердите удаление из списка</string>
     <string name="recorder_manga_capturing">Проверяем изменение манги с ID\u00A0%1$d\u00A0на MyAnimeList</string>
+    <string name="recorder_manga_saving">Сохраняем запись подтверждённого изменения манги</string>
     <string name="recorder_manga_patch_complete">Ответ на PATCH и результат проверки для манги с ID\u00A0%1$d\u00A0записаны</string>
     <string name="recorder_manga_delete_complete">Ответ на DELETE и результат проверки для манги с ID\u00A0%1$d\u00A0записаны</string>
     <string name="recorder_manga_missing">Манги с таким ID нет в сохранённом списке. Откройте «Мой список» и обновите его перед записью</string>

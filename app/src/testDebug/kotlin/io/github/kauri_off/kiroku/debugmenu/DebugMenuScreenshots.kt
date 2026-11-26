@@ -121,6 +121,11 @@ class DebugMenuScreenshots : ScreenshotRegistry() {
                 val target = MangaCaptureTarget(MangaId(17), MangaMutationMethod.Patch)
                 Menu(ScenarioState.Unavailable, recorder = RecorderState(Recording.Idle, manga = MangaCaptureState.Capturing(target)))
             },
+            case("recorder-manga-publishing") {
+                val target = MangaCaptureTarget(MangaId(17), MangaMutationMethod.Patch)
+                val publishing = MangaCaptureState.Capturing(target, canDisarm = false)
+                Menu(ScenarioState.Unavailable, recorder = RecorderState(Recording.Idle, manga = publishing))
+            },
             case("recorder-manga-complete") {
                 val target = MangaCaptureTarget(MangaId(17), MangaMutationMethod.Patch)
                 val directory =
