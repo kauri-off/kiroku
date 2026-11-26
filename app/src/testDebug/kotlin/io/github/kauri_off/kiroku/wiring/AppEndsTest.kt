@@ -1,19 +1,25 @@
 package io.github.kauri_off.kiroku.wiring
 
 import android.content.Context
+import android.os.Looper
 import androidx.work.CoroutineWorker
 import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.WorkManager
 import androidx.work.WorkerParameters
+import io.github.kauri_off.kiroku.KirokuApplication
 import io.github.kauri_off.kiroku.notify.TestScheduledWork
 import io.github.kauri_off.kiroku.source.DataSource
 import io.github.kauri_off.kiroku.source.StartsOn
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeout
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -62,6 +68,34 @@ class AppEndsTest {
         } finally {
             listener.cancel()
         }
+    }
+
+    @Test
+    fun `app teardown waits for cancellation cleanup on the main looper`() {
+        val app = app as KirokuApplication
+        val started = CompletableDeferred<Unit>()
+        var cleanupLooper: Looper? = null
+        val held =
+            app.heldRuns.held(30.seconds, {}) {
+                try {
+                    started.complete(Unit)
+                    awaitCancellation()
+                } finally {
+                    withContext(NonCancellable + Dispatchers.Main) {
+                        cleanupLooper = Looper.myLooper()
+                    }
+                }
+            }
+        runBlocking { withTimeout(10.seconds) { started.await() } }
+
+        val test =
+            object : Statement() {
+                override fun evaluate() = Unit
+            }
+        AppEnds().apply(test, Description.EMPTY).evaluate()
+
+        assertTrue(held.isCompleted)
+        assertEquals(Looper.getMainLooper(), cleanupLooper)
     }
 
     @Test
