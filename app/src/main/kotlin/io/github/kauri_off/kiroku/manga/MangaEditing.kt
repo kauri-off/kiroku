@@ -25,6 +25,7 @@ import io.github.kauri_off.kiroku.edit.MangaEditSheetState
 import io.github.kauri_off.kiroku.edit.MangaEditSubmission
 import io.github.kauri_off.kiroku.edit.MangaEditTotals
 import io.github.kauri_off.kiroku.shell.Destination
+import io.github.kauri_off.kiroku.shell.MangaChange
 import io.github.kauri_off.kiroku.shell.ShellMessage
 import io.github.kauri_off.kiroku.shell.ShellMessages
 import kotlinx.coroutines.CoroutineScope
@@ -63,10 +64,21 @@ internal data class MangaEditingState(
     val owner: SignInId? = null,
     val snapshot: MangaListSnapshot? = null,
     val observed: Boolean = false,
+    val snapshotReadable: Boolean = false,
     val signedIn: Boolean = false,
     val pending: Map<MangaId, MangaListEdit> = emptyMap(),
     val open: OpenMangaEditor? = null,
+    val adding: Set<MangaId> = emptySet(),
+    val reconcilingAdd: Set<MangaId> = emptySet(),
 ) {
+    fun canAdd(id: MangaId): Boolean =
+        signedIn &&
+            snapshotReadable &&
+            snapshot?.syncedAt != null &&
+            snapshot.entries.none { it.id == id } &&
+            id !in adding &&
+            id !in reconcilingAdd
+
     fun displayed(entry: MangaListEntry): MangaListEntry = pending[entry.id]?.appliedTo(entry) ?: entry
 }
 
@@ -90,6 +102,12 @@ internal class MangaEditing(
         val removing get() = changes == null
     }
 
+    private data class Addition(
+        val change: MangaChange,
+        val recovery: ShellMessage.Action.MangaRecovery,
+    )
+
+    private val additions = mutableMapOf<MangaId, Addition>()
     private val mutable = MutableStateFlow(MangaEditingState())
     val state = mutable.asStateFlow()
     private val operations = mutableMapOf<MangaId, Operation>()
@@ -122,6 +140,16 @@ internal class MangaEditing(
     }
 
     private fun settleRecoveries(snapshot: MangaListSnapshot) {
+        if (snapshot.syncedAt != null) {
+            additions.values.toList().forEach { addition ->
+                val change = addition.change
+                val entry = snapshot.entries.find { it.id == change.id }
+                when {
+                    entry != null -> finishAdd(change, added = addition.recovery.readOnly && entry.isPlanned)
+                    addition.recovery.readOnly -> offerAddRecovery(change, readOnly = false)
+                }
+            }
+        }
         operations.values.toList().forEach { op ->
             val entry = snapshot.entries.find { it.id == op.id }
             when (op.phase) {
@@ -154,6 +182,7 @@ internal class MangaEditing(
         val previous = mutable.value
         previous.owner?.let(messages::retireManga)
         operations.clear()
+        additions.clear()
         mutable.value =
             MangaEditingState(
                 owner = next,
@@ -171,14 +200,19 @@ internal class MangaEditing(
             when (stored) {
                 is Outcome.Success -> {
                     val snapshot = stored.value?.takeIf { it.owner == owner }
-                    mutable.value = mutable.value.copy(snapshot = snapshot, observed = true)
-                    if (session is Session.SignedIn && snapshot != null) settleRecoveries(snapshot)
+                    mutable.value = mutable.value.copy(snapshot = snapshot, observed = true, snapshotReadable = true)
+                    if (session is Session.SignedIn && snapshot != null) {
+                        if (snapshot.syncedAt != null) {
+                            messages.retireMangaChanges(owner) { id -> snapshot.entries.none { it.id == id } }
+                        }
+                        settleRecoveries(snapshot)
+                    }
                 }
                 is Outcome.Failure -> {
                     if (stored.error == DataError.ListEnded) {
                         retire(null, signedIn = false)
                     } else {
-                        mutable.value = mutable.value.copy(observed = true)
+                        mutable.value = mutable.value.copy(observed = true, snapshotReadable = false)
                     }
                 }
             }
@@ -186,18 +220,27 @@ internal class MangaEditing(
         }
 
     fun listRefreshed(snapshot: MangaListSnapshot) {
+        val removals = removalRefreshes(snapshot.owner)
+        scope.launch { publishRefresh(snapshot, removals) }
+    }
+
+    private fun removalRefreshes(owner: SignInId): List<Operation> =
+        operations.values.filter { it.owner == owner && it.removing && it.phase == Phase.Refresh }
+
+    private suspend fun publishRefresh(
+        snapshot: MangaListSnapshot,
+        removalRefreshes: List<Operation> = removalRefreshes(snapshot.owner),
+    ): Outcome<MangaListSnapshot?> {
         val owner = snapshot.owner
-        val removalRefreshes = operations.values.filter { it.owner == owner && it.removing && it.phase == Phase.Refresh }
-        scope.launch {
-            if (!active(owner)) return@launch
-            if (snapshot.syncedAt != null) {
-                removalRefreshes.forEach { op ->
-                    if (operations[op.id] === op) readyToRetry(op, snapshot)
-                }
+        if (!active(owner)) return Outcome.Failure(DataError.ListEnded)
+        if (snapshot.syncedAt != null) {
+            removalRefreshes.forEach { op ->
+                if (operations[op.id] === op) readyToRetry(op, snapshot)
             }
-            readSnapshot(owner)
-            if (mutable.value.owner == owner && observerStopped) observation.value++
         }
+        val stored = readSnapshot(owner)
+        if (mutable.value.owner == owner && observerStopped) observation.value++
+        return stored
     }
 
     suspend fun loadMembership(
@@ -207,11 +250,150 @@ internal class MangaEditing(
     ): Outcome<MangaListSnapshot>? {
         val caller = currentCoroutineContext()
         if (!active(owner) || !isShowing()) return null
-        if (!force && mutable.value.snapshot?.syncedAt != null) return null
+        if (!force && mutable.value.let { it.snapshotReadable && it.snapshot?.syncedAt != null }) return null
         val result = editor.refresh(owner) { caller.isActive && isShowing() && mutable.value.owner == owner && mutable.value.signedIn }
-        if (result is Outcome.Success) listRefreshed(result.value)
-        return result.takeIf { active(owner) }
+        if (!active(owner)) return null
+        if (result !is Outcome.Success) return result
+        return when (val stored = publishRefresh(result.value)) {
+            is Outcome.Success -> stored.value?.let { Outcome.Success(it) } ?: Outcome.Failure(DataError.StorageError)
+            is Outcome.Failure -> stored
+        }.takeIf { active(owner) }
     }
+
+    fun addPlanned(
+        owner: SignInId,
+        id: MangaId,
+        title: String,
+        totals: MangaEditTotals,
+    ) {
+        if (mutable.value.owner != owner || !mutable.value.canAdd(id)) return
+        submitAdd(MangaChange(id, owner, title, totals))
+    }
+
+    private fun submitAdd(change: MangaChange) {
+        val (id, owner) = change
+        clearAddRecovery(id)
+        mutable.value = mutable.value.copy(adding = mutable.value.adding + id)
+        scope.launch {
+            if (!active(owner)) return@launch
+            val result = editor.addPlanned(owner, id)
+            if (!active(owner)) return@launch
+            if (result == MangaListEditResult.Failed(DataError.ListEnded)) {
+                retire(null, signedIn = false)
+                return@launch
+            }
+            val stored = readSnapshot(owner)
+            if (!active(owner)) return@launch
+            val snapshot = (stored as? Outcome.Success)?.value?.takeIf { it.syncedAt != null }
+            val entry = snapshot?.entries?.find { it.id == id }
+            val needsReadBack =
+                when (result) {
+                    is MangaListEditResult.Accepted ->
+                        result.readBack is Outcome.Failure &&
+                            result.readBack != Outcome.Failure(DataError.NotFound)
+                    is MangaListEditResult.Uncertain -> result.needsRefresh
+                    else -> false
+                }
+            when {
+                result is MangaListEditResult.Confirmed -> finishAdd(change, added = true)
+                result == MangaListEditResult.Discarded || result is MangaListEditResult.Accepted && result.readBack is Outcome.Success ->
+                    finishAdd(change)
+                entry != null -> finishAdd(change, added = needsReadBack && entry.isPlanned)
+                result == MangaListEditResult.Failed(DataError.SessionExpired) -> {
+                    finishAdd(change)
+                    messages.post(ShellMessage(ShellMessage.Text.CouldNotSave, mangaOwner = owner))
+                }
+                else -> offerAddRecovery(change, readOnly = snapshot == null)
+            }
+        }
+    }
+
+    private fun offerAddRecovery(
+        change: MangaChange,
+        readOnly: Boolean,
+    ) {
+        val (id, owner) = change
+        clearAddRecovery(id)
+        lateinit var recovery: ShellMessage.Action.MangaRecovery
+        recovery =
+            ShellMessage.Action.MangaRecovery(readOnly) {
+                if (additions[id]?.recovery === recovery && mutable.value.let { it.owner == owner && it.signedIn }) {
+                    if (readOnly) {
+                        reconcileAdd(change)
+                    } else {
+                        submitAdd(change)
+                    }
+                }
+            }
+        additions[id] = Addition(change, recovery)
+        val state = mutable.value
+        mutable.value =
+            state.copy(adding = state.adding - id, reconcilingAdd = if (readOnly) state.reconcilingAdd + id else state.reconcilingAdd - id)
+        val text = if (readOnly) ShellMessage.Text.MangaUnconfirmed else ShellMessage.Text.CouldNotSave
+        messages.post(ShellMessage(text, recovery, mangaOwner = owner))
+    }
+
+    fun refreshAdd(
+        owner: SignInId,
+        id: MangaId,
+    ) {
+        val addition = additions[id]?.takeIf { it.change.owner == owner && it.recovery.readOnly } ?: return
+        addition.recovery.run()
+    }
+
+    private fun reconcileAdd(change: MangaChange) {
+        val (id, owner) = change
+        clearAddRecovery(id)
+        mutable.value = mutable.value.copy(adding = mutable.value.adding + id)
+        scope.launch {
+            if (!active(owner)) return@launch
+            val result =
+                when (val refreshed = editor.refresh(owner)) {
+                    is Outcome.Success -> readSnapshot(owner)
+                    else -> refreshed
+                }
+            if (!active(owner)) return@launch
+            if (result == Outcome.Failure(DataError.ListEnded)) {
+                retire(null, signedIn = false)
+                return@launch
+            }
+            val snapshot = (result as? Outcome.Success)?.value?.takeIf { it.syncedAt != null }
+            val entry = snapshot?.entries?.find { it.id == id }
+            if (entry != null) {
+                finishAdd(change, added = entry.isPlanned)
+            } else {
+                val current = mutable.value
+                when {
+                    current.snapshotReadable && current.snapshot?.entries?.any { it.id == id } == true -> finishAdd(change)
+                    else ->
+                        offerAddRecovery(
+                            change,
+                            readOnly =
+                                snapshot == null || !current.snapshotReadable || current.snapshot?.syncedAt == null,
+                        )
+                }
+            }
+        }
+    }
+
+    private fun clearAddRecovery(id: MangaId) {
+        additions.remove(id)?.recovery?.let(messages::remove)
+    }
+
+    private fun finishAdd(
+        change: MangaChange,
+        added: Boolean = false,
+    ) {
+        clearAddRecovery(change.id)
+        val state = mutable.value
+        mutable.value = state.copy(adding = state.adding - change.id, reconcilingAdd = state.reconcilingAdd - change.id)
+        if (added) {
+            val action = change.takeIf { state.snapshotReadable && state.snapshot?.entries?.any { it.id == change.id } == true }
+            messages.post(ShellMessage(ShellMessage.Text.AddedToPlanned, action, mangaOwner = change.owner))
+        }
+    }
+
+    private val MangaListEntry.isPlanned get() = status == MangaListStatus.PlanToRead.readingStatus
 
     fun dismissPresentation(instance: Long? = null) {
         if (instance == null || mutable.value.open?.instance == instance) mutable.value = mutable.value.copy(open = null)
@@ -370,6 +552,7 @@ internal class MangaEditing(
     }
 
     private suspend fun settle(op: Operation) {
+        if (op.removing) messages.retireMangaChange(op.owner, op.id)
         val stored = readSnapshot(op.owner)
         if (!active(op.owner) || operations[op.id] !== op) return
         if (stored == Outcome.Failure(DataError.ListEnded)) {
@@ -516,6 +699,7 @@ internal class MangaEditing(
         failed: Boolean = false,
     ) {
         operations.remove(op.id)?.action?.let(messages::remove)
+        if (op.removing && !failed) messages.retireMangaChange(op.owner, op.id)
         val state = mutable.value
         val open =
             state.open?.let {

@@ -340,21 +340,30 @@ private fun ListBlock(
     onEvent: (TitleEvent) -> Unit,
 ) {
     if (entry == null) {
-        Button(
+        TitleAddButton(
             onClick = { onEvent(TitleEvent.AddToList) },
-            shapes = ButtonDefaults.shapesFor(PrimaryButtonHeight),
-            contentPadding = ButtonDefaults.contentPaddingFor(PrimaryButtonHeight),
-            modifier =
-                Modifier
-                    .padding(horizontal = Spacing.l)
-                    .heightIn(min = PrimaryButtonHeight)
-                    .fillMaxWidth(),
-        ) {
-            Text(stringResource(R.string.title_add_to_list), style = ButtonDefaults.textStyleFor(PrimaryButtonHeight))
-        }
+            modifier = Modifier.padding(horizontal = Spacing.l).fillMaxWidth(),
+        )
         return
     }
     OnList(entry, total, onEvent)
+}
+
+@Composable
+internal fun TitleAddButton(
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    enabled: Boolean = true,
+) {
+    Button(
+        onClick = onClick,
+        enabled = enabled,
+        shapes = ButtonDefaults.shapesFor(PrimaryButtonHeight),
+        contentPadding = ButtonDefaults.contentPaddingFor(PrimaryButtonHeight),
+        modifier = modifier.heightIn(min = PrimaryButtonHeight),
+    ) {
+        Text(stringResource(R.string.title_add_to_list), style = ButtonDefaults.textStyleFor(PrimaryButtonHeight))
+    }
 }
 
 // The status across the width, where "Add to list" stands for a title not on the list; under it the two values the

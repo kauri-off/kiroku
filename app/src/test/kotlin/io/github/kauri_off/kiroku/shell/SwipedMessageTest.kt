@@ -9,7 +9,6 @@ import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.SnackbarResult
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.Recomposer
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -474,7 +473,10 @@ class SwipedMessageMotionTest {
 
     private fun assertIdle() {
         compose.mainClock.advanceTimeByFrame()
-        assertTrue(Recomposer.runningRecomposers.value.none { it.hasPendingWork })
+        val settledAt = compose.mainClock.currentTime
+        compose.mainClock.autoAdvance = true
+        compose.waitForIdle()
+        assertEquals("The snackbar still needed animation frames", settledAt, compose.mainClock.currentTime)
     }
 
     private fun followsTheFinger(direction: LayoutDirection) {

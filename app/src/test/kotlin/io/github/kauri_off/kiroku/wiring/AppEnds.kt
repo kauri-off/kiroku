@@ -5,6 +5,9 @@ import androidx.work.WorkManager
 import io.github.kauri_off.kiroku.KirokuApplication
 import io.github.kauri_off.kiroku.notify.TestScheduledWork
 import io.github.kauri_off.kiroku.reports.reportLog
+import kotlinx.coroutines.CoroutineStart
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
 import org.junit.Assert.assertEquals
@@ -18,9 +21,20 @@ import kotlin.time.Duration.Companion.seconds
 class AppEnds : ExternalResource() {
     override fun after() {
         val app = RuntimeEnvironment.getApplication()
-        (app as? KirokuApplication)?.let { runBlocking { withTimeout(WAIT) { it.endWork() } } }
+        val looper = shadowOf(Looper.getMainLooper())
+        if (app is KirokuApplication) {
+            runBlocking {
+                withTimeout(WAIT) {
+                    val ending = launch(start = CoroutineStart.UNDISPATCHED) { app.endWork() }
+                    while (!ending.isCompleted) {
+                        looper.idle()
+                        delay(1)
+                    }
+                }
+            }
+        }
         reportLog.forget()
-        shadowOf(Looper.getMainLooper()).idle()
+        looper.idle()
         val clockSet = shadowOf(app).registeredReceivers.filter { receiver -> CLOCK_SET.any(receiver.intentFilter::hasAction) }
         assertEquals(emptyList<Any>(), clockSet)
         TestScheduledWork.end()

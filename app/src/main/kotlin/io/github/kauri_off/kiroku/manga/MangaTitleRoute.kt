@@ -93,6 +93,17 @@ internal fun MangaTitleRoute(
             null
         }
     val membershipError = membership?.error?.collectAsScreenState()?.value
+    val checking = membership?.checking?.collectAsScreenState()?.value == true
+    val id = MangaId(key.id)
+    val reconciling = membership != null && !state.sessionExpired && editing?.reconcilingAdd?.contains(id) == true
+    val addAction =
+        when {
+            membership == null || editing == null || state.sessionExpired -> null
+            reconciling -> null
+            id in editing.adding -> MangaAddAction.Saving
+            !checking && membershipError == null && editing.canAdd(id) -> MangaAddAction.Available
+            else -> null
+        }
     val entry =
         editing
             ?.snapshot
@@ -100,12 +111,29 @@ internal fun MangaTitleRoute(
             ?.find { it.id.value == key.id }
             ?.let(editing::displayed)
     MangaTitleScreen(
-        state.copy(listEntry = entry.takeIf { editing?.signedIn == true }, membershipError = membershipError),
+        state.copy(
+            listEntry = entry.takeIf { editing?.signedIn == true && addAction == null },
+            membershipError = membershipError,
+            addAction = addAction,
+            reconcilingAdd = reconciling,
+            checkingMembership = checking || (reconciling && id in editing.adding),
+        ),
         onEvent = {
             when (it) {
                 MangaTitleEvent.Back -> onBack()
                 MangaTitleEvent.SignIn -> onSignIn()
-                MangaTitleEvent.RetryMembership -> membership?.request(force = true)
+                MangaTitleEvent.RetryMembership -> {
+                    if (reconciling && owner != null) editor.refreshAdd(owner, id) else membership?.request(force = true)
+                }
+                MangaTitleEvent.AddToList ->
+                    if (addAction == MangaAddAction.Available &&
+                        membership?.checking?.value == false &&
+                        membership.error.value == null &&
+                        owner != null &&
+                        content != null
+                    ) {
+                        editor.addPlanned(owner, id, content.title, MangaEditTotals(content.details.chapters, content.details.volumes))
+                    }
                 MangaTitleEvent.Edit ->
                     if (entry != null &&
                         owner != null &&
@@ -136,6 +164,7 @@ internal class MangaMembership(
     private val owner: SignInId,
 ) {
     val error = MutableStateFlow<DataError?>(null)
+    val checking = MutableStateFlow(false)
     private var pending = false
     private var covered = false
     private var load: Job? = null
@@ -154,6 +183,7 @@ internal class MangaMembership(
     fun request(force: Boolean = false) {
         pending = pending || force
         if (!loads.isShowing || load?.isActive == true) return
+        checking.value = true
         load =
             scope.launch(start = CoroutineStart.LAZY) {
                 val explicit = pending
@@ -162,11 +192,13 @@ internal class MangaMembership(
                 val result = editor.loadMembership(owner, explicit) { loads.isShowing }
                 load = null
                 if (result == null) {
+                    checking.value = false
                     pending = pending || (explicit && (covered || !loads.isShowing))
                     if (pending && loads.isShowing) request()
                     return@launch
                 }
                 error.value = (result as? Outcome.Failure)?.error?.takeUnless { it == DataError.ListEnded }
+                checking.value = false
                 loads.ended(error.value, retryAfterHiddenFailure = covered || !loads.isShowing)
                 if (pending) request()
             }

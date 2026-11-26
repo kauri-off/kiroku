@@ -88,7 +88,7 @@ fun actionLabel(action: ShellMessage.Action): String =
         when (action) {
             is ShellMessage.Action.Undo -> R.string.common_undo
             is ShellMessage.Action.Retry -> R.string.design_retry
-            is ShellMessage.Action.Change -> R.string.title_change
+            is ShellMessage.Action.Change, is MangaChange -> R.string.title_change
             is ShellMessage.Action.MangaRecovery -> if (action.readOnly) R.string.manga_edit_refresh_list else R.string.design_retry
         },
     )

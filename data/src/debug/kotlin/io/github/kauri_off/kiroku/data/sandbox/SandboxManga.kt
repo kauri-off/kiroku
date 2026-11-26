@@ -13,8 +13,10 @@ import io.github.kauri_off.kiroku.core.model.SignInId
 import io.github.kauri_off.kiroku.core.model.Titles
 import io.github.kauri_off.kiroku.core.repository.MangaListEdit
 import io.github.kauri_off.kiroku.core.repository.MangaListEditor
+import io.github.kauri_off.kiroku.core.repository.MangaListStatus
 import io.github.kauri_off.kiroku.core.repository.MangaRepository
 import io.github.kauri_off.kiroku.core.repository.StoredManga
+import io.github.kauri_off.kiroku.core.repository.readingStatus
 import io.github.kauri_off.kiroku.data.db.KirokuDatabase
 import io.github.kauri_off.kiroku.data.manga.MangaWriteResult
 import io.github.kauri_off.kiroku.data.manga.RoomMangaList
@@ -55,6 +57,11 @@ class SandboxManga(
         canDispatch: () -> Boolean,
     ) = list.refresh(owner, canDispatch)
 
+    override suspend fun addPlanned(
+        owner: SignInId,
+        id: MangaId,
+    ) = list.addPlanned(owner, id)
+
     override suspend fun edit(
         owner: SignInId,
         id: MangaId,
@@ -74,7 +81,10 @@ class SandboxManga(
         owner: SignInId,
         id: MangaId,
         changes: MangaListEdit,
-    ): MangaWriteResult = changeEntry(owner, id) { changes.appliedTo(it).copy(updatedAt = clock.instant()) }
+    ): MangaWriteResult =
+        changeEntry(owner, id, create = changes.status == MangaListStatus.PlanToRead) {
+            changes.appliedTo(it).copy(updatedAt = clock.instant())
+        }
 
     private suspend fun delete(
         owner: SignInId,
@@ -84,6 +94,7 @@ class SandboxManga(
     private suspend fun changeEntry(
         owner: SignInId,
         id: MangaId,
+        create: Boolean = false,
         change: (MangaListEntry) -> MangaListEntry?,
     ): MangaWriteResult =
         when (
@@ -93,10 +104,22 @@ class SandboxManga(
                         SandboxWrites.Refused -> Outcome.Failure(DataError.Refused)
                         SandboxWrites.Fail -> Outcome.Success(MangaWriteResult.Unknown(DataError.ServerError))
                         SandboxWrites.Work -> {
-                            val entry = currentEntries.firstOrNull { it.id == id } ?: return@withList Outcome.Failure(DataError.NotFound)
+                            val current = currentEntries.firstOrNull { it.id == id }
+                            val entry =
+                                current ?: entries.firstOrNull { create && it.id == id }?.let {
+                                    MangaListEntry(
+                                        id,
+                                        it.titles,
+                                        MangaListStatus.PlanToRead.readingStatus,
+                                        posterUrl = it.posterUrl,
+                                        chaptersRead = 0,
+                                        volumesRead = 0,
+                                        explicitlyUnrated = true,
+                                    )
+                                } ?: return@withList Outcome.Failure(DataError.NotFound)
                             val replacement = change(entry)
-                            val next = currentEntries.mapNotNull { if (it.id == id) replacement else it }
-                            if (replacement == null) keepRemovals(owner, next)
+                            val next = currentEntries.filterNot { it.id == id } + listOfNotNull(replacement)
+                            if (current == null || replacement == null) keepRemovals(owner, next)
                             currentEntries = next
                             Outcome.Success(MangaWriteResult.Accepted)
                         }

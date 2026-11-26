@@ -41,6 +41,7 @@ import io.github.kauri_off.kiroku.core.repository.StoredManga
 import io.github.kauri_off.kiroku.design.composeRule
 import io.github.kauri_off.kiroku.design.registered
 import io.github.kauri_off.kiroku.design.theme.KirokuTheme
+import io.github.kauri_off.kiroku.manga.MangaAddRouteList
 import io.github.kauri_off.kiroku.manga.mangaFixture
 import io.github.kauri_off.kiroku.shell.AppRoute
 import io.github.kauri_off.kiroku.wiring.AppGraph
@@ -85,6 +86,62 @@ class MangaCatalogueRouteTest {
     private val title = mangaFixture.titles.romaji
     private val inDialog = hasAnyAncestor(isDialog())
     private val scrollable = SemanticsMatcher.keyIsDefined(SemanticsActions.ScrollToIndex)
+
+    @Test
+    fun `an unowned Search result can be added and appears in My list Manga Planned`() {
+        val list = MangaAddRouteList(demo.clock)
+        catalogue(list = list)
+        compose.onNode(hasSetTextAction() and !inDialog).performClick()
+        settle()
+        compose.onNode(hasSetTextAction() and isFocused() and inDialog).performTextInput("paper")
+        settle()
+        compose.onNode(hasText("Retry") and inDialog).performClick()
+        settle()
+        compose.onNode(scrollable and inDialog).performScrollToIndex(19)
+        settle()
+        compose.onNode(scrollable and inDialog).performScrollToIndex(20)
+        compose.onNode(hasText(title) and inDialog).performClick()
+        settle()
+        addPlanned(list)
+
+        compose.runOnUiThread { compose.activity.onBackPressedDispatcher.onBackPressed() }
+        settle()
+        compose.onNodeWithContentDescription("Back").performClick()
+        settle()
+        compose.onNodeWithText("List").performClick()
+        settle()
+        compose.onNodeWithText("Manga").performClick()
+        settle()
+        compose.onNodeWithText("Planned").performClick()
+        settle()
+        compose.onNodeWithText(title).assertIsDisplayed()
+        assertTrue(list.membershipReads.isEmpty())
+    }
+
+    @Test
+    fun `an unowned Ranking result exposes the same Planned action`() {
+        val list = MangaAddRouteList(demo.clock)
+        catalogue(list = list)
+        compose.onNodeWithText("Manga ranking").performClick()
+        settle()
+        compose.onNode(scrollable).performScrollToIndex(19)
+        settle()
+        compose.onNode(scrollable).performScrollToIndex(20)
+        compose.onNodeWithText("Retry").performClick()
+        settle()
+        compose.onNode(scrollable).performScrollToIndex(20)
+        compose.onNodeWithText("21.\u00a0$title").performClick()
+        settle()
+        addPlanned(list)
+    }
+
+    private fun addPlanned(list: MangaAddRouteList) {
+        compose.onNodeWithText("Add to list").performClick()
+        settle()
+        compose.onNodeWithText("Add to list").assertDoesNotExist()
+        compose.onNode(hasText("Planned") and hasClickAction()).assertExists()
+        assertEquals(listOf(mangaFixture.id), list.additions.map { it.second })
+    }
 
     @Test
     fun `manga search retries its first page and Back keeps its query and scrolled continuation`() {
@@ -291,10 +348,13 @@ class MangaCatalogueRouteTest {
         restore: StateRestorationTester? = null,
         openManga: Boolean = true,
         additionalQueries: Set<String> = emptySet(),
+        list: MangaAddRouteList? = null,
     ) {
         val graph =
             object : AppGraph by demo {
                 override val madeUp = false
+                override val mangaListEditor = list
+                override val mangaList = list
                 override val mangaCatalogue =
                     object : MangaCatalogue {
                         override suspend fun search(

@@ -125,6 +125,116 @@ class RoomMangaListTest {
         )
 
     @Test
+    fun `add sends only Planned and confirms it from read back before a second add can run`() =
+        runBlocking {
+            val owner = signIn("a")
+            val list = repository()
+            val initial = entry()
+            val added = entry(18).copy(status = MangaReadingStatus("plan_to_read"), score = null, volumesRead = 0)
+            val requests = mutableListOf<String>()
+            val dispatched = CompletableDeferred<Unit>()
+            response = { Outcome.Success(listOf(initial)).also { requests += "read" } }
+            write = { asked, id, patch ->
+                assertEquals(owner to added.id, asked to id)
+                assertEquals(mapOf("status" to "plan_to_read"), patch.form())
+                assertNull((list.stored(owner) as Outcome.Success).value?.syncedAt)
+                requests += "patch"
+                dispatched.complete(Unit)
+                response = { Outcome.Success(listOf(initial, added)).also { requests += "read" } }
+                MangaWriteResult.Accepted
+            }
+            val pending = async { list.addPlanned(owner, added.id) }
+            val second =
+                async {
+                    dispatched.await()
+                    list.addPlanned(owner, added.id)
+                }
+            assertEquals(MangaListEditResult.Confirmed(added), pending.await())
+            assertEquals(MangaListEditResult.Discarded, second.await())
+            assertEquals(listOf("read", "patch", "read", "read"), requests)
+            assertEquals(Outcome.Success(MangaListSnapshot(owner, listOf(initial, added), clock.now)), list.stored(owner))
+        }
+
+    @Test
+    fun `a failed absence check and a title added elsewhere both prevent a patch`() =
+        runBlocking {
+            val owner = signIn("a")
+            val list = repository()
+            val existing = entry()
+            response = { Outcome.Success(emptyList()) }
+            list.refresh(owner)
+
+            response = { Outcome.Failure(DataError.NoConnection) }
+            assertEquals(MangaListEditResult.Failed(DataError.NoConnection), list.addPlanned(owner, existing.id))
+            response = { Outcome.Success(listOf(existing)) }
+            assertEquals(MangaListEditResult.Discarded, list.addPlanned(owner, existing.id))
+            assertEquals(Outcome.Success(MangaListSnapshot(owner, listOf(existing), clock.now)), list.stored(owner))
+        }
+
+    @Test
+    fun `an ambiguous add with failed read back stays unconfirmed and reads before any repeat`() =
+        runBlocking {
+            val owner = signIn("a")
+            val list = repository()
+            val added = entry().copy(status = MangaReadingStatus("plan_to_read"))
+            response = { Outcome.Success(emptyList()) }
+            var writes = 0
+            write = { _, _, _ ->
+                writes++
+                response = { Outcome.Failure(DataError.NoConnection) }
+                MangaWriteResult.Unknown(DataError.NoConnection)
+            }
+
+            assertEquals(MangaListEditResult.Uncertain(DataError.NoConnection, needsRefresh = true), list.addPlanned(owner, added.id))
+            assertEquals(Outcome.Success(MangaListSnapshot(owner, emptyList(), null)), list.stored(owner))
+            assertEquals(MangaListEditResult.Failed(DataError.NoConnection), list.addPlanned(owner, added.id))
+            response = { Outcome.Success(listOf(added)) }
+            assertEquals(MangaListEditResult.Discarded, list.addPlanned(owner, added.id))
+            assertEquals(1, writes)
+            assertEquals(Outcome.Success(MangaListSnapshot(owner, listOf(added), clock.now)), list.stored(owner))
+        }
+
+    @Test
+    fun `an add settles without retry when serialized read back finds another status`() =
+        runBlocking {
+            val owner = signIn("a")
+            val list = repository()
+            val existing = entry()
+            for (ack in listOf(MangaWriteResult.Accepted, MangaWriteResult.Unknown(DataError.ServerError))) {
+                response = { Outcome.Success(emptyList()) }
+                write = { _, _, _ ->
+                    response = { Outcome.Success(listOf(existing)) }
+                    ack
+                }
+                assertEquals(MangaListEditResult.Discarded, list.addPlanned(owner, existing.id))
+                assertEquals(Outcome.Success(MangaListSnapshot(owner, listOf(existing), clock.now)), list.stored(owner))
+            }
+        }
+
+    @Test
+    fun `sign-in replacement during the absence check prevents the add`() =
+        runBlocking {
+            val owner = signIn("a")
+            val list = repository()
+            val checking = CompletableDeferred<Unit>()
+            val release = CompletableDeferred<Unit>()
+            response = { asked ->
+                assertEquals(owner, asked)
+                checking.complete(Unit)
+                release.await()
+                Outcome.Success(emptyList())
+            }
+            val pending = async { list.addPlanned(owner, entry().id) }
+            try {
+                withTimeout(5_000) { checking.await() }
+                signIn("b")
+            } finally {
+                release.complete(Unit)
+            }
+            assertEquals(MangaListEditResult.Failed(DataError.ListEnded), pending.await())
+        }
+
+    @Test
     fun `removal leaves confirmed rows visible until full read back and serializes a queued patch`() =
         runBlocking {
             val owner = signIn("a")

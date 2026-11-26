@@ -35,6 +35,7 @@ import io.github.kauri_off.kiroku.design.component.TitleText
 import io.github.kauri_off.kiroku.design.theme.Spacing
 import io.github.kauri_off.kiroku.title.MalScore
 import io.github.kauri_off.kiroku.title.PublicTitleStats
+import io.github.kauri_off.kiroku.title.TitleAddButton
 import io.github.kauri_off.kiroku.title.TitleStatusButton
 import io.github.kauri_off.kiroku.title.countText
 import io.github.kauri_off.kiroku.title.message
@@ -46,7 +47,12 @@ internal data class MangaTitleState(
     val sessionExpired: Boolean = false,
     val listEntry: MangaListEntry? = null,
     val membershipError: DataError? = null,
+    val addAction: MangaAddAction? = null,
+    val reconcilingAdd: Boolean = false,
+    val checkingMembership: Boolean = false,
 )
+
+internal enum class MangaAddAction { Available, Saving }
 
 internal sealed interface MangaTitleContent {
     data object Loading : MangaTitleContent
@@ -73,7 +79,7 @@ internal sealed interface MangaTitleProblem {
     ) : MangaTitleProblem
 }
 
-internal enum class MangaTitleEvent { Back, Retry, Refresh, SignIn, Edit, RetryMembership }
+internal enum class MangaTitleEvent { Back, Retry, Refresh, SignIn, Edit, AddToList, RetryMembership }
 
 @Composable
 internal fun MangaTitleScreen(
@@ -104,15 +110,33 @@ internal fun MangaTitleScreen(
                         state.listEntry?.let { entry ->
                             item { MangaOnList(entry) { onEvent(MangaTitleEvent.Edit) } }
                         }
-                        state.membershipError?.let {
+                        state.addAction?.let { action ->
+                            item {
+                                TitleAddButton(
+                                    onClick = { onEvent(MangaTitleEvent.AddToList) },
+                                    modifier = Modifier.padding(start = Spacing.l, end = Spacing.l, top = Spacing.xl).fillMaxWidth(),
+                                    enabled = action == MangaAddAction.Available,
+                                )
+                            }
+                        }
+                        if (state.reconcilingAdd || state.membershipError != null) {
                             item {
                                 Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
                                     Text(
-                                        stringResource(R.string.manga_edit_membership_failed),
+                                        stringResource(
+                                            if (state.reconcilingAdd) {
+                                                R.string.manga_edit_unconfirmed
+                                            } else {
+                                                R.string.manga_edit_membership_failed
+                                            },
+                                        ),
                                         modifier = Modifier.padding(horizontal = Spacing.l),
                                         textAlign = TextAlign.Center,
                                     )
-                                    TextButton(onClick = { onEvent(MangaTitleEvent.RetryMembership) }) {
+                                    TextButton(
+                                        onClick = { onEvent(MangaTitleEvent.RetryMembership) },
+                                        enabled = !state.checkingMembership,
+                                    ) {
                                         Text(stringResource(R.string.manga_edit_refresh_list))
                                     }
                                 }

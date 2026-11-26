@@ -364,6 +364,11 @@ class ListModesRouteTest {
                     retry: Boolean,
                 ) = error("This test only edits a status")
 
+                override suspend fun addPlanned(
+                    owner: SignInId,
+                    id: MangaId,
+                ) = error("Unexpected add")
+
                 override suspend fun edit(
                     owner: SignInId,
                     id: MangaId,
@@ -515,6 +520,11 @@ class ListModesRouteTest {
                     retry: Boolean,
                 ): MangaListRemovalResult = error("This test only saves changes")
 
+                override suspend fun addPlanned(
+                    owner: SignInId,
+                    id: MangaId,
+                ) = error("Unexpected add")
+
                 override suspend fun edit(
                     owner: SignInId,
                     id: MangaId,
@@ -607,6 +617,11 @@ class ListModesRouteTest {
                     saved.value = saved.value.filter { it.id != baseline.id }
                     return MangaListRemovalResult.Removed
                 }
+
+                override suspend fun addPlanned(
+                    owner: SignInId,
+                    id: MangaId,
+                ) = error("Unexpected add")
 
                 override suspend fun edit(
                     owner: SignInId,
