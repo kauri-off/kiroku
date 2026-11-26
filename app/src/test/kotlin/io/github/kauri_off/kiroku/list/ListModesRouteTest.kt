@@ -6,6 +6,7 @@ import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.remember
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.semantics.ProgressBarRangeInfo
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.semantics.SemanticsProperties
@@ -98,6 +99,60 @@ class ListModesRouteTest {
 
     @get:Rule
     val rule: TestRule = registered(compose) { scope.cancel() }
+
+    @Test
+    fun `switching to Manga leaves the pull indicator idle while a stale list refreshes`() {
+        val entry = entries.first()
+        val now = demo.clock.instant()
+        var syncedAt = now
+        var refreshes = 0
+        var answer = CompletableDeferred<Unit>()
+        val graph =
+            object : AppGraph by demo {
+                override val mangaList =
+                    object : MangaListReader {
+                        override suspend fun stored(owner: SignInId) = Outcome.Success(MangaListSnapshot(owner, listOf(entry), syncedAt))
+
+                        override suspend fun refresh(
+                            owner: SignInId,
+                            canDispatch: () -> Boolean,
+                        ): Outcome<MangaListSnapshot>? {
+                            if (!canDispatch()) return null
+                            refreshes++
+                            answer.await()
+                            syncedAt = now
+                            return stored(owner)
+                        }
+                    }
+            }
+        val pullIndicator =
+            compose.onNode(
+                SemanticsMatcher.expectValue(SemanticsProperties.ProgressBarRangeInfo, ProgressBarRangeInfo.Indeterminate),
+            )
+        compose.setContent { KirokuTheme(dark = false, dynamicColor = false) { AppRoute(graph) } }
+        compose.onNodeWithText("Manga").performClick()
+        val row = compose.onNodeWithText(entry.titles.romaji)
+        row.assertIsDisplayed()
+        pullIndicator.assertDoesNotExist()
+        compose.runOnIdle { assertEquals(0, refreshes) }
+
+        compose.onNodeWithText("Anime").performClick()
+        compose.onNodeWithText("Watching").assertIsDisplayed()
+        compose.runOnIdle { syncedAt = now.minusSeconds(3600) }
+        compose.onNodeWithText("Manga").performClick()
+        row.assertIsDisplayed()
+        compose.runOnIdle { assertEquals(1, refreshes) }
+        pullIndicator.assertDoesNotExist()
+        compose.runOnIdle { answer.complete(Unit) }
+        row.assertIsDisplayed()
+
+        compose.runOnIdle { answer = CompletableDeferred() }
+        compose.onNode(scroller(entry.titles.romaji)).performTouchInput { swipeDown(startY = centerY, endY = bottom) }
+        compose.runOnIdle { assertEquals(2, refreshes) }
+        pullIndicator.assertIsDisplayed()
+        compose.runOnIdle { answer.complete(Unit) }
+        pullIndicator.assertDoesNotExist()
+    }
 
     @Test
     fun `the List modes restore their own controls and positions after switching and process death`() {

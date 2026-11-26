@@ -33,6 +33,7 @@ class MangaListScreenshots : ScreenshotRegistry() {
     override val cases =
         listOf(
             case("reading") { Screen(mangaListFixture()) },
+            case("refreshing") { Screen(mangaListFixture().copy(refreshing = true)) },
             case("planned") { Screen(mangaListFixture(), tab = MangaEditStatus.Planned.readingStatus) },
             case("empty-tab") { Screen(mangaListFixture(), tab = MangaEditStatus.Dropped.readingStatus) },
             case("signed-out") { Screen(MangaListContent.SignedOut) },
@@ -60,6 +61,9 @@ class MangaListScreenshots : ScreenshotRegistry() {
 
     override val transitions =
         listOf(
+            Transition("reading", start = "refreshing", millis = MotionBounds.SCREEN, name = "refresh-finished") { finished ->
+                Screen(mangaListFixture().copy(refreshing = !finished))
+            },
             Transition("planned", start = "reading", millis = MotionBounds.ENTER, lead = 16L) { changed ->
                 Screen(mangaListFixture(), tab = (if (changed) MangaEditStatus.Planned else MangaEditStatus.Reading).readingStatus)
             },

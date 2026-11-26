@@ -47,6 +47,7 @@ class MangaListViewModelTest {
     private val owner = SignInId("first")
     private val now = Instant.parse("2026-11-25T12:00:00Z")
     private var snapshot = MangaListSnapshot(owner, listOf(mangaEntry), now)
+    private var hasStoredList = true
     private val online = MutableStateFlow(false)
     private val sessions = MutableStateFlow<Session>(Session.SignedIn(owner))
     private val preferences = DemoPreferences()
@@ -69,7 +70,7 @@ class MangaListViewModelTest {
             override suspend fun stored(owner: SignInId): Outcome<MangaListSnapshot?> {
                 cachedReads++
                 cache.await()
-                return Outcome.Success(snapshot.takeIf { it.owner == owner })
+                return Outcome.Success(snapshot.takeIf { hasStoredList && it.owner == owner })
             }
 
             override suspend fun refresh(
@@ -301,6 +302,68 @@ class MangaListViewModelTest {
         }
 
     @Test
+    fun `the first download without a stored list stays in the loading state`() =
+        runTest(dispatcher) {
+            hasStoredList = false
+            answer = CompletableDeferred()
+            val vm = model()
+            try {
+                showing(vm.shown, vm.state)
+                runCurrent()
+                assertEquals(1, fetches)
+                assertEquals(MangaListContent.Loading, vm.state.value.content)
+                answer.complete(Outcome.Success(snapshot))
+                runCurrent()
+                val ready = vm.state.value.content as MangaListContent.Ready
+                assertEquals(snapshot.entries, ready.entries)
+                assertEquals(false, ready.refreshing)
+            } finally {
+                answer.complete(Outcome.Failure(DataError.NoConnection))
+                vm.viewModelScope.cancel()
+            }
+        }
+
+    @Test
+    fun `a pull during a background refresh shows feedback and offline recovery stays in the background`() =
+        runTest(dispatcher) {
+            snapshot = snapshot.copy(syncedAt = now.minusSeconds(7 * 24 * 60 * 60))
+            val first = CompletableDeferred<Outcome<MangaListSnapshot>>()
+            val recovery = CompletableDeferred<Outcome<MangaListSnapshot>>()
+            answer = first
+            val vm = model()
+            try {
+                showing(vm.shown, vm.state)
+                runCurrent()
+                assertEquals(1, fetches)
+                assertEquals(false, (vm.state.value.content as MangaListContent.Ready).refreshing)
+
+                vm.refresh()
+                runCurrent()
+                assertEquals(true, (vm.state.value.content as MangaListContent.Ready).refreshing)
+                assertEquals(1, fetches)
+
+                first.complete(Outcome.Failure(DataError.NoConnection))
+                runCurrent()
+                assertEquals(false, (vm.state.value.content as MangaListContent.Ready).refreshing)
+                assertEquals(listOf(DataError.NoConnection), failures)
+
+                answer = recovery
+                online.value = true
+                runCurrent()
+                assertEquals(2, fetches)
+                assertEquals(false, (vm.state.value.content as MangaListContent.Ready).refreshing)
+                val updated = snapshot.copy(entries = listOf(mangaEntry.copy(chaptersRead = 26)), syncedAt = now)
+                recovery.complete(Outcome.Success(updated))
+                runCurrent()
+                assertEquals(updated.entries, (vm.state.value.content as MangaListContent.Ready).entries)
+            } finally {
+                first.complete(Outcome.Failure(DataError.NoConnection))
+                recovery.complete(Outcome.Failure(DataError.NoConnection))
+                vm.viewModelScope.cancel()
+            }
+        }
+
+    @Test
     fun `reconnect retains its refresh while a fresh cache lookup is suspended`() =
         runTest(dispatcher) {
             val vm = model()
@@ -474,16 +537,18 @@ class MangaListViewModelTest {
         }
 
     @Test
-    fun `a queued refresh waits for visibility at admission and resumes after Back`() =
+    fun `a queued pull resumes after returning without carrying its indicator`() =
         runTest(dispatcher) {
             val vm = model()
+            val response = CompletableDeferred<Outcome<MangaListSnapshot>>()
             try {
                 val firstShow = showing(vm.shown, vm.state)
                 runCurrent()
                 admission = CompletableDeferred()
-                answer = CompletableDeferred(Outcome.Success(snapshot))
+                answer = response
                 vm.refresh()
                 runCurrent()
+                assertEquals(true, (vm.state.value.content as MangaListContent.Ready).refreshing)
                 firstShow.cancel()
                 runCurrent()
                 admission.complete(Unit)
@@ -493,7 +558,14 @@ class MangaListViewModelTest {
                 showing(vm.shown, vm.state)
                 runCurrent()
                 assertEquals(1, fetches)
+                assertEquals(false, (vm.state.value.content as MangaListContent.Ready).refreshing)
+                val updated = snapshot.copy(entries = listOf(mangaEntry.copy(chaptersRead = 26)))
+                response.complete(Outcome.Success(updated))
+                runCurrent()
+                assertEquals(updated.entries, (vm.state.value.content as MangaListContent.Ready).entries)
+                assertEquals(1, fetches)
             } finally {
+                response.complete(Outcome.Failure(DataError.NoConnection))
                 vm.viewModelScope.cancel()
             }
         }
