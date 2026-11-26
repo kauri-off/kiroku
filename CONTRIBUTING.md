@@ -43,8 +43,7 @@ For data instrumentation tests, start an Android emulator or connect a test devi
 
 [CI](.github/workflows/ci.yml) skips Markdown-only changes. For code pull requests it runs formatting, lint, tests,
 screenshot renders and Debug builds, including the instrumentation APK. Run connected tests locally. Full Release
-and Preview assembly runs after qualifying pushes to `main`. The
-[pull request title check](.github/workflows/pr-title.yml) also runs for Markdown-only changes.
+and Preview assembly runs after qualifying pushes to `main`.
 
 ## MyAnimeList sign-in in a fork
 
