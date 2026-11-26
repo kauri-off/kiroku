@@ -70,6 +70,7 @@ class MangaCaptureRecorder internal constructor(
     private val write: (File, String) -> Unit,
     private val time: TimeSource = TimeSource.Monotonic,
     private val erase: (File) -> Boolean = File::deleteRecursively,
+    private val rename: (File, File) -> Unit = ::moveCaptureDirectory,
 ) : MangaMutationObserver {
     private val root by lazy(directory)
     private val shown = MutableStateFlow<MangaCaptureState>(MangaCaptureState.Ready)
@@ -240,6 +241,7 @@ class MangaCaptureRecorder internal constructor(
         evidence: MangaMutationEvidence?,
     ) {
         var pending: File? = null
+        var unpublished: File? = null
         try {
             if (evidence == null) return
             withContext(Dispatchers.IO) {
@@ -255,22 +257,28 @@ class MangaCaptureRecorder internal constructor(
                     }
                 val directory = pending
                 val staged = directory != null && storage { stage(directory, evidence, run.target.method) } == true
+                if (!synchronized(lock) { current(run) }) return@withContext
+                caller.ensureActive()
+                val completed =
+                    directory?.takeIf { staged }?.let {
+                        val destination = File(it.parentFile, it.name.replaceFirst("run-", "capture-"))
+                        unpublished = destination
+                        storage {
+                            rename(it, destination)
+                            pending = null
+                            destination
+                        }
+                    }
                 session.value.withOwner(run.owner) {
                     synchronized(lock) {
                         if (current(run)) {
                             caller.ensureActive()
-                            val folder =
-                                directory?.takeIf { staged }?.let {
-                                    storage {
-                                        val completed = File(it.parentFile, it.name.replaceFirst("run-", "capture-"))
-                                        Files.move(it.toPath(), completed.toPath(), StandardCopyOption.ATOMIC_MOVE).toFile()
-                                    }
-                                }
-                            if (folder == null) {
+                            if (completed == null) {
                                 stop(MangaCaptureStop.Storage)
                             } else {
+                                unpublished = null
                                 clear()
-                                shown.value = MangaCaptureState.Complete(run.target, folder)
+                                shown.value = MangaCaptureState.Complete(run.target, completed)
                             }
                         }
                     }
@@ -281,18 +289,22 @@ class MangaCaptureRecorder internal constructor(
             synchronized(lock) {
                 if (reservation === run) stop(if (active && current(run)) MangaCaptureStop.Unconfirmed else MangaCaptureStop.Ended)
             }
-            pending?.let { directory ->
+            val leftovers = listOfNotNull(pending, unpublished)
+            if (leftovers.isNotEmpty()) {
                 withContext(Dispatchers.IO + NonCancellable) {
-                    if (storage { directory.deleteRecursively() } != true) {
-                        scope.launch(Dispatchers.IO) {
-                            var attempt = 0
-                            do {
-                                delay(fileRetry(attempt++).toKotlinDuration())
-                            } while (storage { directory.deleteRecursively() } != true)
-                        }
-                    }
+                    leftovers.forEach(::clearUnpublished)
                 }
             }
+        }
+    }
+
+    private fun clearUnpublished(directory: File) {
+        if (storage { erase(directory) } == true) return
+        scope.launch(Dispatchers.IO) {
+            var attempt = 0
+            do {
+                delay(fileRetry(attempt++).toKotlinDuration())
+            } while (storage { erase(directory) } != true)
         }
     }
 
@@ -310,8 +322,13 @@ class MangaCaptureRecorder internal constructor(
                 evidence.readBack?.let { put("list_status", it) }
             }
         val writeReply = redaction.privateAnswer("manga_mutation_${method.name.lowercase()}", evidence.status, evidence.write)
-        storePrivateAnswer(pending, writeReply, write)
-        storePrivateAnswer(pending, redaction.privateAnswer("manga_mutation_read_back", 200, body), write)
+        storePrivateAnswer(pending, writeReply, write, tempDirectory = pending)
+        storePrivateAnswer(
+            pending,
+            redaction.privateAnswer("manga_mutation_read_back", 200, body),
+            write,
+            tempDirectory = pending,
+        )
         return true
     }
 
@@ -334,4 +351,11 @@ class MangaCaptureRecorder internal constructor(
         expiry = null
         reservation = null
     }
+}
+
+internal fun moveCaptureDirectory(
+    from: File,
+    to: File,
+) {
+    Files.move(from.toPath(), to.toPath(), StandardCopyOption.ATOMIC_MOVE)
 }

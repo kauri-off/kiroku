@@ -53,6 +53,20 @@ class MangaMutationPairTest {
         }
     }
 
+    @Test
+    fun `a patch read back requires a known status even when the expected edit only changes score`() {
+        val expected = temporary.newFile().apply { writeText("""{"score":0}""") }
+        val patch = "manga_mutation_patch.200.json"
+        val written = """{"score":0}"""
+        val missing = PATCH.replace("\"status\":\"reading\",", "")
+        val unknown = PATCH.replace("reading", "unknown")
+        validate(pair(patch, written, PATCH), expected)
+
+        for (invalid in listOf(missing, unknown)) {
+            assertThrows(IllegalStateException::class.java) { validate(pair(patch, written, invalid), expected) }
+        }
+    }
+
     private fun pair(
         write: String,
         body: String,
@@ -79,6 +93,7 @@ class MangaMutationPairTest {
             val write = reply.objectBody().verifiedFields().also { check(it.isNotEmpty()) }
             check(read.keys == setOf("pages", "complete", "present", "list_status") && read["present"] == JsonPrimitive(true))
             val values = (read["list_status"] as? JsonObject)?.verifiedFields() ?: error("Invalid projection")
+            check("status" in values)
             val changes = checkNotNull(expected).objectBody().verifiedFields().also { check(it.isNotEmpty()) }
             check(changes.all { (field, value) -> values[field] == value && (field !in write || write[field] == value) })
         } else {

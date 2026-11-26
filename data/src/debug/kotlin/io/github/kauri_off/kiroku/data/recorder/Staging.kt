@@ -70,8 +70,9 @@ internal fun storePrivateAnswer(
     pending: File,
     kept: Kept,
     write: (File, String) -> Unit,
+    tempDirectory: File = checkNotNull(pending.parentFile),
 ) {
-    val temp = Files.createTempFile(pending.toPath().parent, "answer-", ".tmp").toFile()
+    val temp = Files.createTempFile(tempDirectory.toPath(), "answer-", ".tmp").toFile()
     try {
         write(temp, kept.text)
         Files.move(temp.toPath(), File(pending, kept.file).toPath(), StandardCopyOption.ATOMIC_MOVE)

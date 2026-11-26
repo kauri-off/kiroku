@@ -41,6 +41,7 @@ import java.io.IOException
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicInteger
+import java.util.concurrent.atomic.AtomicReference
 import kotlin.time.Duration.Companion.minutes
 import kotlin.time.TestTimeSource
 
@@ -62,8 +63,17 @@ class MangaCaptureRecorderTest {
     private val time = TestTimeSource()
     private var writeFile: (File, String) -> Unit = { file, payload -> file.writeText(payload) }
     private var eraseFiles: (File) -> Boolean = File::deleteRecursively
+    private var renameDirectory: (File, File) -> Unit = ::moveCaptureDirectory
     private val recorder by lazy {
-        MangaCaptureRecorder(lazy { session }, scope, { root }, { f, s -> writeFile(f, s) }, time) { eraseFiles(it) }
+        MangaCaptureRecorder(
+            lazy { session },
+            scope,
+            { root },
+            { file, payload -> writeFile(file, payload) },
+            time,
+            erase = { eraseFiles(it) },
+            rename = { from, to -> renameDirectory(from, to) },
+        )
     }
     private val list by lazy { RoomMangaList({ database }, session, network.http, network.clock, recorder) { false } }
 
@@ -268,6 +278,150 @@ class MangaCaptureRecorderTest {
             assertEquals(MangaCaptureState.Stopped(MangaCaptureStop.Ended), recorder.state.value)
             assertTrue(root.listFiles().isNullOrEmpty())
             assertEquals(listOf("GET", "DELETE", "GET", "GET"), List(network.api.requestCount) { network.api.received().method })
+        }
+
+    @Test
+    fun `a stalled final rename leaves candidate lookup and disarm responsive`() =
+        runBlocking {
+            val owner = signIn()
+            val baseline = load(owner)
+            arm(MangaMutationMethod.Delete)
+            val renaming = CountDownLatch(1)
+            val release = CountDownLatch(1)
+            renameDirectory = { from, to ->
+                renaming.countDown()
+                check(release.await(5, TimeUnit.SECONDS))
+                moveCaptureDirectory(from, to)
+            }
+            network.api.enqueue(answer(204, ""))
+            network.api.enqueue(answer(body = page("")))
+            val deleting = async { list.remove(owner, baseline) }
+            try {
+                withContext(Dispatchers.IO) { assertTrue(renaming.await(5, TimeUnit.SECONDS)) }
+                val target = (recorder.state.value as MangaCaptureState.Capturing).target
+                withTimeout(3_000) {
+                    withContext(Dispatchers.Default) {
+                        assertNull(recorder.candidate(owner, MangaId(19), MangaMutationMethod.Patch))
+                        recorder.disarm(target)
+                    }
+                    assertEquals(MangaCaptureState.Stopped(MangaCaptureStop.Ended), recorder.state.value)
+                    network.api.enqueue(answer(body = page(row(19, 2))))
+                    assertTrue(list.refresh(owner) is Outcome.Success)
+                }
+            } finally {
+                release.countDown()
+            }
+            assertEquals(MangaListRemovalResult.Removed, deleting.await())
+            assertEquals(MangaCaptureState.Stopped(MangaCaptureStop.Ended), recorder.state.value)
+            assertTrue(root.listFiles().isNullOrEmpty())
+            assertEquals(listOf("GET", "DELETE", "GET", "GET"), List(network.api.requestCount) { network.api.received().method })
+        }
+
+    @Test
+    fun `retirement during the final rename cannot report completion for a replaced sign in`() =
+        runBlocking {
+            val owner = signIn()
+            val baseline = load(owner)
+            arm(MangaMutationMethod.Delete)
+            val renaming = CountDownLatch(1)
+            val release = CountDownLatch(1)
+            renameDirectory = { from, to ->
+                renaming.countDown()
+                check(release.await(5, TimeUnit.SECONDS))
+                moveCaptureDirectory(from, to)
+            }
+            network.api.enqueue(answer(204, ""))
+            network.api.enqueue(answer(body = page("")))
+            val deleting = async { list.remove(owner, baseline) }
+            try {
+                withContext(Dispatchers.IO) { assertTrue(renaming.await(5, TimeUnit.SECONDS)) }
+                withTimeout(3_000) { signIn() }
+            } finally {
+                release.countDown()
+            }
+            assertEquals(MangaListRemovalResult.Removed, deleting.await())
+            assertEquals(MangaCaptureState.Stopped(MangaCaptureStop.Ended), recorder.state.value)
+            assertTrue(root.listFiles().isNullOrEmpty())
+            assertEquals(3, network.api.requestCount)
+        }
+
+    @Test
+    fun `a paused write cannot recreate its temporary evidence under a replacement root`() =
+        runBlocking {
+            val owner = signIn()
+            val baseline = load(owner)
+            arm(MangaMutationMethod.Delete)
+            val writtenTo = AtomicReference<File>()
+            val writing = CountDownLatch(1)
+            val release = CountDownLatch(1)
+            writeFile = { file, payload ->
+                if (writtenTo.compareAndSet(null, file)) {
+                    writing.countDown()
+                    check(release.await(5, TimeUnit.SECONDS))
+                }
+                file.writeText(payload)
+            }
+            network.api.enqueue(answer(204, ""))
+            network.api.enqueue(answer(body = page("")))
+            val old = async { list.remove(owner, baseline) }
+            val replacement =
+                try {
+                    withContext(Dispatchers.IO) { assertTrue(writing.await(5, TimeUnit.SECONDS)) }
+                    val run = checkNotNull(checkNotNull(writtenTo.get()).parentFile)
+                    assertTrue(run.name.startsWith("run-"))
+                    withContext(Dispatchers.IO) { recorder.forget() }
+                    val next = signIn()
+                    load(next)
+                    arm(MangaMutationMethod.Patch)
+                    network.api.enqueue(answer(body = """{"score":8}"""))
+                    network.api.enqueue(answer(body = page(row(17, 8))))
+                    assertTrue(list.edit(next, id, MangaListEdit(score = 8)) is MangaListEditResult.Confirmed)
+                    completed()
+                } finally {
+                    release.countDown()
+                }
+            assertEquals(MangaListRemovalResult.Removed, old.await())
+            assertEquals(replacement, completed())
+            assertEquals(listOf(replacement), root.listFiles()?.toList())
+            assertEquals(6, network.api.requestCount)
+        }
+
+    @Test
+    fun `failed staging cleanup retries only the run containing the temporary answer`() =
+        runBlocking {
+            val owner = signIn()
+            val baseline = load(owner)
+            arm(MangaMutationMethod.Delete)
+            val leftovers = AtomicReference<File>()
+            val erased = AtomicInteger()
+            writeFile = { file, payload ->
+                check(file.delete() && file.mkdir())
+                File(file, "synthetic").writeText(payload)
+                leftovers.set(file.parentFile)
+                throw IOException("Synthetic staging failure")
+            }
+            eraseFiles = { directory ->
+                if (directory == leftovers.get() && erased.incrementAndGet() == 1) false else directory.deleteRecursively()
+            }
+            network.api.enqueue(answer(204, ""))
+            network.api.enqueue(answer(body = page("")))
+            assertEquals(MangaListRemovalResult.Removed, list.remove(owner, baseline))
+            assertEquals(MangaCaptureState.Stopped(MangaCaptureStop.Storage), recorder.state.value)
+            val failed = leftovers.get()
+            assertEquals(root, failed.parentFile)
+            assertTrue(erased.get() >= 1)
+
+            writeFile = { file, payload -> file.writeText(payload) }
+            load(owner)
+            arm(MangaMutationMethod.Patch)
+            network.api.enqueue(answer(body = """{"score":8}"""))
+            network.api.enqueue(answer(body = page(row(17, 8))))
+            assertTrue(list.edit(owner, id, MangaListEdit(score = 8)) is MangaListEditResult.Confirmed)
+            val replacement = completed()
+            withTimeout(5_000) { while (failed.exists()) delay(20) }
+            assertTrue(erased.get() >= 2)
+            assertEquals(listOf(replacement), root.listFiles()?.toList())
+            assertEquals(6, network.api.requestCount)
         }
 
     @Test
