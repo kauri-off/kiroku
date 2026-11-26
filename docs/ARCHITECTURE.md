@@ -22,7 +22,7 @@ stack · 7 Persistence, errors and writes · 8 Design system · 9 How the interf
 
 - Sign in with a MAL account; browse without an account.
 - The user's anime list: read, change status, change watched episodes, score, dates, remove.
-- The user's personal manga list: read, change status, chapter and volume progress, and score, remove. The current slice supports reading.
+- The user's personal manga list: read, change status, chapter and volume progress, and score, remove.
 - Anime title pages with related titles and statistics, and manga title pages.
 - For titles that are still airing: episodes aired so far, total episodes, and how many aired episodes the user has
   yet to watch ("to watch").

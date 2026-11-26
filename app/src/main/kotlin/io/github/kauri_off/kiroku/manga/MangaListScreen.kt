@@ -52,6 +52,7 @@ internal sealed interface MangaListContent {
         val entries: List<MangaListEntry>,
         val language: TitleLanguage,
         val refreshing: Boolean = false,
+        val canEdit: Boolean = false,
     ) : MangaListContent
 }
 
@@ -59,6 +60,10 @@ internal sealed interface MangaListEvent {
     data object SignIn : MangaListEvent
 
     data object Refresh : MangaListEvent
+
+    data class Edit(
+        val entry: MangaListEntry,
+    ) : MangaListEvent
 
     data class Open(
         val entry: MangaListEntry,
@@ -101,7 +106,17 @@ internal fun MangaListBody(
                         }
                     } else {
                         items(content.entries, key = { it.id.value }) { entry ->
-                            MangaListRow(entry, content.language) { onEvent(MangaListEvent.Open(entry)) }
+                            MangaListRow(
+                                entry,
+                                content.language,
+                                open = { onEvent(MangaListEvent.Open(entry)) },
+                                edit =
+                                    if (content.canEdit) {
+                                        { onEvent(MangaListEvent.Edit(entry)) }
+                                    } else {
+                                        null
+                                    },
+                            )
                         }
                     }
                 }
@@ -118,28 +133,34 @@ private fun MangaListRow(
     entry: MangaListEntry,
     language: TitleLanguage,
     open: () -> Unit,
+    edit: (() -> Unit)?,
 ) {
     ListItem(
         onClick = open,
+        onLongClick = edit,
+        onLongClickLabel = edit?.let { stringResource(R.string.list_edit) },
         leadingContent = { Poster(entry.posterUrl, PosterSize.Row) },
         trailingContent = { Icon(painterResource(R.drawable.ic_chevron_right), contentDescription = null) },
-        supportingContent = {
-            val status =
-                when (entry.status.code) {
-                    notShown("reading") -> stringResource(R.string.manga_list_reading)
-                    notShown("completed") -> stringResource(R.string.manga_list_completed)
-                    notShown("on_hold") -> stringResource(R.string.manga_list_on_hold)
-                    notShown("dropped") -> stringResource(R.string.manga_list_dropped)
-                    notShown("plan_to_read") -> stringResource(R.string.manga_list_planned)
-                    else -> malCodeAsText(entry.status.code)
-                }
-            val chapters = entry.chaptersRead?.let { pluralStringResource(R.plurals.manga_chapters, it, countText(it)) }
-            val volumes = entry.volumesRead?.let { pluralStringResource(R.plurals.manga_volumes, it, countText(it)) }
-            val score = entry.score?.let { stringResource(R.string.title_your_score_spoken, it) }
-            Text(listOfNotNull(status, chapters, volumes, score).joinToString(stringResource(R.string.common_separator)))
-        },
+        supportingContent = { Text(entry.progressText()) },
         content = {
             TitleText(entry.titles.preferred(language), maxLines = Int.MAX_VALUE, style = MaterialTheme.typography.titleMedium)
         },
     )
+}
+
+@Composable
+internal fun MangaListEntry.progressText(): String {
+    val statusLabel =
+        when (status.code) {
+            notShown("reading") -> stringResource(R.string.manga_list_reading)
+            notShown("completed") -> stringResource(R.string.manga_list_completed)
+            notShown("on_hold") -> stringResource(R.string.manga_list_on_hold)
+            notShown("dropped") -> stringResource(R.string.manga_list_dropped)
+            notShown("plan_to_read") -> stringResource(R.string.manga_list_planned)
+            else -> malCodeAsText(status.code)
+        }
+    val chapters = chaptersRead?.let { pluralStringResource(R.plurals.manga_chapters, it, countText(it)) }
+    val volumes = volumesRead?.let { pluralStringResource(R.plurals.manga_volumes, it, countText(it)) }
+    val scoreLabel = score?.let { stringResource(R.string.title_your_score_spoken, it) }
+    return listOfNotNull(statusLabel, chapters, volumes, scoreLabel).joinToString(stringResource(R.string.common_separator))
 }

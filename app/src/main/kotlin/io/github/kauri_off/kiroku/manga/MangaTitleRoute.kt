@@ -2,7 +2,11 @@ package io.github.kauri_off.kiroku.manga
 
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation3.runtime.NavKey
 import io.github.kauri_off.kiroku.CountAsShown
@@ -60,13 +64,35 @@ internal fun MangaTitleRoute(
         }
     val state by manga.state.collectAsScreenState()
     CountAsShown(manga.shown)
+    val editor = LocalMangaEditing.current
+    LaunchedEffect(editor) { editor?.watch() }
+    val editing =
+        editor?.state?.collectAsScreenState()?.value?.takeIf {
+            it.owner != null && (key.opened?.owner == null || key.opened?.owner == it.owner)
+        }
+    val owner = editing?.owner
+    val content = state.content as? MangaTitleContent.Shown
+    var membershipAttempt by remember(key.id) { mutableIntStateOf(0) }
+    if (editor != null && owner != null && content != null && editing.observed) {
+        LaunchedEffect(owner, key.id, membershipAttempt) { editor.loadMembership(owner) }
+    }
+    val entry =
+        editing
+            ?.snapshot
+            ?.entries
+            ?.find { it.id.value == key.id }
+            ?.let(editing::displayed)
     MangaTitleScreen(
-        state,
+        state.copy(listEntry = entry),
         onEvent = {
             when (it) {
                 MangaTitleEvent.Back -> onBack()
                 MangaTitleEvent.SignIn -> onSignIn()
-                MangaTitleEvent.Retry, MangaTitleEvent.Refresh -> manga.refresh()
+                MangaTitleEvent.Edit -> if (entry != null && owner != null && content != null) editor.open(owner, entry.id, content.title)
+                MangaTitleEvent.Retry, MangaTitleEvent.Refresh -> {
+                    membershipAttempt++
+                    manga.refresh()
+                }
             }
         },
         snackbars,

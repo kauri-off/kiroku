@@ -8,6 +8,7 @@ import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.key
 import androidx.compose.ui.Alignment
@@ -22,6 +23,7 @@ import io.github.kauri_off.kiroku.R
 import io.github.kauri_off.kiroku.core.error.DataError
 import io.github.kauri_off.kiroku.core.model.MangaDetails
 import io.github.kauri_off.kiroku.core.model.MangaFormat
+import io.github.kauri_off.kiroku.core.model.MangaListEntry
 import io.github.kauri_off.kiroku.core.model.MangaPublication
 import io.github.kauri_off.kiroku.core.model.malCodeAsText
 import io.github.kauri_off.kiroku.design.component.Poster
@@ -40,6 +42,7 @@ import io.github.kauri_off.kiroku.titlesub.SubScreenBody
 internal data class MangaTitleState(
     val content: MangaTitleContent = MangaTitleContent.Loading,
     val sessionExpired: Boolean = false,
+    val listEntry: MangaListEntry? = null,
 )
 
 internal sealed interface MangaTitleContent {
@@ -66,7 +69,7 @@ internal sealed interface MangaTitleProblem {
     ) : MangaTitleProblem
 }
 
-internal enum class MangaTitleEvent { Back, Retry, Refresh, SignIn }
+internal enum class MangaTitleEvent { Back, Retry, Refresh, SignIn, Edit }
 
 @Composable
 internal fun MangaTitleScreen(
@@ -93,7 +96,7 @@ internal fun MangaTitleScreen(
                     )
                 is MangaTitleContent.Shown ->
                     SubScreenBody.List(content.refreshing, onRefresh = { onEvent(MangaTitleEvent.Refresh) }) {
-                        item { MangaHeader(content) }
+                        item { MangaHeader(content, state.listEntry) { onEvent(MangaTitleEvent.Edit) } }
                         content.detailsError?.let { error ->
                             item {
                                 ScreenState(ScreenState.Error(stringResource(error.message())) { onEvent(MangaTitleEvent.Retry) })
@@ -119,7 +122,11 @@ internal fun MangaTitleScreen(
 }
 
 @Composable
-private fun MangaHeader(content: MangaTitleContent.Shown) {
+private fun MangaHeader(
+    content: MangaTitleContent.Shown,
+    entry: MangaListEntry?,
+    onEdit: () -> Unit,
+) {
     val details = content.details
     Column(
         Modifier.fillMaxWidth().padding(horizontal = Spacing.l),
@@ -162,6 +169,10 @@ private fun MangaHeader(content: MangaTitleContent.Shown) {
                 style = MaterialTheme.typography.labelLarge,
                 textAlign = TextAlign.Center,
             )
+        }
+        if (entry != null) {
+            Text(entry.progressText(), style = MaterialTheme.typography.bodyMedium, textAlign = TextAlign.Center)
+            TextButton(onClick = onEdit) { Text(stringResource(R.string.title_change)) }
         }
     }
 }

@@ -5,6 +5,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.remember
 import androidx.lifecycle.viewmodel.compose.viewModel
 import io.github.kauri_off.kiroku.about.AboutKey
@@ -12,14 +13,17 @@ import io.github.kauri_off.kiroku.about.AboutRoute
 import io.github.kauri_off.kiroku.collectAsScreenState
 import io.github.kauri_off.kiroku.core.link.Link
 import io.github.kauri_off.kiroku.core.model.AnimeId
+import io.github.kauri_off.kiroku.core.model.Session
 import io.github.kauri_off.kiroku.core.model.owner
 import io.github.kauri_off.kiroku.core.repository.BrowseList
 import io.github.kauri_off.kiroku.design.component.LocalMessageCovers
 import io.github.kauri_off.kiroku.design.component.MessageCovers
+import io.github.kauri_off.kiroku.edit.MangaEditSheet
 import io.github.kauri_off.kiroku.link.AppLinks
 import io.github.kauri_off.kiroku.list.ListMode
 import io.github.kauri_off.kiroku.list.ListRoute
 import io.github.kauri_off.kiroku.list.UserListRoute
+import io.github.kauri_off.kiroku.manga.LocalMangaEditing
 import io.github.kauri_off.kiroku.manga.MangaTitleKey
 import io.github.kauri_off.kiroku.manga.MangaTitleRoute
 import io.github.kauri_off.kiroku.notifysettings.NotifySettingsKey
@@ -70,7 +74,8 @@ fun AppRoute(
     snackbars: SnackbarHostState = remember { SnackbarHostState() },
     links: AppLinks? = null,
 ) {
-    val messages = viewModel { ShellViewModel(graph.list) }.messages
+    val shell = viewModel { ShellViewModel(graph.list, graph.mangaListEditor, graph.session.observeSession()) }
+    val messages = shell.messages
     val profiles = viewModel { OpenedProfiles(graph.preferences) }
     val covers = remember { MessageCovers() }
     ShownMessages(messages, snackbars, covers)
@@ -104,8 +109,18 @@ fun AppRoute(
     val session = SignOutTurns(graph, navigator, messages)
     val images = remember(graph, session) { session?.let(graph::imageLoaderFor) }
     if (links != null) LinkTurns(links, navigator)
-    CompositionLocalProvider(LocalMessageCovers provides covers) {
+    val mangaEditing = shell.mangaEditing
+    CompositionLocalProvider(LocalMessageCovers provides covers, LocalMangaEditing provides mangaEditing) {
         ShellRoute(navigator, snackbars, remember(graph, messages, profiles) { appEntries(graph, messages, profiles) }, images)
+        if (mangaEditing != null) {
+            val editing by mangaEditing.state.collectAsScreenState()
+            val open = editing.open?.takeIf { session == Session.SignedIn(it.owner) }
+            if (open != null) {
+                key(open.instance) {
+                    MangaEditSheet(open.form) { mangaEditing.event(open, it) }
+                }
+            }
+        }
     }
 }
 

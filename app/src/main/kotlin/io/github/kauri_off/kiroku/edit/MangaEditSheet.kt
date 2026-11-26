@@ -299,13 +299,14 @@ private fun MangaEditFooter(
                 }
             }
         }
-        MangaEditSubmission.Saving ->
+        MangaEditSubmission.Saving, MangaEditSubmission.Reconciling ->
             LineOrStack(
                 gap = Spacing.s,
                 centred = true,
                 modifier = Modifier.semantics(mergeDescendants = true) { liveRegion = LiveRegionMode.Polite },
             ) {
-                Text(stringResource(R.string.manga_edit_saving))
+                val label = if (submission == MangaEditSubmission.Saving) R.string.manga_edit_saving else R.string.manga_edit_checking_save
+                Text(stringResource(label))
                 WaitIndicator()
             }
         is MangaEditSubmission.Failed ->
@@ -315,9 +316,12 @@ private fun MangaEditFooter(
                     modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite },
                     color = MaterialTheme.colorScheme.error,
                 )
-                if (submission.canRetry) {
-                    Button(onClick = { onEvent(MangaEditSheetEvent.Retry) }, shapes = ButtonDefaults.shapes()) {
-                        Text(stringResource(R.string.design_retry))
+                if (submission.canRetry || submission.canReconcile) {
+                    Button(
+                        onClick = { onEvent(if (submission.canRetry) MangaEditSheetEvent.Retry else MangaEditSheetEvent.Reconcile) },
+                        shapes = ButtonDefaults.shapes(),
+                    ) {
+                        Text(stringResource(if (submission.canRetry) R.string.design_retry else R.string.manga_edit_refresh_list))
                     }
                 }
             }

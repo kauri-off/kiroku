@@ -8,6 +8,7 @@ import io.github.kauri_off.kiroku.core.fixtures.FixtureAnime
 import io.github.kauri_off.kiroku.core.model.MangaDetails
 import io.github.kauri_off.kiroku.core.model.MangaFormat
 import io.github.kauri_off.kiroku.core.model.MangaId
+import io.github.kauri_off.kiroku.core.model.MangaListEntry
 import io.github.kauri_off.kiroku.core.model.MangaPublication
 import io.github.kauri_off.kiroku.core.model.Titles
 import io.github.kauri_off.kiroku.screenshots.ScreenshotRegistry
@@ -25,6 +26,7 @@ class MangaTitleScreenshots : ScreenshotRegistry() {
 
     override val cases =
         listOf(
+            case("on-personal-list", largeText = true) { Screen(mangaFixture.shown(), mangaEntry.copy(score = 8)) },
             case("opened-with-summary") { Screen(openingSummary) },
             case("opened-with-summary-offline") { Screen(openingSummary.copy(detailsError = DataError.NoConnection)) },
             case("unavailable") { Screen(MangaTitleContent.Failed(MangaTitleProblem.Unavailable)) },
@@ -73,6 +75,9 @@ private val openingSummary =
 private fun MangaDetails.shown() = MangaTitleContent.Shown(this, titles.romaji)
 
 @Composable
-private fun Screen(content: MangaTitleContent) {
-    MangaTitleScreen(MangaTitleState(content), {}, remember { SnackbarHostState() })
+private fun Screen(
+    content: MangaTitleContent,
+    entry: MangaListEntry? = null,
+) {
+    MangaTitleScreen(MangaTitleState(content, listEntry = entry), {}, remember { SnackbarHostState() })
 }

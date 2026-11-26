@@ -1,6 +1,8 @@
 package io.github.kauri_off.kiroku.sandbox
 
 import android.os.Looper
+import androidx.compose.ui.semantics.SemanticsActions
+import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.assertIsSelected
 import androidx.compose.ui.test.hasAnyDescendant
 import androidx.compose.ui.test.hasScrollAction
@@ -10,6 +12,9 @@ import androidx.compose.ui.test.junit4.v2.createAndroidComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performImeAction
+import androidx.compose.ui.test.performSemanticsAction
+import androidx.compose.ui.test.performTextReplacement
 import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.test.swipeDown
 import io.github.kauri_off.kiroku.MainActivity
@@ -20,6 +25,7 @@ import io.github.kauri_off.kiroku.core.model.owner
 import io.github.kauri_off.kiroku.core.repository.MangaListReader
 import io.github.kauri_off.kiroku.core.repository.SignInStep
 import io.github.kauri_off.kiroku.scenario.Scenario
+import io.github.kauri_off.kiroku.scenario.WriteFault
 import io.github.kauri_off.kiroku.source.DataSource
 import io.github.kauri_off.kiroku.source.StartsOn
 import io.github.kauri_off.kiroku.wiring.AppEnds
@@ -76,11 +82,13 @@ class SandboxMangaRouteTest {
 
     private fun <T> waited(block: suspend () -> T): T = runBlocking { withTimeout(WAIT) { block() } }
 
-    private fun shows(text: String) =
-        compose.waitUntil(WAIT) {
-            shadowOf(Looper.getMainLooper()).idle()
-            compose.onAllNodesWithText(text).fetchSemanticsNodes().isNotEmpty()
-        }
+    private fun shows(
+        text: String,
+        substring: Boolean = false,
+    ) = compose.waitUntil(WAIT) {
+        shadowOf(Looper.getMainLooper()).idle()
+        compose.onAllNodesWithText(text, substring = substring).fetchSemanticsNodes().isNotEmpty()
+    }
 
     private fun openList() {
         shows("Manga")
@@ -147,15 +155,7 @@ class SandboxMangaRouteTest {
         openList()
         shows("Paper Observatory")
         val before = (waited { manga.stored(old.signIn) } as Outcome.Success).value
-        runBlocking {
-            val current = graph
-            val signingOut = async(Dispatchers.Default) { current.signOut(old) }
-            compose.waitUntil(WAIT) {
-                shadowOf(Looper.getMainLooper()).idle()
-                signingOut.isCompleted
-            }
-            signingOut.await()
-        }
+        signOut(old)
         shows("Anime")
         compose.onNodeWithText("Anime").assertIsSelected()
         compose.onNodeWithText("Paper Observatory").assertDoesNotExist()
@@ -188,6 +188,108 @@ class SandboxMangaRouteTest {
         assertEquals(before, waited { manga.stored(account.signIn) })
         shows("Paper Observatory")
         assertEquals(emptyList<Any>(), connections.asked)
+    }
+
+    @Test
+    fun `the personal row saves and the title can retry a refused edit`() {
+        val account = signIn()
+        openList()
+        shows("Paper Observatory")
+        val row = compose.onNode(hasText("Paper Observatory") and SemanticsMatcher.keyIsDefined(SemanticsActions.OnLongClick))
+        compose.waitUntil(WAIT) { runCatching { row.fetchSemanticsNode() }.isSuccess }
+        row.performSemanticsAction(SemanticsActions.OnLongClick)
+        shows("Save")
+        setChapters("23")
+        compose.onNodeWithText("Save").performClick()
+        waitForChapters(account, 23)
+        awaitEditClosed()
+        shows("23\u00A0chapters", substring = true)
+
+        compose.onNodeWithText("Paper Observatory").performClick()
+        shows("Change")
+        compose.onNodeWithText("Change").performClick()
+        shows("Save")
+        graph.scenarios.set(Scenario(writes = WriteFault.Refused))
+        setChapters("24")
+        compose.onNodeWithText("Save").performClick()
+        shows("Could not save")
+        shows("Retry")
+        assertEquals(23, chapters(account))
+        graph.scenarios.set(Scenario())
+        compose.onNodeWithText("Retry").performClick()
+        waitForChapters(account, 24)
+        awaitEditClosed()
+        shows("24\u00A0chapters", substring = true)
+        compose.runOnUiThread { compose.activity.onBackPressedDispatcher.onBackPressed() }
+        shows("Manga")
+        compose.onNodeWithText("Manga").assertIsSelected()
+        shows("24\u00A0chapters", substring = true)
+    }
+
+    @Test
+    fun `replacement closes a failed edit and keeps its retry from the next account`() {
+        val first = signIn()
+        openList()
+        shows("Paper Observatory")
+        compose.onNodeWithText("Paper Observatory").performClick()
+        shows("Change")
+        compose.onNodeWithText("Change").performClick()
+        shows("Save")
+        graph.scenarios.set(Scenario(writes = WriteFault.Refused))
+        setChapters("27")
+        compose.onNodeWithText("Save").performClick()
+        shows("Could not save")
+        signOut(first)
+        awaitEditClosed()
+        compose.onNodeWithText("Could not save").assertDoesNotExist()
+        graph.scenarios.set(Scenario())
+        val replacement = signIn()
+        openList()
+        shows("Paper Observatory")
+        assertNotEquals(27, chapters(replacement))
+        compose.onNodeWithText("Retry").assertDoesNotExist()
+    }
+
+    private fun signOut(old: Session.SignedIn) {
+        runBlocking {
+            val current = graph
+            val signingOut = async(Dispatchers.Default) { current.signOut(old) }
+            compose.waitUntil(WAIT) {
+                shadowOf(Looper.getMainLooper()).idle()
+                signingOut.isCompleted
+            }
+            signingOut.await()
+        }
+    }
+
+    private fun awaitEditClosed() {
+        compose.waitUntil(WAIT) {
+            shadowOf(Looper.getMainLooper()).idle()
+            compose.onAllNodesWithText("Chapters read").fetchSemanticsNodes().isEmpty()
+        }
+    }
+
+    private fun setChapters(value: String) {
+        val input = compose.onNode(hasText("Chapters read") and SemanticsMatcher.keyIsDefined(SemanticsActions.SetText))
+        input.performTextReplacement(value)
+        input.performImeAction()
+    }
+
+    private fun chapters(account: Session.SignedIn): Int? =
+        (waited { manga.stored(account.signIn) } as Outcome.Success)
+            .value
+            ?.entries
+            ?.first { it.titles.romaji == "Paper Observatory" }
+            ?.chaptersRead
+
+    private fun waitForChapters(
+        account: Session.SignedIn,
+        expected: Int,
+    ) {
+        compose.waitUntil(WAIT) {
+            shadowOf(Looper.getMainLooper()).idle()
+            chapters(account) == expected
+        }
     }
 
     private companion object {

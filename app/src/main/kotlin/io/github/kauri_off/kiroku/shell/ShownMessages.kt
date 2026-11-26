@@ -77,6 +77,7 @@ fun text(text: ShellMessage.Text): String =
                 },
             )
         ShellMessage.Text.CouldNotSave -> stringResource(R.string.shell_could_not_save)
+        ShellMessage.Text.MangaUnconfirmed -> stringResource(R.string.manga_edit_unconfirmed)
     }
 
 @Composable
@@ -86,5 +87,6 @@ fun actionLabel(action: ShellMessage.Action): String =
             is ShellMessage.Action.Undo -> R.string.common_undo
             is ShellMessage.Action.Retry -> R.string.design_retry
             is ShellMessage.Action.Change -> R.string.title_change
+            is ShellMessage.Action.MangaRecovery -> if (action.readOnly) R.string.manga_edit_refresh_list else R.string.design_retry
         },
     )

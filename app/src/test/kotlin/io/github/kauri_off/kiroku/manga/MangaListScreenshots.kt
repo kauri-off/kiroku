@@ -21,7 +21,7 @@ import io.github.kauri_off.kiroku.shell.ShellScreen
 import io.github.kauri_off.kiroku.shell.ShellState
 
 class MangaListScreenshots : ScreenshotRegistry() {
-    override val content = contentCase { Screen(mangaListFixture()) }
+    override val content = contentCase { Screen(mangaListFixture().copy(canEdit = true)) }
     override val loading = shown { Screen(MangaListContent.Loading) }
     override val empty = shown { Screen(mangaListFixture(emptyList())) }
     override val error = shown { Screen(MangaListContent.Failed(DataError.NoConnection)) }

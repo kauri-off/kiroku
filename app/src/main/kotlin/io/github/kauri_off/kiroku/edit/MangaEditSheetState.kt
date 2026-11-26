@@ -37,9 +37,12 @@ internal sealed interface MangaEditSubmission {
 
     data object Saving : MangaEditSubmission
 
+    data object Reconciling : MangaEditSubmission
+
     data class Failed(
         val canRetry: Boolean,
         @param:StringRes val message: Int = R.string.shell_could_not_save,
+        val canReconcile: Boolean = false,
     ) : MangaEditSubmission
 }
 
@@ -84,7 +87,7 @@ internal data class MangaEditSheetState(
             MangaEditSheetEvent.DismissAsked -> if (mayLeave) this else copy(confirmDiscard = true)
             MangaEditSheetEvent.KeepEditing -> copy(confirmDiscard = false)
             MangaEditSheetEvent.Discard -> if (confirmDiscard) copy(confirmDiscard = false, closing = true) else this
-            is MangaEditSheetEvent.Save, MangaEditSheetEvent.Retry, MangaEditSheetEvent.Dismissed -> this
+            is MangaEditSheetEvent.Save, MangaEditSheetEvent.Retry, MangaEditSheetEvent.Reconcile, MangaEditSheetEvent.Dismissed -> this
         }
 }
 
@@ -114,6 +117,8 @@ internal sealed interface MangaEditSheetEvent {
     ) : MangaEditSheetEvent
 
     data object Retry : MangaEditSheetEvent
+
+    data object Reconcile : MangaEditSheetEvent
 
     data object DismissAsked : MangaEditSheetEvent
 

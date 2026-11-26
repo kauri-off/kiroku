@@ -2,6 +2,7 @@ package io.github.kauri_off.kiroku.edit
 
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.platform.LocalCursorBlinkEnabled
+import io.github.kauri_off.kiroku.R
 import io.github.kauri_off.kiroku.core.model.MangaReadingStatus
 import io.github.kauri_off.kiroku.design.MotionBounds
 import io.github.kauri_off.kiroku.screenshots.ScreenshotRegistry
@@ -27,6 +28,21 @@ class MangaEditSheetScreenshots : ScreenshotRegistry() {
             case("invalid-count", largeText = true) { MangaEditSheet(MangaEditFixtures.existing.copy(chapters = "2147483648")) {} },
             case("score-cleared") { MangaEditSheet(MangaEditFixtures.existing.copy(score = 0)) {} },
             case("saving", largeText = true) { MangaEditSheet(MangaEditFixtures.saving) {} },
+            case("checking-save") {
+                MangaEditSheet(MangaEditFixtures.saving.copy(submission = MangaEditSubmission.Reconciling)) {}
+            },
+            case("refresh-to-confirm", largeText = true) {
+                MangaEditSheet(
+                    MangaEditFixtures.failed.copy(
+                        submission =
+                            MangaEditSubmission.Failed(
+                                canRetry = false,
+                                message = R.string.manga_edit_unconfirmed,
+                                canReconcile = true,
+                            ),
+                    ),
+                ) {}
+            },
             case("failure-without-retry") {
                 MangaEditSheet(MangaEditFixtures.failed.copy(submission = MangaEditSubmission.Failed(canRetry = false))) {}
             },

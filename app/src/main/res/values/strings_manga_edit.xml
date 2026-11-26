@@ -9,4 +9,7 @@
     <string name="manga_edit_unknown_score">Unknown</string>
     <string name="manga_edit_invalid_count">Enter a whole number from\u00A0%1$s to\u00A0%2$s</string>
     <string name="manga_edit_saving">Saving…</string>
+    <string name="manga_edit_unconfirmed">Could not confirm save</string>
+    <string name="manga_edit_refresh_list">Refresh list</string>
+    <string name="manga_edit_checking_save">Checking save…</string>
 </resources>

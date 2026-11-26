@@ -27,6 +27,7 @@ import kotlin.time.Duration.Companion.seconds
 data class ShellMessage(
     val text: Text,
     val action: Action? = null,
+    val mangaOwner: SignInId? = null,
 ) {
     sealed interface Text {
         data class EpisodeWatched(
@@ -42,6 +43,8 @@ data class ShellMessage(
         ) : Text
 
         data object CouldNotSave : Text
+
+        data object MangaUnconfirmed : Text
     }
 
     sealed interface Action {
@@ -53,6 +56,11 @@ data class ShellMessage(
             val write: ListWrite.Retry,
         ) : Action
 
+        data class MangaRecovery(
+            val readOnly: Boolean,
+            val run: () -> Unit,
+        ) : Action
+
         // Opens the title's edit sheet on the screen on top.
         data class Change(
             val id: AnimeId,
@@ -61,7 +69,11 @@ data class ShellMessage(
     }
 
     // The only way back from what happened: the Undo of a title that left its tab, or the Retry of a failed save.
-    val mustStay: Boolean get() = text == Text.MovedToCompleted && action is Action.Undo || action is Action.Retry
+    val mustStay: Boolean get() =
+        text == Text.MovedToCompleted &&
+            action is Action.Undo ||
+            action is Action.Retry ||
+            action is Action.MangaRecovery
 
     // The title an Undo or a Retry writes.
     val title: AnimeId?
@@ -178,10 +190,21 @@ class ShellMessages(
                 is ShellMessage.Action.Undo -> write(action.write)
                 is ShellMessage.Action.Retry -> write(action.write)
                 is ShellMessage.Action.Change -> requested.value = action
+                is ShellMessage.Action.MangaRecovery -> action.run()
                 null -> Unit
             }
         }
         if (shown.value == posted) showNext()
+    }
+
+    internal fun remove(action: ShellMessage.Action.MangaRecovery) {
+        waiting.removeAll { it.posted.message.action == action }
+        if (shown.value?.message?.action == action) showNext()
+    }
+
+    internal fun retireManga(owner: SignInId) {
+        waiting.removeAll { it.posted.message.mangaOwner == owner }
+        if (shown.value?.message?.mangaOwner == owner) showNext()
     }
 
     private fun showNext() {
