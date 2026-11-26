@@ -168,7 +168,7 @@ internal class LiveGraph(
         expected.owner?.let { sessionWithCleanup.signOut(it) }
     }
 
-    override val list by lazy { liveList(parts, account, listStore) { preferences.forgetUsersChoices(keepMangaFor = it) } }
+    override val list by lazy { liveList(parts, account, listStore) { preferences.forgetUsersChoices() } }
     override val anime by lazy { liveTitles(parts, preferences = { preferences }) }
     override val mangaCatalogue by lazy { MalMangaCatalogue(parts.http) }
     val recorder = liveRecorder(parts, built)

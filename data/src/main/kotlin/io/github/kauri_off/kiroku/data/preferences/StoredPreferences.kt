@@ -260,14 +260,14 @@ class StoredPreferences internal constructor(
 
     // The list's sorts and the profiles opened are the user's and go with them (S9); every other choice stays. A disk
     // that fails this throws.
-    suspend fun forgetUsersChoices(keepMangaFor: SignInId? = null) {
+    suspend fun forgetUsersChoices() {
         try {
             edit { stored ->
                 stored
                     .asMap()
                     .keys
                     .filter { it.name.startsWith(SORT) || it.name.startsWith(DIRECTION) || it == OPENED }
-                    .filterNot { keepMangaFor != null && it.name.isMangaSortOf(keepMangaFor) }
+                    .filterNot { it.name.isMangaSort }
                     .forEach { stored -= it }
             }
         } catch (e: IOException) {

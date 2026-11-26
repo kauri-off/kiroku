@@ -218,11 +218,11 @@ class StoredPreferencesTest {
             assertEquals(anime, it.observeListSorts().first()[ListStatus.Planned])
             assertEquals(mapOf(planned to mangaScore, unfamiliar to mangaTitle), it.mangaSorts(owner))
             assertEquals(mapOf(planned to mangaTitle), it.mangaSorts(replacement))
-            it.forgetUsersChoices(keepMangaFor = replacement)
+            assertEquals(Outcome.Success(Unit), it.reconcileMangaListSorts(replacement))
             assertTrue(it.mangaSorts(owner).isEmpty())
-            assertEquals(mapOf(planned to mangaTitle), it.mangaSorts(replacement))
             it.forgetUsersChoices()
-            assertTrue(it.mangaSorts(replacement).isEmpty())
+            assertEquals(TabSort.defaultFor(ListStatus.Planned), it.observeListSorts().first()[ListStatus.Planned])
+            assertEquals(mapOf(planned to mangaTitle), it.mangaSorts(replacement))
         }
     }
 
