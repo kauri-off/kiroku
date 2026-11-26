@@ -18,14 +18,22 @@ internal class MangaListQueue {
     suspend fun edit(
         id: MangaId,
         save: suspend () -> MangaListEditResult,
-    ): MangaListEditResult {
+    ): MangaListEditResult =
+        mutate(id, MangaListEditResult.Discarded, { it is MangaListEditResult.Confirmed || it == MangaListEditResult.Discarded }, save)
+
+    suspend fun <T> mutate(
+        id: MangaId,
+        discarded: T,
+        mayContinue: (T) -> Boolean,
+        save: suspend () -> T,
+    ): T {
         val batch = synchronized(batches) { batches.getOrPut(id, ::Batch).also { it.edits++ } }
         try {
             return lock.withLock {
-                if (batch.failed) return@withLock MangaListEditResult.Discarded
+                if (batch.failed) return@withLock discarded
                 var failed = true
                 try {
-                    save().also { failed = it !is MangaListEditResult.Confirmed && it != MangaListEditResult.Discarded }
+                    save().also { failed = !mayContinue(it) }
                 } finally {
                     if (failed) {
                         batch.failed = true

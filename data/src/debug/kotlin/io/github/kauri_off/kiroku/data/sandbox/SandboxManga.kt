@@ -16,7 +16,7 @@ import io.github.kauri_off.kiroku.core.repository.MangaListEditor
 import io.github.kauri_off.kiroku.core.repository.MangaRepository
 import io.github.kauri_off.kiroku.core.repository.StoredManga
 import io.github.kauri_off.kiroku.data.db.KirokuDatabase
-import io.github.kauri_off.kiroku.data.manga.MangaPatchResult
+import io.github.kauri_off.kiroku.data.manga.MangaWriteResult
 import io.github.kauri_off.kiroku.data.manga.RoomMangaList
 import io.github.kauri_off.kiroku.data.network.Device
 import io.github.kauri_off.kiroku.data.session.Attempt
@@ -40,7 +40,7 @@ class SandboxManga(
     private var currentEntries = entries
 
     private val list by lazy {
-        RoomMangaList(database, session, { owner, _ -> readList(owner) }, clock, unexpected, retired, writer = ::patch)
+        RoomMangaList(database, session, { owner, _ -> readList(owner) }, clock, unexpected, retired, writer = ::patch, remover = ::delete)
     }
 
     override suspend fun stored(owner: SignInId) = list.stored(owner)
@@ -59,29 +59,45 @@ class SandboxManga(
         retryFrom: MangaListEntry?,
     ) = list.edit(owner, id, changes, retryFrom)
 
+    override suspend fun remove(
+        owner: SignInId,
+        baseline: MangaListEntry,
+        retry: Boolean,
+    ) = list.remove(owner, baseline, retry)
+
     private suspend fun readList(owner: SignInId): Outcome<List<MangaListEntry>> = withList(owner) { Outcome.Success(currentEntries) }
 
     private suspend fun patch(
         owner: SignInId,
         id: MangaId,
         changes: MangaListEdit,
-    ): MangaPatchResult =
+    ): MangaWriteResult = changeEntry(owner, id) { changes.appliedTo(it).copy(updatedAt = clock.instant()) }
+
+    private suspend fun delete(
+        owner: SignInId,
+        id: MangaId,
+    ): MangaWriteResult = changeEntry(owner, id) { null }
+
+    private suspend fun changeEntry(
+        owner: SignInId,
+        id: MangaId,
+        change: (MangaListEntry) -> MangaListEntry?,
+    ): MangaWriteResult =
         when (
             val result =
                 withList(owner) {
                     when (mal.writes) {
                         SandboxWrites.Refused -> Outcome.Failure(DataError.Refused)
-                        SandboxWrites.Fail -> Outcome.Success(MangaPatchResult.Unknown(DataError.ServerError))
+                        SandboxWrites.Fail -> Outcome.Success(MangaWriteResult.Unknown(DataError.ServerError))
                         SandboxWrites.Work -> {
                             if (currentEntries.none { it.id == id }) return@withList Outcome.Failure(DataError.NotFound)
-                            currentEntries =
-                                currentEntries.map { if (it.id == id) changes.appliedTo(it).copy(updatedAt = clock.instant()) else it }
-                            Outcome.Success(MangaPatchResult.Accepted)
+                            currentEntries = currentEntries.mapNotNull { if (it.id == id) change(it) else it }
+                            Outcome.Success(MangaWriteResult.Accepted)
                         }
                     }
                 }
         ) {
-            is Outcome.Failure -> MangaPatchResult.Refused(result.error)
+            is Outcome.Failure -> MangaWriteResult.Refused(result.error)
             is Outcome.Success -> result.value
         }
 

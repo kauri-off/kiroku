@@ -76,9 +76,10 @@ internal class MalMangaList(
     suspend fun delete(
         id: MangaId,
         expectedOwner: SignInId,
+        onHttpFailure: (DataError) -> Unit = {},
     ): Outcome<MangaListWriteAnswer> {
         if (id.value <= 0) return Outcome.Failure(DataError.NotFound)
-        return request(expectedOwner, write = true) { api.delete(id.value, it).writeAnswer() }
+        return request(expectedOwner, write = true, onHttpFailure = onHttpFailure) { api.delete(id.value, it).writeAnswer() }
     }
 
     private suspend fun page(

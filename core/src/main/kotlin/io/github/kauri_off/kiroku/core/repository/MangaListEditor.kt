@@ -100,6 +100,29 @@ sealed interface MangaListEditResult {
     data object Discarded : MangaListEditResult
 }
 
+sealed interface MangaListRemovalResult {
+    data object Removed : MangaListRemovalResult
+
+    data class Failed(
+        val error: DataError,
+    ) : MangaListRemovalResult
+
+    data class ReadRequired(
+        val error: DataError,
+    ) : MangaListRemovalResult
+
+    data class StillPresent(
+        val canRetry: Boolean,
+    ) : MangaListRemovalResult
+
+    data object RefreshRequired : MangaListRemovalResult
+
+    data object Discarded : MangaListRemovalResult
+}
+
+fun MangaListEntry.matchesRemovalRetry(current: MangaListEntry): Boolean =
+    this == current && updatedAt != null && recordedScore != null && recordedChaptersRead != null && recordedVolumesRead != null
+
 interface MangaListEditor : MangaListReader {
     fun observe(owner: SignInId): Flow<Outcome<MangaListSnapshot?>>
 
@@ -109,4 +132,10 @@ interface MangaListEditor : MangaListReader {
         changes: MangaListEdit,
         retryFrom: MangaListEntry? = null,
     ): MangaListEditResult
+
+    suspend fun remove(
+        owner: SignInId,
+        baseline: MangaListEntry,
+        retry: Boolean = false,
+    ): MangaListRemovalResult
 }

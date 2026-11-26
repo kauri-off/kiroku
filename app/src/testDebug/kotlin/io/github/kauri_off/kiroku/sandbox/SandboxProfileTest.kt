@@ -8,6 +8,7 @@ import io.github.kauri_off.kiroku.core.model.MangaListSnapshot
 import io.github.kauri_off.kiroku.core.model.Session
 import io.github.kauri_off.kiroku.core.repository.MangaListEdit
 import io.github.kauri_off.kiroku.core.repository.MangaListEditResult
+import io.github.kauri_off.kiroku.core.repository.MangaListRemovalResult
 import io.github.kauri_off.kiroku.core.repository.MangaListStatus
 import io.github.kauri_off.kiroku.core.repository.SignInStep
 import io.github.kauri_off.kiroku.data.sandbox.SandboxMal
@@ -180,6 +181,27 @@ class SandboxProfileTest {
             assertEquals(MangaListEditResult.Failed(DataError.ListEnded), editor.edit(first, entry.id, changes))
             val replacement = (graph.mangaList.refresh(second) as Outcome.Success).value
             assertEquals(baseline.entries, replacement.entries)
+        }
+        assertEquals(emptyList<URI>(), connections.asked)
+        assertEquals(emptyList<Throwable>(), reports)
+    }
+
+    @Test
+    fun `sandbox manga removal reconciles with the same fixture source`() {
+        process { graph ->
+            val owner = saveManga(graph).signIn
+            val editor = graph.mangaListEditor
+            val baseline = (editor.stored(owner) as Outcome.Success).value ?: error("Missing list")
+            val entry = baseline.entries.first()
+            graph.sandbox.mal.writes = SandboxWrites.Refused
+            assertEquals(MangaListRemovalResult.Failed(DataError.Refused), editor.remove(owner, entry))
+            assertEquals(Outcome.Success(baseline), graph.mangaList.stored(owner))
+
+            graph.sandbox.mal.writes = SandboxWrites.Work
+            assertEquals(MangaListRemovalResult.Removed, editor.remove(owner, entry))
+            val read = (graph.mangaList.refresh(owner) as Outcome.Success).value
+            assertEquals(baseline.entries.drop(1), read.entries)
+            assertEquals(MangaListRemovalResult.Discarded, editor.remove(owner, entry, retry = true))
         }
         assertEquals(emptyList<URI>(), connections.asked)
         assertEquals(emptyList<Throwable>(), reports)

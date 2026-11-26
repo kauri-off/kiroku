@@ -564,15 +564,15 @@ class MalMangaListTest {
             val edit = MangaListEdit(score = 3)
             val bodies =
                 listOf(
-                    """{"arbitrary":[true,false,null,0,-0,1.25,-1e+3,"a\n\u0020\""]}""" to MangaPatchResult.Accepted,
-                    """{"arbitrary":[1,[2],{"nested":[]}]}""" to MangaPatchResult.Accepted,
-                    """{"arbitrary":[1]2]}""" to MangaPatchResult.Unknown(DataError.ServerError),
-                    """{"status":broken}""" to MangaPatchResult.Unknown(DataError.ServerError),
-                    """{"status":NaN}""" to MangaPatchResult.Unknown(DataError.ServerError),
-                    """{"n":00,"n":2}""" to MangaPatchResult.Unknown(DataError.ServerError),
-                    """{"a":1,}""" to MangaPatchResult.Unknown(DataError.ServerError),
-                    """{"a":true "b":false}""" to MangaPatchResult.Unknown(DataError.ServerError),
-                    """{"bad":"line${'\n'}break"}""" to MangaPatchResult.Unknown(DataError.ServerError),
+                    """{"arbitrary":[true,false,null,0,-0,1.25,-1e+3,"a\n\u0020\""]}""" to MangaWriteResult.Accepted,
+                    """{"arbitrary":[1,[2],{"nested":[]}]}""" to MangaWriteResult.Accepted,
+                    """{"arbitrary":[1]2]}""" to MangaWriteResult.Unknown(DataError.ServerError),
+                    """{"status":broken}""" to MangaWriteResult.Unknown(DataError.ServerError),
+                    """{"status":NaN}""" to MangaWriteResult.Unknown(DataError.ServerError),
+                    """{"n":00,"n":2}""" to MangaWriteResult.Unknown(DataError.ServerError),
+                    """{"a":1,}""" to MangaWriteResult.Unknown(DataError.ServerError),
+                    """{"a":true "b":false}""" to MangaWriteResult.Unknown(DataError.ServerError),
+                    """{"bad":"line${'\n'}break"}""" to MangaWriteResult.Unknown(DataError.ServerError),
                 )
             for ((body, expected) in bodies) {
                 network.api.enqueue(answer(200, body))

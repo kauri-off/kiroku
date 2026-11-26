@@ -13,6 +13,8 @@ import io.github.kauri_off.kiroku.core.model.owner
 import io.github.kauri_off.kiroku.core.repository.MangaListEdit
 import io.github.kauri_off.kiroku.core.repository.MangaListEditResult
 import io.github.kauri_off.kiroku.core.repository.MangaListEditor
+import io.github.kauri_off.kiroku.core.repository.MangaListRemovalResult
+import io.github.kauri_off.kiroku.core.repository.matchesRemovalRetry
 import io.github.kauri_off.kiroku.data.db.KirokuDatabase
 import io.github.kauri_off.kiroku.data.db.MangaListStateRow
 import io.github.kauri_off.kiroku.data.db.UnreadableRow
@@ -53,19 +55,26 @@ internal fun interface MangaListWriter {
         owner: SignInId,
         id: MangaId,
         changes: MangaListEdit,
-    ): MangaPatchResult
+    ): MangaWriteResult
 }
 
-internal sealed interface MangaPatchResult {
-    data object Accepted : MangaPatchResult
+internal fun interface MangaListRemover {
+    suspend fun remove(
+        owner: SignInId,
+        id: MangaId,
+    ): MangaWriteResult
+}
+
+internal sealed interface MangaWriteResult {
+    data object Accepted : MangaWriteResult
 
     data class Refused(
         val error: DataError,
-    ) : MangaPatchResult
+    ) : MangaWriteResult
 
     data class Unknown(
         val error: DataError,
-    ) : MangaPatchResult
+    ) : MangaWriteResult
 }
 
 class RoomMangaList internal constructor(
@@ -76,6 +85,7 @@ class RoomMangaList internal constructor(
     private val unexpected: (Throwable) -> Unit,
     private val retired: (SignInId) -> Boolean = { false },
     private val writer: MangaListWriter? = null,
+    private val remover: MangaListRemover? = null,
 ) : MangaListEditor {
     private constructor(
         database: () -> KirokuDatabase,
@@ -84,7 +94,7 @@ class RoomMangaList internal constructor(
         clock: Clock,
         unexpected: (Throwable) -> Unit,
         retired: (SignInId) -> Boolean,
-    ) : this(database, session, source, clock, unexpected, retired, source)
+    ) : this(database, session, source, clock, unexpected, retired, source, source)
 
     constructor(
         database: () -> KirokuDatabase,
@@ -167,6 +177,68 @@ class RoomMangaList internal constructor(
         }
     }
 
+    override suspend fun remove(
+        owner: SignInId,
+        baseline: MangaListEntry,
+        retry: Boolean,
+    ): MangaListRemovalResult {
+        val remover = remover ?: return MangaListRemovalResult.Failed(DataError.InvalidRequest)
+        return queued(owner) { queue ->
+            queue.mutate<MangaListRemovalResult>(
+                baseline.id,
+                MangaListRemovalResult.Discarded,
+                { it == MangaListRemovalResult.Removed || it == MangaListRemovalResult.Discarded },
+            ) {
+                withContext(Dispatchers.IO) { removeEntry(owner, baseline, retry, remover) }
+            }
+        }
+    }
+
+    private suspend fun removeEntry(
+        owner: SignInId,
+        baseline: MangaListEntry,
+        retry: Boolean,
+        remover: MangaListRemover,
+    ): MangaListRemovalResult {
+        val prepared =
+            whileOwner<Boolean?>(owner) {
+                if (!session.isSignedInAs(owner)) return@whileOwner Outcome.Failure(DataError.SessionExpired)
+                database.transaction {
+                    val state = dao.state(owner.value) ?: return@transaction Outcome.Success(false)
+                    if (state.needsRefresh) return@transaction Outcome.Success(null)
+                    val current = dao.entry(owner.value, baseline.id.value)?.toEntry()
+                    val matches = current != null && current == baseline && (!retry || baseline.matchesRemovalRetry(current))
+                    if (matches) dao.requireRefresh(owner.value, true)
+                    Outcome.Success(matches)
+                }
+            }
+        when (prepared) {
+            is Outcome.Failure -> return MangaListRemovalResult.Failed(prepared.error)
+            is Outcome.Success ->
+                when (prepared.value) {
+                    null -> return MangaListRemovalResult.RefreshRequired
+                    false -> return MangaListRemovalResult.Discarded
+                    true -> Unit
+                }
+        }
+
+        val result = send { remover.remove(owner, baseline.id) }
+        if (result is MangaWriteResult.Refused) return MangaListRemovalResult.Failed(clearRefusal(owner, result.error))
+        return when (val readBack = checkNotNull(download(owner) { true })) {
+            is Outcome.Failure ->
+                if (readBack.error == DataError.ListEnded) {
+                    MangaListRemovalResult.Failed(readBack.error)
+                } else {
+                    MangaListRemovalResult.ReadRequired(readBack.error)
+                }
+            is Outcome.Success -> {
+                val current = readBack.value.entries.firstOrNull { it.id == baseline.id }
+                if (current == null) return MangaListRemovalResult.Removed
+                MangaListRemovalResult.StillPresent(baseline.matchesRemovalRetry(current))
+            }
+        }
+    }
+
     private suspend fun <T> queued(
         owner: SignInId,
         run: suspend (MangaListQueue) -> T,
@@ -207,21 +279,8 @@ class RoomMangaList internal constructor(
             }
         if (patch.isEmpty) return MangaListEditResult.Discarded
 
-        val sent =
-            when (val answer = remote { Outcome.Success(writer.patch(owner, id, patch)) }) {
-                is Outcome.Success -> answer.value
-                is Outcome.Failure -> MangaPatchResult.Unknown(answer.error)
-                null -> error("A manga edit cannot be deferred")
-            }
-        if (sent is MangaPatchResult.Refused) {
-            val cleared =
-                whileOwner(owner) {
-                    dao.requireRefresh(owner.value, false)
-                    Outcome.Success(Unit)
-                }
-            val ended = cleared == Outcome.Failure(DataError.ListEnded)
-            return MangaListEditResult.Failed(if (ended) DataError.ListEnded else sent.error)
-        }
+        val sent = send { writer.patch(owner, id, patch) }
+        if (sent is MangaWriteResult.Refused) return MangaListEditResult.Failed(clearRefusal(owner, sent.error))
 
         val readBack = checkNotNull(download(owner) { true })
         if (readBack == Outcome.Failure(DataError.ListEnded)) return MangaListEditResult.Failed(DataError.ListEnded)
@@ -238,9 +297,28 @@ class RoomMangaList internal constructor(
                 }
             }
         if (entry is Outcome.Success && patch.isPresentIn(entry.value)) return MangaListEditResult.Confirmed(entry.value)
-        if (sent == MangaPatchResult.Accepted) return MangaListEditResult.Accepted(entry)
-        check(sent is MangaPatchResult.Unknown)
+        if (sent == MangaWriteResult.Accepted) return MangaListEditResult.Accepted(entry)
+        check(sent is MangaWriteResult.Unknown)
         return MangaListEditResult.Uncertain(sent.error, needsRefresh = entry is Outcome.Failure && entry.error != DataError.NotFound)
+    }
+
+    private suspend fun send(operation: suspend () -> MangaWriteResult): MangaWriteResult =
+        when (val answer = remote { Outcome.Success(operation()) }) {
+            is Outcome.Success -> answer.value
+            is Outcome.Failure -> MangaWriteResult.Unknown(answer.error)
+            null -> error("A manga list write cannot be deferred")
+        }
+
+    private suspend fun clearRefusal(
+        owner: SignInId,
+        error: DataError,
+    ): DataError {
+        val cleared =
+            whileOwner(owner) {
+                dao.requireRefresh(owner.value, false)
+                Outcome.Success(Unit)
+            }
+        return if (cleared == Outcome.Failure(DataError.ListEnded)) DataError.ListEnded else error
     }
 
     private suspend fun download(

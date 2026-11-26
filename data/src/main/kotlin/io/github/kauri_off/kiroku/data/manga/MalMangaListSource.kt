@@ -34,26 +34,53 @@ internal class MalMangaListSource(
     private val session: MalSession,
     retired: (SignInId) -> Boolean = { false },
 ) : MangaListSource,
-    MangaListWriter {
+    MangaListWriter,
+    MangaListRemover {
     private val list = MalMangaList(http, session, retired)
 
     override suspend fun patch(
         owner: SignInId,
         id: MangaId,
         changes: MangaListEdit,
-    ): MangaPatchResult {
+    ): MangaWriteResult {
         var failedOnHttp = false
         return when (val answer = list.patch(id, changes, owner) { failedOnHttp = true }) {
-            is Outcome.Failure ->
-                if (failedOnHttp && (answer.error == DataError.ServerError || answer.error == DataError.NoConnection)) {
-                    MangaPatchResult.Unknown(answer.error)
-                } else {
-                    MangaPatchResult.Refused(answer.error)
-                }
+            is Outcome.Failure -> failure(answer.error, failedOnHttp)
             is Outcome.Success ->
-                if (answer.value.acknowledgesPatch()) MangaPatchResult.Accepted else MangaPatchResult.Unknown(DataError.ServerError)
+                if (answer.value.acknowledgesPatch()) MangaWriteResult.Accepted else MangaWriteResult.Unknown(DataError.ServerError)
         }
     }
+
+    override suspend fun remove(
+        owner: SignInId,
+        id: MangaId,
+    ): MangaWriteResult {
+        var failedOnHttp = false
+        return when (val answer = list.delete(id, owner) { failedOnHttp = true }) {
+            is Outcome.Success ->
+                if (answer.value.status == 200 || answer.value.status == 204) {
+                    MangaWriteResult.Accepted
+                } else {
+                    MangaWriteResult.Unknown(DataError.ServerError)
+                }
+            is Outcome.Failure ->
+                if (failedOnHttp && answer.error == DataError.NotFound) {
+                    MangaWriteResult.Unknown(DataError.NotFound)
+                } else {
+                    failure(answer.error, failedOnHttp)
+                }
+        }
+    }
+
+    private fun failure(
+        error: DataError,
+        failedOnHttp: Boolean,
+    ): MangaWriteResult =
+        if (failedOnHttp && (error == DataError.ServerError || error == DataError.NoConnection)) {
+            MangaWriteResult.Unknown(error)
+        } else {
+            MangaWriteResult.Refused(error)
+        }
 
     override suspend fun fetch(
         owner: SignInId,

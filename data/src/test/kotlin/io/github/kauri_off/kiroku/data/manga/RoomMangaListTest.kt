@@ -4,6 +4,7 @@ import io.github.kauri_off.kiroku.core.error.DataError
 import io.github.kauri_off.kiroku.core.error.Outcome
 import io.github.kauri_off.kiroku.core.model.MangaId
 import io.github.kauri_off.kiroku.core.model.MangaListEntry
+import io.github.kauri_off.kiroku.core.model.MangaListNumber
 import io.github.kauri_off.kiroku.core.model.MangaListSnapshot
 import io.github.kauri_off.kiroku.core.model.MangaReadingStatus
 import io.github.kauri_off.kiroku.core.model.Session
@@ -13,6 +14,7 @@ import io.github.kauri_off.kiroku.core.model.Titles
 import io.github.kauri_off.kiroku.core.model.owner
 import io.github.kauri_off.kiroku.core.repository.MangaListEdit
 import io.github.kauri_off.kiroku.core.repository.MangaListEditResult
+import io.github.kauri_off.kiroku.core.repository.MangaListRemovalResult
 import io.github.kauri_off.kiroku.core.repository.MangaListStatus
 import io.github.kauri_off.kiroku.data.anime.edited
 import io.github.kauri_off.kiroku.data.db.KirokuDatabase
@@ -39,8 +41,10 @@ import kotlinx.coroutines.flow.take
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeout
+import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonNull
+import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
@@ -80,7 +84,9 @@ class RoomMangaListTest {
     private val reported = mutableListOf<Throwable>()
     private var response: suspend (SignInId) -> Outcome<List<MangaListEntry>> = { error("Unexpected fetch") }
 
-    private var write: suspend (SignInId, MangaId, MangaListEdit) -> MangaPatchResult = { _, _, _ -> error("Unexpected patch") }
+    private var write: suspend (SignInId, MangaId, MangaListEdit) -> MangaWriteResult = { _, _, _ -> error("Unexpected patch") }
+
+    private var delete: suspend (SignInId, MangaId) -> MangaWriteResult = { _, _ -> error("Unexpected delete") }
 
     @After
     fun close() {
@@ -97,6 +103,7 @@ class RoomMangaListTest {
             clock,
             unexpected = { reported += it },
             writer = { owner, id, edit -> write(owner, id, edit) },
+            remover = { owner, id -> delete(owner, id) },
         )
 
     private suspend fun signIn(name: String): SignInId {
@@ -117,6 +124,164 @@ class RoomMangaListTest {
         )
 
     @Test
+    fun `removal leaves confirmed rows visible until full read back and serializes a queued patch`() =
+        runBlocking {
+            val owner = signIn("a")
+            val list = repository()
+            val initial = entry()
+            val other = entry(18)
+            response = { Outcome.Success(listOf(initial, other)) }
+            list.refresh(owner)
+            val sent = CompletableDeferred<Unit>()
+            val release = CompletableDeferred<Unit>()
+            delete = { asked, id ->
+                assertEquals(owner to initial.id, asked to id)
+                sent.complete(Unit)
+                release.await()
+                response = { Outcome.Success(listOf(other)) }
+                MangaWriteResult.Accepted
+            }
+            val observed =
+                async {
+                    withTimeout(5_000) {
+                        list.observe(owner).first { it == Outcome.Success(MangaListSnapshot(owner, listOf(other), clock.now)) }
+                    }
+                }
+            val pending = async { list.remove(owner, initial) }
+            val patch =
+                try {
+                    withTimeout(5_000) { sent.await() }
+                    assertEquals(Outcome.Success(MangaListSnapshot(owner, listOf(initial, other), null)), list.stored(owner))
+                    async(start = CoroutineStart.UNDISPATCHED) { list.edit(owner, initial.id, MangaListEdit(score = 2)) }
+                } finally {
+                    release.complete(Unit)
+                }
+
+            val expected = Outcome.Success(MangaListSnapshot(owner, listOf(other), clock.now))
+            assertEquals(MangaListRemovalResult.Removed, pending.await())
+            assertEquals(expected, observed.await())
+            assertEquals(MangaListEditResult.Failed(DataError.NotFound), patch.await())
+            database.close()
+            database = KirokuDatabase.open(context, name)
+            assertEquals(expected, repository().stored(owner))
+            assertTrue(reported.isEmpty())
+        }
+
+    @Test
+    fun `an ambiguous removal owes a complete read and only an unchanged trusted baseline can retry`() =
+        runBlocking {
+            val owner = signIn("a")
+            val list = repository()
+            val initial = entry()
+            response = { Outcome.Success(listOf(initial)) }
+            list.refresh(owner)
+            var sent = 0
+            delete = { _, _ ->
+                sent++
+                MangaWriteResult.Unknown(DataError.ServerError)
+            }
+            response = { Outcome.Failure(DataError.NoConnection) }
+            assertEquals(MangaListRemovalResult.ReadRequired(DataError.NoConnection), list.remove(owner, initial))
+            assertEquals(MangaListRemovalResult.RefreshRequired, list.remove(owner, initial, retry = true))
+            assertEquals(1, sent)
+
+            val changed = initial.copy(updatedAt = clock.now)
+            response = { Outcome.Success(listOf(changed)) }
+            list.refresh(owner)
+            assertEquals(MangaListRemovalResult.Discarded, list.remove(owner, initial, retry = true))
+            val unverified = initial.copy(unverifiedNumbers = setOf(MangaListNumber.Score))
+            response = { Outcome.Success(listOf(unverified)) }
+            list.refresh(owner)
+            assertEquals(MangaListRemovalResult.Discarded, list.remove(owner, unverified, retry = true))
+            assertEquals(1, sent)
+
+            response = { Outcome.Success(listOf(initial)) }
+            list.refresh(owner)
+            assertEquals(MangaListRemovalResult.StillPresent(canRetry = true), list.remove(owner, initial, retry = true))
+            assertEquals(2, sent)
+        }
+
+    @Test
+    fun `a late removal cannot read or delete rows for a replacement sign in`() =
+        runBlocking {
+            val old = signIn("a")
+            val list = repository()
+            val initial = entry()
+            response = { Outcome.Success(listOf(initial)) }
+            list.refresh(old)
+            val sent = CompletableDeferred<Unit>()
+            val release = CompletableDeferred<Unit>()
+            delete = { asked, _ ->
+                assertEquals(old, asked)
+                sent.complete(Unit)
+                release.await()
+                MangaWriteResult.Accepted
+            }
+            val pending = async { list.remove(old, initial) }
+            val replacement =
+                try {
+                    withTimeout(5_000) { sent.await() }
+                    val owner = signIn("b")
+                    response = { asked ->
+                        assertEquals(owner, asked)
+                        Outcome.Success(listOf(initial.copy(score = 2)))
+                    }
+                    owner to list.refresh(owner)
+                } finally {
+                    release.complete(Unit)
+                }
+            assertEquals(MangaListRemovalResult.Failed(DataError.ListEnded), pending.await())
+            assertEquals(MangaListRemovalResult.Failed(DataError.ListEnded), list.remove(old, initial, retry = true))
+            assertEquals(replacement.second, list.stored(replacement.first))
+        }
+
+    @Test
+    fun `empty success and 404 require a complete read to establish removal`() =
+        runBlocking {
+            val owner = signIn("replay")
+            val pages = OwnerRecordings.mangaPages()
+            OwnerRecordings.read("manga removal read-back") {
+                val live = RoomMangaList({ database }, session, network.http, clock) { false }
+                val firstPage = MalJson.parseToJsonElement(pages.first().body).jsonObject
+                val emptyPage = firstPage.edited(listOf("data"), JsonArray(emptyList())).edited(listOf("paging"), JsonObject(emptyMap()))
+                for (page in pages) network.api.enqueue(answer(page.status, page.body))
+                val before = (live.refresh(owner) as Outcome.Success).value
+                val rows = firstPage.getValue("data").jsonArray
+                val removedRow = rows.last().jsonObject
+                val removedNode = removedRow.getValue("node").jsonObject
+                val initial = before.entries.single { it.id.value == removedNode.getValue("id").jsonPrimitive.long }
+                repeat(pages.size) { check(network.api.received().method == "GET") }
+                network.api.enqueue(answer(404, ""))
+                val partial = firstPage.edited(listOf("data"), JsonArray(rows.dropLast(1)))
+                val paging = partial.getValue("paging").jsonObject
+                val next = paging.getValue("next").jsonPrimitive.content
+                val nextWithOneRow = next.replace("offset=2", "offset=1")
+                network.api.enqueue(answer(200, partial.edited(listOf("paging", "next"), JsonPrimitive(nextWithOneRow)).toString()))
+                network.api.enqueue(answer(400, ""))
+                check(live.remove(owner, initial) == MangaListRemovalResult.ReadRequired(DataError.InvalidRequest))
+                check(network.api.received().method == "DELETE")
+                repeat(2) { check(network.api.received().method == "GET") }
+                check(live.stored(owner) == Outcome.Success(before.copy(syncedAt = null)))
+                val count = network.api.requestCount
+                check(live.remove(owner, initial, retry = true) == MangaListRemovalResult.RefreshRequired)
+                check(network.api.requestCount == count)
+
+                for (status in listOf(200, 204, 404)) {
+                    for (page in pages) network.api.enqueue(answer(page.status, page.body))
+                    val baseline = (live.refresh(owner) as Outcome.Success).value.entries.first()
+                    repeat(pages.size) { check(network.api.received().method == "GET") }
+                    network.api.enqueue(answer(status, ""))
+                    network.api.enqueue(answer(200, emptyPage.toString()))
+                    check(live.remove(owner, baseline) == MangaListRemovalResult.Removed)
+                    val request = network.api.received()
+                    check(request.method == "DELETE" && request.url.encodedPath == "/v2/manga/${baseline.id.value}/my_list_status")
+                    check(network.api.received().method == "GET")
+                    check((live.stored(owner) as Outcome.Success).value?.entries == emptyList<MangaListEntry>())
+                }
+            }
+        }
+
+    @Test
     fun `a pending edit leaves Room confirmed and the read back publishes actual values`() =
         runBlocking {
             val owner = signIn("a")
@@ -133,7 +298,7 @@ class RoomMangaListTest {
                 sent.complete(Unit)
                 finish.await()
                 response = { Outcome.Success(listOf(confirmed)) }
-                MangaPatchResult.Accepted
+                MangaWriteResult.Accepted
             }
             val snapshots = list.observe(owner).filterIsInstance<Outcome.Success<MangaListSnapshot?>>().mapNotNull { it.value }
             val observed = async { withTimeout(5_000) { snapshots.first { it.entries == listOf(confirmed) } } }
@@ -167,7 +332,7 @@ class RoomMangaListTest {
             write = { _, _, _ ->
                 assertEquals(Outcome.Success(MangaListSnapshot(owner, listOf(initial), null)), list.stored(owner))
                 response = { Outcome.Success(listOf(confirmed)) }
-                MangaPatchResult.Accepted
+                MangaWriteResult.Accepted
             }
             val refreshing = async { list.refresh(owner) }
             withTimeout(5_000) { reading.await() }
@@ -187,7 +352,7 @@ class RoomMangaListTest {
             response = { Outcome.Success(listOf(initial)) }
             val before = list.refresh(owner)
             response = { error("A rejection should require no download") }
-            write = { _, _, _ -> MangaPatchResult.Refused(DataError.Refused) }
+            write = { _, _, _ -> MangaWriteResult.Refused(DataError.Refused) }
 
             assertEquals(MangaListEditResult.Failed(DataError.Refused), list.edit(owner, initial.id, MangaListEdit(score = 4)))
             assertEquals(before, list.stored(owner))
@@ -207,7 +372,7 @@ class RoomMangaListTest {
             var patches = 0
             write = { _, _, _ ->
                 patches++
-                MangaPatchResult.Unknown(DataError.ServerError)
+                MangaWriteResult.Unknown(DataError.ServerError)
             }
             response = { Outcome.Failure(DataError.NoConnection) }
 
@@ -245,7 +410,7 @@ class RoomMangaListTest {
             write = { _, _, changes ->
                 assertEquals(MangaListEdit(score = 2), changes)
                 response = { Outcome.Success(listOf(confirmed)) }
-                MangaPatchResult.Accepted
+                MangaWriteResult.Accepted
             }
             val refreshing = async { list.refresh(owner) }
             withTimeout(5_000) { reading.await() }
@@ -268,7 +433,7 @@ class RoomMangaListTest {
             var patches = 0
             write = { _, _, _ ->
                 patches++
-                MangaPatchResult.Accepted
+                MangaWriteResult.Accepted
             }
             response = { Outcome.Success(listOf(initial, initial)) }
 
@@ -295,7 +460,7 @@ class RoomMangaListTest {
             list.refresh(owner)
             write = { _, _, _ ->
                 response = { Outcome.Success(listOf(actual)) }
-                MangaPatchResult.Unknown(DataError.NoConnection)
+                MangaWriteResult.Unknown(DataError.NoConnection)
             }
 
             assertEquals(
@@ -346,7 +511,7 @@ class RoomMangaListTest {
                 assertEquals(old, owner)
                 sent.complete(Unit)
                 finish.await()
-                MangaPatchResult.Accepted
+                MangaWriteResult.Accepted
             }
             val pending = async { list.edit(old, initial.id, MangaListEdit(score = 2)) }
             val replacement =
