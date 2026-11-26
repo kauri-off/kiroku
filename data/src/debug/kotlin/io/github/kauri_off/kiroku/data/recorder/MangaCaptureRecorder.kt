@@ -4,18 +4,23 @@ import io.github.kauri_off.kiroku.core.model.MangaId
 import io.github.kauri_off.kiroku.core.model.SessionOwner
 import io.github.kauri_off.kiroku.core.model.SignInId
 import io.github.kauri_off.kiroku.data.manga.MangaMutationClaim
-import io.github.kauri_off.kiroku.data.manga.MangaMutationEvidence
+import io.github.kauri_off.kiroku.data.manga.MangaMutationExchange
 import io.github.kauri_off.kiroku.data.manga.MangaMutationMethod
 import io.github.kauri_off.kiroku.data.manga.MangaMutationObserver
 import io.github.kauri_off.kiroku.data.session.MalSession
+import io.github.kauri_off.kiroku.data.session.fileRetry
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 import java.io.File
@@ -26,6 +31,7 @@ import java.util.UUID
 import kotlin.time.Duration.Companion.minutes
 import kotlin.time.TimeMark
 import kotlin.time.TimeSource
+import kotlin.time.toKotlinDuration
 
 const val MANGA_CAPTURE_MINUTES = 10
 
@@ -63,12 +69,16 @@ class MangaCaptureRecorder internal constructor(
     directory: () -> File,
     private val write: (File, String) -> Unit,
     private val time: TimeSource = TimeSource.Monotonic,
+    private val erase: (File) -> Boolean = File::deleteRecursively,
 ) : MangaMutationObserver {
     private val root by lazy(directory)
     private val shown = MutableStateFlow<MangaCaptureState>(MangaCaptureState.Ready)
     val state = shown.asStateFlow()
     private val lock = Any()
-    private var initialized = false
+    private val disk = Any()
+    private var generation = 0L
+    private var retrying: Long? = null
+    private var cleanupPending = true
     private var watching = false
     private var resident: SessionOwner? = null
     private var reservation: Reservation? = null
@@ -84,11 +94,40 @@ class MangaCaptureRecorder internal constructor(
 
     internal val active: Boolean get() = synchronized(lock) { reservation != null }
 
-    internal fun initialize(): Boolean =
-        synchronized(lock) {
-            if (!initialized) initialized = erase()
-            initialized
+    internal fun initialize(): Boolean {
+        val epoch = synchronized(lock) { generation }
+        if (retireFiles(epoch)) return true
+        retryRetirement(epoch)
+        return false
+    }
+
+    private fun retireFiles(epoch: Long): Boolean =
+        synchronized(disk) {
+            if (synchronized(lock) { generation != epoch || !cleanupPending }) return true
+            val erased = storage { erase(root) } == true
+            synchronized(lock) {
+                if (generation != epoch) return true
+                if (erased) {
+                    cleanupPending = false
+                } else {
+                    stop(MangaCaptureStop.Storage)
+                }
+            }
+            erased
         }
+
+    private fun retryRetirement(epoch: Long) {
+        synchronized(lock) {
+            if (generation != epoch || !cleanupPending || retrying == epoch) return
+            retrying = epoch
+        }
+        scope.launch {
+            var attempt = 0
+            do {
+                delay(fileRetry(attempt++).toKotlinDuration())
+            } while (!retireFiles(epoch))
+        }
+    }
 
     internal suspend fun arm(
         owner: SessionOwner?,
@@ -102,6 +141,7 @@ class MangaCaptureRecorder internal constructor(
             return
         }
         val listed = contains(signIn, id)
+        if (!initialize()) return
         val armed =
             session.value.withOwner(owner) {
                 synchronized(lock) {
@@ -109,8 +149,8 @@ class MangaCaptureRecorder internal constructor(
                         reservation != null -> Unit
                         !session.value.mayWriteAs(signIn) -> stop(MangaCaptureStop.Ended)
                         !listed -> stop(MangaCaptureStop.MissingEntry)
-                        !initialize() -> stop(MangaCaptureStop.Storage)
-                        resident != null && resident !== owner && !erase() -> stop(MangaCaptureStop.Storage)
+                        cleanupPending -> stop(MangaCaptureStop.Storage)
+                        resident != null && resident !== owner -> retryRetirement(retire())
                         else -> reserve(owner, MangaCaptureTarget(id, method))
                     }
                 }
@@ -138,8 +178,7 @@ class MangaCaptureRecorder internal constructor(
                     synchronized(lock) {
                         val stored = resident ?: return@synchronized
                         if (!session.value.isCurrentOwner(stored)) {
-                            if (erase()) resident = null
-                            stop(MangaCaptureStop.Ended)
+                            retryRetirement(retire())
                         } else if (reservation != null && stored.id?.let(session.value::mayWriteAs) != true) {
                             stop(MangaCaptureStop.Ended)
                         }
@@ -149,18 +188,22 @@ class MangaCaptureRecorder internal constructor(
         }
     }
 
-    fun disarm(): Job =
-        scope.launch {
-            synchronized(lock) {
-                if (reservation != null) stop(MangaCaptureStop.Ended)
-            }
+    fun disarm(target: MangaCaptureTarget) {
+        synchronized(lock) {
+            if (reservation?.target === target) stop(MangaCaptureStop.Ended)
         }
+    }
 
     fun forget() {
-        synchronized(lock) {
-            if (erase()) resident = null
-            stop(MangaCaptureStop.Ended)
-        }
+        synchronized(lock) { retire() }
+        initialize()
+    }
+
+    private fun retire(): Long {
+        resident = null
+        cleanupPending = true
+        stop(MangaCaptureStop.Ended)
+        return ++generation
     }
 
     override fun candidate(
@@ -178,13 +221,12 @@ class MangaCaptureRecorder internal constructor(
             MangaMutationClaim { claim(run) }
         }
 
-    private fun claim(run: Reservation): (suspend (MangaMutationEvidence?) -> Unit)? =
+    private fun claim(run: Reservation): MangaMutationExchange? =
         synchronized(lock) {
             if (!current(run) || run.claimed) return null
             run.claimed = true
-            val finish: suspend (MangaMutationEvidence?) -> Unit = { evidence -> finish(run, evidence) }
             shown.value = MangaCaptureState.Capturing(run.target)
-            finish
+            ObservedMangaMutation(run.target.id, run.target.method) { evidence -> finish(run, evidence) }
         }
 
     private fun current(run: Reservation): Boolean =
@@ -197,63 +239,81 @@ class MangaCaptureRecorder internal constructor(
         run: Reservation,
         evidence: MangaMutationEvidence?,
     ) {
+        var pending: File? = null
         try {
             if (evidence == null) return
-            val caller = currentCoroutineContext()
-            session.value.withOwner(run.owner) {
-                synchronized(lock) {
-                    if (current(run)) {
-                        val folder =
-                            storage {
-                                publish(evidence, run.target.method) {
-                                    caller.ensureActive()
-                                    current(run)
+            withContext(Dispatchers.IO) {
+                val caller = currentCoroutineContext()
+                caller.ensureActive()
+                pending =
+                    synchronized(disk) {
+                        if (!synchronized(lock) { current(run) }) return@withContext
+                        storage {
+                            val parent = Files.createDirectories(root.toPath())
+                            Files.createDirectory(parent.resolve("run-${UUID.randomUUID()}")).toFile()
+                        }
+                    }
+                val directory = pending
+                val staged = directory != null && storage { stage(directory, evidence, run.target.method) } == true
+                session.value.withOwner(run.owner) {
+                    synchronized(lock) {
+                        if (current(run)) {
+                            caller.ensureActive()
+                            val folder =
+                                directory?.takeIf { staged }?.let {
+                                    storage {
+                                        val completed = File(it.parentFile, it.name.replaceFirst("run-", "capture-"))
+                                        Files.move(it.toPath(), completed.toPath(), StandardCopyOption.ATOMIC_MOVE).toFile()
+                                    }
                                 }
+                            if (folder == null) {
+                                stop(MangaCaptureStop.Storage)
+                            } else {
+                                clear()
+                                shown.value = MangaCaptureState.Complete(run.target, folder)
                             }
-                        if (folder == null) {
-                            stop(if (current(run)) MangaCaptureStop.Storage else MangaCaptureStop.Ended)
-                        } else {
-                            clear()
-                            shown.value = MangaCaptureState.Complete(run.target, folder)
                         }
                     }
                 }
             }
         } finally {
+            val active = currentCoroutineContext().isActive
             synchronized(lock) {
-                if (reservation === run) stop(if (current(run)) MangaCaptureStop.Unconfirmed else MangaCaptureStop.Ended)
+                if (reservation === run) stop(if (active && current(run)) MangaCaptureStop.Unconfirmed else MangaCaptureStop.Ended)
+            }
+            pending?.let { directory ->
+                withContext(Dispatchers.IO + NonCancellable) {
+                    if (storage { directory.deleteRecursively() } != true) {
+                        scope.launch(Dispatchers.IO) {
+                            var attempt = 0
+                            do {
+                                delay(fileRetry(attempt++).toKotlinDuration())
+                            } while (storage { directory.deleteRecursively() } != true)
+                        }
+                    }
+                }
             }
         }
     }
 
-    private fun publish(
+    private fun stage(
+        pending: File,
         evidence: MangaMutationEvidence,
         method: MangaMutationMethod,
-        mayPublish: () -> Boolean,
-    ): File? {
-        val parent = Files.createDirectories(root.toPath())
-        val id = UUID.randomUUID()
-        val pending = Files.createDirectory(parent.resolve("run-$id")).toFile()
-        try {
-            val redaction = Sanitiser(emptyMap())
-            val body =
-                buildJsonObject {
-                    put("pages", evidence.pages)
-                    put("complete", true)
-                    put("present", evidence.readBack != null)
-                    evidence.readBack?.let { put("list_status", it) }
-                }
-            val writeReply = redaction.privateAnswer(method.name.lowercase(), evidence.status, evidence.write)
-            storePrivateAnswer(pending, writeReply, write)
-            storePrivateAnswer(pending, redaction.privateAnswer("read_back", 200, body), write)
-            if (!mayPublish()) return null
-            return Files.move(pending.toPath(), parent.resolve("capture-$id"), StandardCopyOption.ATOMIC_MOVE).toFile()
-        } finally {
-            pending.deleteRecursively()
-        }
+    ): Boolean {
+        val redaction = Sanitiser(emptyMap())
+        val body =
+            buildJsonObject {
+                put("pages", evidence.pages)
+                put("complete", true)
+                put("present", evidence.readBack != null)
+                evidence.readBack?.let { put("list_status", it) }
+            }
+        val writeReply = redaction.privateAnswer("manga_mutation_${method.name.lowercase()}", evidence.status, evidence.write)
+        storePrivateAnswer(pending, writeReply, write)
+        storePrivateAnswer(pending, redaction.privateAnswer("manga_mutation_read_back", 200, body), write)
+        return true
     }
-
-    private fun erase(): Boolean = storage { root.deleteRecursively() } == true
 
     private inline fun <T> storage(operation: () -> T): T? =
         try {

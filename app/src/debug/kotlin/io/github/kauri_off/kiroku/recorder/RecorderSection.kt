@@ -19,6 +19,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
@@ -35,12 +36,14 @@ import io.github.kauri_off.kiroku.R
 import io.github.kauri_off.kiroku.collectAsScreenState
 import io.github.kauri_off.kiroku.core.error.Outcome
 import io.github.kauri_off.kiroku.core.model.MangaId
+import io.github.kauri_off.kiroku.core.model.Session
 import io.github.kauri_off.kiroku.data.manga.MangaMutationMethod
 import io.github.kauri_off.kiroku.data.recorder.Halt
 import io.github.kauri_off.kiroku.data.recorder.ListAfter
 import io.github.kauri_off.kiroku.data.recorder.MANGA_CAPTURE_MINUTES
 import io.github.kauri_off.kiroku.data.recorder.MangaCaptureState
 import io.github.kauri_off.kiroku.data.recorder.MangaCaptureStop
+import io.github.kauri_off.kiroku.data.recorder.MangaCaptureTarget
 import io.github.kauri_off.kiroku.data.recorder.ReadCapture
 import io.github.kauri_off.kiroku.data.recorder.RecordedTitle
 import io.github.kauri_off.kiroku.data.recorder.Recording
@@ -61,6 +64,7 @@ data class RecorderState(
     val typed: String = "",
     val manga: MangaCaptureState? = null,
     val mangaId: String = "",
+    val mangaSignedIn: Boolean = true,
 )
 
 sealed interface RecorderEvent {
@@ -76,7 +80,9 @@ sealed interface RecorderEvent {
         val method: MangaMutationMethod,
     ) : RecorderEvent
 
-    data object DisarmManga : RecorderEvent
+    data class DisarmManga(
+        val target: MangaCaptureTarget,
+    ) : RecorderEvent
 
     data object Check : RecorderEvent
 
@@ -108,7 +114,11 @@ fun RecorderRoute() {
             ?.state
             ?.collectAsScreenState()
             ?.value
-    RecorderSection(RecorderState(recording, typed, manga, mangaId)) { event ->
+    val session =
+        remember(graph) { graph?.takeIf { recorder?.manga != null }?.session?.observeSession() }
+            ?.collectAsScreenState(initial = null)
+            ?.value
+    RecorderSection(RecorderState(recording, typed, manga, mangaId, mangaSignedIn = session is Session.SignedIn)) { event ->
         when (event) {
             is RecorderEvent.Type -> typed = event.text.filter(Char::isDigit).take(ID_DIGITS)
             is RecorderEvent.TypeManga -> mangaId = event.text.filter { it in '0'..'9' }.take(ID_DIGITS)
@@ -119,7 +129,7 @@ fun RecorderRoute() {
                         stored is Outcome.Success && stored.value?.entries?.any { it.id == id } == true
                     }
                 }
-            RecorderEvent.DisarmManga -> recorder?.manga?.disarm()
+            is RecorderEvent.DisarmManga -> recorder?.manga?.disarm(event.target)
             RecorderEvent.Check -> typed.toLongOrNull()?.let { recorder?.check(it) }
             is RecorderEvent.Record -> recorder?.record(event.title)
             is RecorderEvent.RecordReads -> recorder?.recordReads(event.capture)
@@ -145,7 +155,7 @@ fun RecorderSection(
     SectionDetail(R.string.recorder_read_detail)
     ReadButton(R.string.recorder_suggestions, ReadCapture.Suggestions, free, onEvent)
     ReadButton(R.string.recorder_manga_list, ReadCapture.MangaList, free, onEvent)
-    state.manga?.let { MangaCaptureSection(it, state.mangaId, free && recording !is Recording.Checked, onEvent) }
+    state.manga?.let { MangaCaptureSection(it, state.mangaId, state.mangaSignedIn && free && recording !is Recording.Checked, onEvent) }
     SectionDetail(R.string.recorder_detail)
     RecorderIdField(
         state.typed,
@@ -213,9 +223,15 @@ private fun MangaCaptureSection(
         is MangaCaptureState.Stopped -> MangaCaptureLine(stringResource(state.reason.label()))
         MangaCaptureState.Ready -> Unit
     }
-    if (state is MangaCaptureState.Armed || state is MangaCaptureState.Capturing) {
+    val active =
+        when (state) {
+            is MangaCaptureState.Armed -> state.target
+            is MangaCaptureState.Capturing -> state.target
+            else -> null
+        }
+    if (active != null) {
         OutlinedButton(
-            onClick = { onEvent(RecorderEvent.DisarmManga) },
+            onClick = { onEvent(RecorderEvent.DisarmManga(active)) },
             modifier = Modifier.padding(horizontal = Spacing.l),
         ) {
             Text(stringResource(R.string.recorder_manga_disarm))

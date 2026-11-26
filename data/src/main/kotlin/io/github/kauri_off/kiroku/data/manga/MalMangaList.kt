@@ -73,7 +73,7 @@ internal class MalMangaList(
         if (form.isEmpty()) return Outcome.Failure(DataError.InvalidRequest)
         return request(expectedOwner, write = true, onHttpFailure = onHttpFailure) { authorization ->
             api.patch(id.value, form, authorization).writeAnswer().also {
-                currentCoroutineContext()[MangaMutationExchange]?.write(id, it, authorization, http.clientId)
+                currentCoroutineContext()[MangaMutationExchange]?.write(id, it, form, authorization, http.clientId)
             }
         }
     }
@@ -86,7 +86,7 @@ internal class MalMangaList(
         if (id.value <= 0) return Outcome.Failure(DataError.NotFound)
         return request(expectedOwner, write = true, onHttpFailure = onHttpFailure) { authorization ->
             api.delete(id.value, authorization).writeAnswer().also {
-                currentCoroutineContext()[MangaMutationExchange]?.write(id, it, authorization, http.clientId)
+                currentCoroutineContext()[MangaMutationExchange]?.write(id, it, emptyMap(), authorization, http.clientId)
             }
         }
     }

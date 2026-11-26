@@ -103,6 +103,13 @@ class DebugMenuScreenshots : ScreenshotRegistry() {
                 )
             },
             case("recorder-confirm") { Menu(ScenarioState.Unavailable, recorder = RecorderState(Recording.Checked(TITLE), "1")) },
+            case("recorder-manga-signed-out") {
+                Menu(
+                    ScenarioState.Unavailable,
+                    signOut = SignOutState.Account(Session.SignedOut),
+                    recorder = RecorderState(Recording.Idle, manga = MangaCaptureState.Ready, mangaId = "17", mangaSignedIn = false),
+                )
+            },
             case("recorder-manga-ready") {
                 Menu(ScenarioState.Unavailable, recorder = RecorderState(Recording.Idle, manga = MangaCaptureState.Ready, mangaId = "17"))
             },

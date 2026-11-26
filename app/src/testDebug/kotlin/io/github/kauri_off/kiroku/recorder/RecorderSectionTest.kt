@@ -66,6 +66,20 @@ class RecorderSectionTest {
     }
 
     @Test
+    fun `signed out manga capture cannot be armed`() {
+        compose.setContent {
+            Column {
+                RecorderSection(RecorderState(Recording.Idle, manga = MangaCaptureState.Ready, mangaId = "17", mangaSignedIn = false)) {
+                    events += it
+                }
+            }
+        }
+        compose.onNodeWithText("Arm capture for Save").assertIsNotEnabled()
+        compose.onNodeWithText("Arm capture for Remove").assertIsNotEnabled()
+        assertEquals(emptyList<RecorderEvent>(), events)
+    }
+
+    @Test
     fun `armed manga capture shows the selected action and can be disarmed`() {
         val target = MangaCaptureTarget(MangaId(17), MangaMutationMethod.Delete)
         compose.setContent {
@@ -75,7 +89,7 @@ class RecorderSectionTest {
         compose.onNodeWithText("Arm capture for Save").assertDoesNotExist()
         compose.onNodeWithText("Record my manga list").assertIsNotEnabled()
         compose.onNodeWithText("Disarm capture").performClick()
-        assertEquals(listOf(RecorderEvent.DisarmManga), events)
+        assertEquals(listOf(RecorderEvent.DisarmManga(target)), events)
     }
 
     @Test

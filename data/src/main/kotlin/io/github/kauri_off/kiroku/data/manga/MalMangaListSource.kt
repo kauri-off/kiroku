@@ -175,6 +175,7 @@ private const val MAX_ACKNOWLEDGMENT_DEPTH = 64
 
 private class JsonStructure(
     private val payload: String,
+    private val startsObject: (() -> (String) -> Boolean)?,
 ) {
     private var end = 0
     private val tokens =
@@ -201,7 +202,10 @@ private class JsonStructure(
     private fun value(depth: Int): Boolean {
         if (depth == MAX_ACKNOWLEDGMENT_DEPTH) return false
         return when (token) {
-            "{" -> collection("}", ::takeMember, depth + 1)
+            "{" -> {
+                val member = startsObject?.invoke()
+                collection("}", { takeMember(it, member) }, depth + 1)
+            }
             "[" -> collection("]", ::value, depth + 1)
             null, "}", "]", ":", "," -> false
             else -> {
@@ -211,8 +215,12 @@ private class JsonStructure(
         }
     }
 
-    private fun takeMember(depth: Int): Boolean {
-        if (token?.first() != '"') return false
+    private fun takeMember(
+        depth: Int,
+        checkName: ((String) -> Boolean)?,
+    ): Boolean {
+        val name = token ?: return false
+        if (name.first() != '"' || checkName?.invoke(name) == false) return false
         token = next()
         return take(":") && value(depth)
     }
@@ -245,4 +253,5 @@ internal fun String.strictMangaObject(): JsonObject? {
     }
 }
 
-internal fun String.isStrictMangaObject(): Boolean = JsonStructure(this).isObject()
+internal fun String.isStrictMangaObject(startsObject: (() -> (String) -> Boolean)? = null): Boolean =
+    JsonStructure(this, startsObject).isObject()

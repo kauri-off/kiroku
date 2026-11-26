@@ -25,9 +25,12 @@ enum class ReadCapture(
 
 internal fun isSignedInAnswer(name: String): Boolean =
     name in SignedInAnswers ||
+        name in MangaMutationAnswers ||
         name == "suggestions_first" ||
         name == "suggestions_next" ||
         (name.startsWith("manga_list_") && name.removePrefix("manga_list_").toIntOrNull()?.let { it > 0 } == true)
+
+private val MangaMutationAnswers = setOf("manga_mutation_patch", "manga_mutation_delete", "manga_mutation_read_back")
 
 // A change of the recorder's own title on the list: [form] is sent as it is, and the entry is read back after it.
 internal class OwnWrite(

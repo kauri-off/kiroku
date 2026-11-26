@@ -176,8 +176,10 @@ class RoomMangaList internal constructor(
             return MangaListEditResult.Failed(DataError.InvalidRequest)
         }
         val claim = if (retryFrom == null) observing { mutationObserver?.candidate(owner, id, MangaMutationMethod.Patch) } else null
-        return queued(owner) { queue ->
-            queue.edit(id) { withContext(Dispatchers.IO) { save(owner, id, changes, retryFrom, writer, claim) } }
+        return completeMutation(claim) { operation ->
+            queued(owner) { queue ->
+                queue.edit(id) { withContext(Dispatchers.IO) { save(owner, id, changes, retryFrom, writer, operation) } }
+            }
         }
     }
 
@@ -188,13 +190,15 @@ class RoomMangaList internal constructor(
     ): MangaListRemovalResult {
         val remover = remover ?: return MangaListRemovalResult.Failed(DataError.InvalidRequest)
         val claim = if (!retry) observing { mutationObserver?.candidate(owner, baseline.id, MangaMutationMethod.Delete) } else null
-        return queued(owner) { queue ->
-            queue.mutate<MangaListRemovalResult>(
-                baseline.id,
-                MangaListRemovalResult.Discarded,
-                { it == MangaListRemovalResult.Removed || it == MangaListRemovalResult.Discarded },
-            ) {
-                withContext(Dispatchers.IO) { removeEntry(owner, baseline, retry, remover, claim) }
+        return completeMutation(claim) { operation ->
+            queued(owner) { queue ->
+                queue.mutate<MangaListRemovalResult>(
+                    baseline.id,
+                    MangaListRemovalResult.Discarded,
+                    { it == MangaListRemovalResult.Removed || it == MangaListRemovalResult.Discarded },
+                ) {
+                    withContext(Dispatchers.IO) { removeEntry(owner, baseline, retry, remover, operation) }
+                }
             }
         }
     }
@@ -204,7 +208,7 @@ class RoomMangaList internal constructor(
         baseline: MangaListEntry,
         retry: Boolean,
         remover: MangaListRemover,
-        claim: MangaMutationClaim?,
+        operation: MutationOperation?,
     ): MangaListRemovalResult {
         val prepared =
             whileOwner<Boolean?>(owner) {
@@ -228,7 +232,7 @@ class RoomMangaList internal constructor(
                 }
         }
 
-        return observeMutation(baseline.id, MangaMutationMethod.Delete, claim) { evidence ->
+        return observeMutation(operation) { evidence ->
             removePrepared(owner, baseline, remover, evidence)
         }
     }
@@ -289,7 +293,7 @@ class RoomMangaList internal constructor(
         changes: MangaListEdit,
         retryFrom: MangaListEntry?,
         writer: MangaListWriter,
-        claim: MangaMutationClaim?,
+        operation: MutationOperation?,
     ): MangaListEditResult {
         val prepared =
             whileOwner<MangaListEdit?>(owner) {
@@ -310,7 +314,7 @@ class RoomMangaList internal constructor(
             }
         if (patch.isEmpty) return MangaListEditResult.Discarded
 
-        return observeMutation(id, MangaMutationMethod.Patch, claim) { evidence ->
+        return observeMutation(operation) { evidence ->
             savePrepared(owner, id, patch, writer, evidence)
         }
     }
@@ -352,20 +356,31 @@ class RoomMangaList internal constructor(
         return MangaListEditResult.Uncertain(sent.error, needsRefresh = entry is Outcome.Failure && entry.error != DataError.NotFound)
     }
 
-    private suspend fun <T> observeMutation(
-        id: MangaId,
-        method: MangaMutationMethod,
+    private class MutationOperation(
+        val claim: MangaMutationClaim,
+    ) {
+        var exchange: MangaMutationExchange? = null
+    }
+
+    private suspend fun <T> completeMutation(
         claim: MangaMutationClaim?,
+        run: suspend (MutationOperation?) -> T,
+    ): T {
+        val operation = claim?.let(::MutationOperation)
+        try {
+            return run(operation)
+        } finally {
+            observing { operation?.exchange?.finish() }
+        }
+    }
+
+    private suspend fun <T> observeMutation(
+        operation: MutationOperation?,
         run: suspend (MangaMutationExchange?) -> T,
     ): T {
-        val finish = observing { claim?.claim() } ?: return run(null)
-        val exchange = MangaMutationExchange(id, method)
-        var evidence: MangaMutationEvidence? = null
-        try {
-            return withContext(exchange) { run(exchange) }.also { evidence = exchange.completed() }
-        } finally {
-            observing { finish(evidence) }
-        }
+        val exchange = observing { operation?.claim?.claim() } ?: return run(null)
+        checkNotNull(operation).exchange = exchange
+        return withContext(exchange) { run(exchange) }
     }
 
     private inline fun <T> observing(run: () -> T): T? =
