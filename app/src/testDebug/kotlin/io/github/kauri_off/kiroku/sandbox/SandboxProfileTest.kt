@@ -150,6 +150,19 @@ class SandboxProfileTest {
     }
 
     @Test
+    fun `first manga access starts cleanup for a replacement in the same process`() {
+        process { graph ->
+            val first = saveManga(graph)
+            assertEquals(listOf(1L, 4L), mangaRows())
+            val second = signIn(graph)
+            assertNotEquals(first.signIn, second.signIn)
+            awaitMangaRows(listOf(0L, 0L))
+        }
+        assertEquals(emptyList<URI>(), connections.asked)
+        assertEquals(emptyList<Throwable>(), reports)
+    }
+
+    @Test
     fun `re-sign-in retires an expired owner's manga on a restarted graph without using the reader`() {
         val first =
             process { graph ->

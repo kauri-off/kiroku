@@ -38,12 +38,11 @@ import io.github.kauri_off.kiroku.notify.MarkWatchedWork
 import io.github.kauri_off.kiroku.signin.SignInOwner
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.collectLatest
-import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import okhttp3.Interceptor
@@ -170,18 +169,32 @@ internal class LiveGraph(
     override val list by lazy { liveList(parts, account, listStore) { preferences.forgetUsersChoices() } }
     override val anime by lazy { liveTitles(parts, preferences = { preferences }) }
     override val mangaCatalogue by lazy { MalMangaCatalogue(parts.http) }
-    override val mangaList by lazy { RoomMangaList({ parts.database }, account, parts.http, clock, ::wasRetiredOnDisk) }
+    private val mangaReader = lazy { RoomMangaList({ parts.database }, account, parts.http, clock, ::wasRetiredOnDisk) }
+    override val mangaList: RoomMangaList
+        get() {
+            startMangaCleanup()
+            return mangaReader.value
+        }
 
     internal fun wasRetiredOnDisk(owner: SignInId) = imageCache.wasRecorded(owner)
 
     private fun hasDatabase() = parts.context.getDatabasePath(parts.databaseName).isFile
 
-    init {
-        parts.scope.launch(Dispatchers.IO) {
-            account.observeSession().map { it.owner }.distinctUntilChanged().collectLatest { owner ->
-                if (hasDatabase()) mangaList.sweepRetired(owner)
+    private val mangaCleanup =
+        parts.scope.launch(Dispatchers.IO, start = CoroutineStart.LAZY) {
+            account.observeOwner().collectLatest { owner ->
+                if (hasDatabase()) mangaReader.value.sweepRetired(owner)
             }
         }
+
+    init {
+        parts.scope.launch(Dispatchers.IO) {
+            if (hasDatabase()) startMangaCleanup()
+        }
+    }
+
+    internal fun startMangaCleanup() {
+        mangaCleanup.start()
     }
 
     override val manga by lazy {

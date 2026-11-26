@@ -88,7 +88,7 @@ class SandboxGraph internal constructor(
 
     override val manga: MangaRepository get() = mangaFixtures
 
-    override val mangaList: MangaListReader get() = mangaFixtures
+    override val mangaList: MangaListReader get() = mangaFixtures.also { live.startMangaCleanup() }
 
     override val search: SearchRepository by lazy {
         val fixtures = SearchFixtureStates.standIn(Fixtures.at(clock))

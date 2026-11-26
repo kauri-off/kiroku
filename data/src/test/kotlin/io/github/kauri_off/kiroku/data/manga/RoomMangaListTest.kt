@@ -6,6 +6,7 @@ import io.github.kauri_off.kiroku.core.model.MangaId
 import io.github.kauri_off.kiroku.core.model.MangaListEntry
 import io.github.kauri_off.kiroku.core.model.MangaListSnapshot
 import io.github.kauri_off.kiroku.core.model.MangaReadingStatus
+import io.github.kauri_off.kiroku.core.model.SessionOwner
 import io.github.kauri_off.kiroku.core.model.SignInId
 import io.github.kauri_off.kiroku.core.model.Titles
 import io.github.kauri_off.kiroku.core.model.owner
@@ -18,6 +19,8 @@ import io.github.kauri_off.kiroku.data.session.TokenReply
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.async
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.take
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
 import org.junit.After
@@ -149,10 +152,49 @@ class RoomMangaListTest {
         }
 
     @Test
+    fun `a new signed out owner triggers cleanup even when the collector misses the intervening sign in`() =
+        runBlocking {
+            val a = signIn("a")
+            val list = repository()
+            response = { Outcome.Success(listOf(entry())) }
+            assertTrue(list.refresh(a) is Outcome.Success)
+            session.signOut()
+
+            val initial = CompletableDeferred<SessionOwner>()
+            val release = CompletableDeferred<Unit>()
+            val sweep =
+                async {
+                    session.observeOwner().take(2).collect { owner ->
+                        if (initial.complete(owner)) {
+                            release.await()
+                        } else {
+                            assertNull(owner.id)
+                            assertEquals(Outcome.Success(Unit), list.forgetRetired(owner))
+                        }
+                    }
+                }
+            try {
+                val old = initial.await()
+                assertNull(old.id)
+                signIn("b")
+                assertEquals(Outcome.Failure(DataError.ListEnded), list.forgetRetired(old))
+                session.signOut()
+                assertEquals(Outcome.Failure(DataError.ListEnded), list.forgetRetired(old))
+                assertTrue(database.mangaList().entries(a.value).isNotEmpty())
+                release.complete(Unit)
+                withTimeout(5_000) { sweep.await() }
+                assertTrue(database.mangaList().entries(a.value).isEmpty())
+            } finally {
+                release.complete(Unit)
+            }
+        }
+
+    @Test
     fun `a retired download and cleanup cannot replace the new owner's same manga`() =
         runBlocking {
             val a = signIn("a")
             val list = repository()
+            val epochA = session.observeOwner().first()
             val aEntry = entry().copy(score = 4)
             response = { Outcome.Success(listOf(aEntry)) }
             assertEquals(Outcome.Success(MangaListSnapshot(a, listOf(aEntry), clock.now)), list.refresh(a))
@@ -177,13 +219,13 @@ class RoomMangaListTest {
                 assertEquals(Outcome.Success(bSnapshot), withTimeout(5_000) { list.refresh(b) })
                 release.complete(Unit)
                 assertEquals(Outcome.Failure(DataError.ListEnded), stale.await())
-                assertEquals(Outcome.Failure(DataError.ListEnded), list.forgetRetired(a))
+                assertEquals(Outcome.Failure(DataError.ListEnded), list.forgetRetired(epochA))
                 assertEquals(Outcome.Success(bSnapshot), list.stored(b))
                 assertNull(database.mangaList().state(a.value))
                 assertTrue(database.mangaList().entries(a.value).isEmpty())
 
                 session.signOut()
-                assertEquals(Outcome.Success(Unit), list.forgetRetired(null))
+                assertEquals(Outcome.Success(Unit), list.forgetRetired(session.observeOwner().first()))
                 assertNull(database.mangaList().state(b.value))
                 assertTrue(database.mangaList().entries(b.value).isEmpty())
             } finally {

@@ -170,7 +170,7 @@ class MalSession internal constructor(
         }
     }
 
-    internal fun observeOwner(): Flow<SessionOwner> =
+    fun observeOwner(): Flow<SessionOwner> =
         flow {
             read.await()
             emitAll(owners.filterNotNull())

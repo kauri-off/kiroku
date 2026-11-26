@@ -6,6 +6,7 @@ import io.github.kauri_off.kiroku.core.error.Outcome
 import io.github.kauri_off.kiroku.core.model.MangaListEntry
 import io.github.kauri_off.kiroku.core.model.MangaListSnapshot
 import io.github.kauri_off.kiroku.core.model.Session
+import io.github.kauri_off.kiroku.core.model.SessionOwner
 import io.github.kauri_off.kiroku.core.model.SignInId
 import io.github.kauri_off.kiroku.core.model.owner
 import io.github.kauri_off.kiroku.core.repository.MangaListReader
@@ -122,17 +123,19 @@ class RoomMangaList internal constructor(
             }
         }
 
-    suspend fun sweepRetired(owner: SignInId?) {
+    suspend fun sweepRetired(owner: SessionOwner) {
         var attempt = 0
         while (forgetRetired(owner) == Outcome.Failure(DataError.StorageError)) {
             delay(fileRetry(attempt++).toMillis())
         }
     }
 
-    internal suspend fun forgetRetired(currentOwner: SignInId?): Outcome<Unit> =
-        whileOwner(currentOwner, allowRetired = true) {
-            forget(currentOwner?.takeUnless(retired))
-            Outcome.Success(Unit)
+    internal suspend fun forgetRetired(owner: SessionOwner): Outcome<Unit> =
+        storage {
+            session.withOwner(owner) {
+                forget(owner.id?.takeUnless(retired))
+                Outcome.Success(Unit)
+            } ?: Outcome.Failure(DataError.ListEnded)
         }
 
     // Called with the session gate already held.
@@ -161,14 +164,13 @@ class RoomMangaList internal constructor(
 
     private suspend fun <T> whileOwner(
         owner: SignInId?,
-        allowRetired: Boolean = false,
         operation: suspend () -> Outcome<T>,
     ): Outcome<T> =
         storage {
             var answer: Outcome<T> = Outcome.Failure(DataError.ListEnded)
             val owned =
                 session.whileOwner(owner) {
-                    if (allowRetired || owner == null || !retired(owner)) answer = operation()
+                    if (owner == null || !retired(owner)) answer = operation()
                     true
                 }
             if (!owned && session.currentSession() == null) Outcome.Failure(DataError.StorageError) else answer
