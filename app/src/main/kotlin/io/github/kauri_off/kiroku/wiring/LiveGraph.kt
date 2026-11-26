@@ -153,6 +153,7 @@ internal class LiveGraph(
             { user },
             { notifications },
             runLog,
+            forgetMangaSorts = { preferences.forgetMangaListSorts(it) },
             forgetManga = {
                 withContext(Dispatchers.IO) {
                     forgetMangaCaptures(this@LiveGraph)
@@ -167,7 +168,7 @@ internal class LiveGraph(
         expected.owner?.let { sessionWithCleanup.signOut(it) }
     }
 
-    override val list by lazy { liveList(parts, account, listStore) { preferences.forgetUsersChoices() } }
+    override val list by lazy { liveList(parts, account, listStore) { preferences.forgetUsersChoices(keepMangaFor = it) } }
     override val anime by lazy { liveTitles(parts, preferences = { preferences }) }
     override val mangaCatalogue by lazy { MalMangaCatalogue(parts.http) }
     val recorder = liveRecorder(parts, built)
@@ -306,6 +307,7 @@ private class SignOutForgets(
     private val user: () -> LiveUser,
     private val notifications: () -> LiveNotifications,
     private val runs: KeptRuns?,
+    private val forgetMangaSorts: suspend (SignInId) -> Unit,
     private val forgetManga: suspend () -> Boolean,
 ) : SessionRepository by account {
     private val signingOut = mutableSetOf<SignInId?>()
@@ -331,6 +333,7 @@ private class SignOutForgets(
                 images.retire(owner)
             }
         if (!signedOut) return
+        owner?.let { forgetMangaSorts(it) }
         runs?.forget()
         notifications().forget()
         list().observeSyncedAt().first()

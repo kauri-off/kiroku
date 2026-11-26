@@ -1,20 +1,37 @@
 package io.github.kauri_off.kiroku.manga
 
 import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveableStateHolder
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.semantics.SemanticsActions
+import androidx.compose.ui.semantics.SemanticsProperties
+import androidx.compose.ui.test.SemanticsMatcher
+import androidx.compose.ui.test.SemanticsNodeInteraction
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsNotDisplayed
 import androidx.compose.ui.test.assertIsSelected
+import androidx.compose.ui.test.getUnclippedBoundsInRoot
+import androidx.compose.ui.test.hasAnyDescendant
+import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.isDisplayed
+import androidx.compose.ui.test.junit4.StateRestorationTester
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollToIndex
+import androidx.compose.ui.test.performSemanticsAction
 import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.test.swipeLeft
+import io.github.kauri_off.kiroku.core.list.ListSort
+import io.github.kauri_off.kiroku.core.list.SortDirection
+import io.github.kauri_off.kiroku.core.list.TabSort
 import io.github.kauri_off.kiroku.core.model.MangaId
+import io.github.kauri_off.kiroku.core.model.MangaListEntry
 import io.github.kauri_off.kiroku.core.model.MangaReadingStatus
 import io.github.kauri_off.kiroku.core.model.Titles
 import io.github.kauri_off.kiroku.design.composeRule
@@ -22,7 +39,9 @@ import io.github.kauri_off.kiroku.design.registered
 import io.github.kauri_off.kiroku.design.theme.KirokuTheme
 import io.github.kauri_off.kiroku.list.ListPane
 import io.github.kauri_off.kiroku.list.ListScreen
+import io.github.kauri_off.kiroku.list.ListState
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotEquals
 import org.junit.Rule
 import org.junit.Test
 import org.junit.rules.TestRule
@@ -91,6 +110,76 @@ class MangaListScreenTest {
         compose.onNodeWithText(mangaEntry.titles.romaji).assertIsDisplayed()
     }
 
+    @Test
+    fun `Back to filtered matches anchors the same title when an earlier match disappeared`() {
+        val entries = longList()
+        val query = ListState.Typed("Volume")
+        val initial = MangaListState(content = mangaListFixture(entries), filter = query, matches = entries)
+        var titleOpen by mutableStateOf(false)
+        state = initial
+        compose.setContent {
+            val holder = rememberSaveableStateHolder()
+            if (titleOpen) {
+                Text("Manga title")
+            } else {
+                holder.SaveableStateProvider("list") {
+                    Screen(state) { if (it is MangaListEvent.Open) titleOpen = true }
+                }
+            }
+        }
+        val anchor = scrollToAnchor(entries)
+        val top = anchor.getUnclippedBoundsInRoot().top
+        anchor.performClick()
+        compose.onNodeWithText("Manga title").assertIsDisplayed()
+        compose.runOnIdle {
+            val remaining = entries.drop(1)
+            state = initial.copy(content = mangaListFixture(remaining), matches = remaining)
+            titleOpen = false
+        }
+        assertEquals(top, anchor.getUnclippedBoundsInRoot().top)
+        compose.onNodeWithText(entries[5].titles.romaji).assertIsNotDisplayed()
+    }
+
+    @Test
+    fun `restoring a sorted tab waits through loading and an empty cache before resolving the anchor`() {
+        val entries = longList()
+        val initial =
+            MangaListState(
+                content = mangaListFixture(entries),
+                sorts = mapOf(mangaEntry.status to TabSort(ListSort.Title, SortDirection.Descending)),
+            )
+        var recreating = false
+        state = initial.copy(content = MangaListContent.Loading)
+        val restoration = StateRestorationTester(compose)
+        restoration.setContent { Screen(if (recreating) state else initial) {} }
+        val anchor = scrollToAnchor(entries)
+        val top = anchor.getUnclippedBoundsInRoot().top
+        recreating = true
+        restoration.emulateSavedInstanceStateRestore()
+        compose.runOnIdle { state = initial.copy(content = mangaListFixture(emptyList())) }
+        assertEmptyLibraryDisplayed()
+        compose.runOnIdle { state = initial.copy(content = mangaListFixture(entries.drop(1))) }
+        assertEquals(top, anchor.getUnclippedBoundsInRoot().top)
+        compose.onNodeWithText(entries[5].titles.romaji).assertIsNotDisplayed()
+    }
+
+    private fun longList() = (1L..24).map { id -> mangaEntry.copy(id = MangaId(id), titles = Titles("Volume $id"), posterUrl = null) }
+
+    private fun scrollToAnchor(entries: List<MangaListEntry>): SemanticsNodeInteraction {
+        val title = entries[6].titles.romaji
+        val anchor = compose.onNodeWithText(title)
+        scroller(entries.first().titles.romaji).performScrollToIndex(6)
+        val unscrolled = anchor.getUnclippedBoundsInRoot().top
+        scroller(title).performSemanticsAction(SemanticsActions.ScrollBy) { it(0f, 21f) }
+        assertNotEquals(unscrolled, anchor.getUnclippedBoundsInRoot().top)
+        return anchor
+    }
+
+    private fun scroller(title: String) =
+        compose.onNode(
+            SemanticsMatcher.keyIsDefined(SemanticsProperties.VerticalScrollAxisRange) and hasAnyDescendant(hasText(title)),
+        )
+
     private fun assertEmptyLibraryDisplayed() {
         val messages = compose.onAllNodesWithText("Your manga list is empty")
         assertEquals(1, messages.fetchSemanticsNodes().indices.count { messages[it].isDisplayed() })
@@ -101,14 +190,16 @@ class MangaListScreenTest {
         tab: MangaReadingStatus = mangaEntry.status,
     ) {
         state = MangaListState(content = content, tab = tab)
-        compose.setContent {
-            KirokuTheme(dark = false, dynamicColor = false) {
-                ListScreen(
-                    ListPane.Manga(state) { if (it is MangaListEvent.SelectTab) state = state.copy(tab = it.status) },
-                    remember { SnackbarHostState() },
-                    onMode = {},
-                )
-            }
+        compose.setContent { Screen(state) { if (it is MangaListEvent.SelectTab) state = state.copy(tab = it.status) } }
+    }
+
+    @Composable
+    private fun Screen(
+        state: MangaListState,
+        onEvent: (MangaListEvent) -> Unit,
+    ) {
+        KirokuTheme(dark = false, dynamicColor = false) {
+            ListScreen(ListPane.Manga(state, onEvent), remember { SnackbarHostState() }, onMode = {})
         }
     }
 }

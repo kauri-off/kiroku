@@ -41,6 +41,7 @@ internal fun mangaListPane(
                 graph.connection,
                 graph.session.observeSession(),
                 graph.titleLanguage,
+                graph.preferences,
                 createSavedStateHandle(),
                 edits = editor?.state ?: flowOf(MangaEditingState()),
                 onRefreshed = { editor?.listRefreshed(it) },

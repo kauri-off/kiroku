@@ -8,7 +8,6 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.pager.PagerState
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -200,10 +199,9 @@ internal fun MangaListBody(
             val scrolls =
                 content.statuses.associateWith { status ->
                     val rows = content.pages[status].orEmpty()
-                    key(status.code, state.sortFor(status), content.language) {
-                        rememberSaveable(saver = listScrollSaver(rows.lastIndex) { id -> rows.indexOfFirst { it.id.value == id } }) {
-                            LazyListState()
-                        }
+                    val choice = state.sortFor(status)
+                    key(status.code, choice.sort.name, choice.direction?.name, content.language.name) {
+                        if (rows.isEmpty()) null else rememberMangaScroll(rows)
                     }
                 }
             val pages: @Composable () -> Unit = {
@@ -211,10 +209,11 @@ internal fun MangaListBody(
                     val matches = state.matches.takeIf { state.filter.session == state.activeFilterSession }
                     key(state.activeFilterSession, state.filter.text) {
                         FilterResults(matches?.isNotEmpty(), pagePadding) { bottom ->
+                            val rows = checkNotNull(matches)
                             MangaRows(
-                                checkNotNull(matches),
+                                rows,
                                 content,
-                                rememberLazyListState(),
+                                rememberMangaScroll(rows),
                                 onEvent,
                                 PaddingValues(
                                     start = pagePadding.calculateStartPadding(direction),
@@ -240,11 +239,17 @@ internal fun MangaListBody(
 }
 
 @Composable
+private fun rememberMangaScroll(rows: List<MangaListEntry>): LazyListState =
+    rememberSaveable(saver = listScrollSaver(rows.lastIndex) { id -> rows.indexOfFirst { it.id.value == id } }) {
+        LazyListState()
+    }
+
+@Composable
 private fun MangaPages(
     tab: MangaReadingStatus,
     content: MangaListContent.Ready,
     motion: ListTabMotion,
-    scrolls: Map<MangaReadingStatus, LazyListState>,
+    scrolls: Map<MangaReadingStatus, LazyListState?>,
     onEvent: (MangaListEvent) -> Unit,
     padding: PaddingValues,
 ) {
@@ -270,7 +275,7 @@ private fun MangaPages(
 private fun MangaListPage(
     content: MangaListContent.Ready,
     status: MangaReadingStatus,
-    scroll: LazyListState,
+    scroll: LazyListState?,
     onEvent: (MangaListEvent) -> Unit,
     padding: PaddingValues,
 ) {
@@ -290,7 +295,7 @@ private fun MangaListPage(
 private fun MangaRows(
     entries: List<MangaListEntry>,
     content: MangaListContent.Ready,
-    scroll: LazyListState,
+    scroll: LazyListState?,
     onEvent: (MangaListEvent) -> Unit,
     padding: PaddingValues,
     empty: String? = null,

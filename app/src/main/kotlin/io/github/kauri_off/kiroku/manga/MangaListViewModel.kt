@@ -18,19 +18,23 @@ import io.github.kauri_off.kiroku.core.model.TitleLanguage
 import io.github.kauri_off.kiroku.core.model.owner
 import io.github.kauri_off.kiroku.core.repository.Connection
 import io.github.kauri_off.kiroku.core.repository.MangaListReader
+import io.github.kauri_off.kiroku.core.repository.PreferencesRepository
 import io.github.kauri_off.kiroku.core.repository.listStale
 import io.github.kauri_off.kiroku.list.TitleFilter
 import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.time.Clock
 
 internal class MangaListViewModel(
@@ -39,6 +43,7 @@ internal class MangaListViewModel(
     connection: Connection,
     private val sessions: Flow<Session>,
     language: Flow<TitleLanguage>,
+    private val preferences: PreferencesRepository,
     private val saved: SavedStateHandle = SavedStateHandle(),
     edits: Flow<MangaEditingState> = flowOf(MangaEditingState()),
     private val onRefreshed: (MangaListSnapshot) -> Unit = {},
@@ -58,6 +63,7 @@ internal class MangaListViewModel(
     private val session = MutableStateFlow<Session?>(null)
     private var load: Job? = null
     private var watch: Job? = null
+    private var sortsOwner: SignInId? = null
     private var refreshPending = false
     private var recoveryPending = false
     private var coveredDuringRefresh = false
@@ -181,6 +187,14 @@ internal class MangaListViewModel(
         if (next != current) {
             controls.value = next
             saved.saveMangaControls(next)
+            val sort = tab?.let(next.sorts::get)
+            if (tab != null && sort != null && next.sorts != current.sorts) {
+                viewModelScope.launch(start = CoroutineStart.UNDISPATCHED) {
+                    withContext(NonCancellable) {
+                        if (sessions.first().owner == owner) preferences.setMangaListSort(owner, tab, sort)
+                    }
+                }
+            }
         }
     }
 
@@ -188,7 +202,7 @@ internal class MangaListViewModel(
         if (watch != null) return
         watch =
             viewModelScope.launch {
-                sessions.collect { next ->
+                sessions.collectLatest { next ->
                     val previous = session.value
                     if (previous?.owner != next.owner) {
                         load?.cancel()
@@ -197,12 +211,20 @@ internal class MangaListViewModel(
                         recoveryPending = false
                         loads.started()
                         page.value = Page()
+                        session.value = null
                     }
                     if (controls.value.owner != next.owner) {
+                        sortsOwner = null
                         ordering = MangaListOrdering()
                         listFilter = mangaTitleFilter()
                         controls.value = MangaListControls(next.owner)
                         saved.saveMangaControls(controls.value)
+                    }
+                    val owner = next.owner
+                    if (owner != null && sortsOwner != owner) {
+                        val sorts = preferences.observeMangaListSorts(owner).first()
+                        controls.value = controls.value.copy(sorts = sorts)
+                        sortsOwner = owner
                     }
                     session.value = next
                     if (previous != next) read()

@@ -13,6 +13,7 @@ import io.github.kauri_off.kiroku.core.model.ListEntry
 import io.github.kauri_off.kiroku.core.model.ListField
 import io.github.kauri_off.kiroku.core.model.ListStatus
 import io.github.kauri_off.kiroku.core.model.ListValues
+import io.github.kauri_off.kiroku.core.model.MangaReadingStatus
 import io.github.kauri_off.kiroku.core.model.Session
 import io.github.kauri_off.kiroku.core.model.SignInId
 import io.github.kauri_off.kiroku.core.model.TitleLanguage
@@ -424,6 +425,14 @@ interface PreferencesRepository {
 
     suspend fun setListSort(
         status: ListStatus,
+        sort: TabSort,
+    )
+
+    fun observeMangaListSorts(owner: SignInId): Flow<Map<MangaReadingStatus, TabSort>>
+
+    suspend fun setMangaListSort(
+        owner: SignInId,
+        status: MangaReadingStatus,
         sort: TabSort,
     )
 

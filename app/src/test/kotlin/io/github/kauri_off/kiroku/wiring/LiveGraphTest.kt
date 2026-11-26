@@ -18,6 +18,7 @@ import io.github.kauri_off.kiroku.core.model.AnimeDetails
 import io.github.kauri_off.kiroku.core.model.AnimeId
 import io.github.kauri_off.kiroku.core.model.ListEntry
 import io.github.kauri_off.kiroku.core.model.ListStatus
+import io.github.kauri_off.kiroku.core.model.MangaReadingStatus
 import io.github.kauri_off.kiroku.core.model.Session
 import io.github.kauri_off.kiroku.core.model.SignInId
 import io.github.kauri_off.kiroku.core.repository.AnimeRepository
@@ -202,7 +203,11 @@ class LiveGraphTest {
             val signIn = "0f8fad5b-d9cb-469f-a165-70867728950e"
             parts.file("tokens").writeBytes(byteArrayOf(0) + signIn.encodeToByteArray())
             val graph = LiveGraph(parts, listStore = { store() })
-            assertEquals(Session.Expired(SignInId(signIn)), graph.session.observeSession().first())
+            val owner = SignInId(signIn)
+            val reading = MangaReadingStatus("reading")
+            assertEquals(Session.Expired(owner), graph.session.observeSession().first())
+            graph.preferences.setMangaListSort(owner, reading, TabSort(ListSort.Title))
+            assertEquals(mapOf(reading to TabSort(ListSort.Title)), graph.preferences.observeMangaListSorts(owner).first())
             graph.anime.observeAnime(AnimeId(1)).first()
             val file = context.getDatabasePath("account.db").path
             SQLiteDatabase.openDatabase(file, null, SQLiteDatabase.OPEN_READWRITE).use {
@@ -219,6 +224,12 @@ class LiveGraphTest {
             assertEquals(1L, profiles())
 
             graph.session.signOut()
+            assertTrue(
+                graph.preferences
+                    .observeMangaListSorts(owner)
+                    .first()
+                    .isEmpty(),
+            )
             assertEquals(Session.SignedOut, graph.session.observeSession().first())
             assertEquals(0L, profiles())
             assertEquals(emptyList<Throwable>(), unexpected)

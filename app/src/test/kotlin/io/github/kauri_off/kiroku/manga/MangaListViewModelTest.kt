@@ -2,11 +2,13 @@ package io.github.kauri_off.kiroku.manga
 
 import androidx.compose.runtime.snapshots.Snapshot
 import androidx.lifecycle.viewModelScope
+import io.github.kauri_off.kiroku.core.demo.DemoPreferences
 import io.github.kauri_off.kiroku.core.error.DataError
 import io.github.kauri_off.kiroku.core.error.Outcome
 import io.github.kauri_off.kiroku.core.list.ListSort
 import io.github.kauri_off.kiroku.core.list.SortDirection
 import io.github.kauri_off.kiroku.core.list.TabSort
+import io.github.kauri_off.kiroku.core.model.MangaId
 import io.github.kauri_off.kiroku.core.model.MangaListSnapshot
 import io.github.kauri_off.kiroku.core.model.MangaReadingStatus
 import io.github.kauri_off.kiroku.core.model.Session
@@ -21,6 +23,7 @@ import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.onStart
 import kotlinx.coroutines.test.StandardTestDispatcher
@@ -42,6 +45,7 @@ class MangaListViewModelTest {
     private var snapshot = MangaListSnapshot(owner, listOf(mangaEntry), now)
     private val online = MutableStateFlow(false)
     private val sessions = MutableStateFlow<Session>(Session.SignedIn(owner))
+    private val preferences = DemoPreferences()
     private val failures = mutableListOf<DataError>()
     private var cache = CompletableDeferred(Unit)
     private var admission = CompletableDeferred(Unit)
@@ -78,8 +82,65 @@ class MangaListViewModelTest {
             },
             sessions,
             flowOf(TitleLanguage.Romaji),
+            preferences,
             onRefreshFailed = failures::add,
         )
+
+    @Test
+    fun `a fresh task restores Manga sort and direction from preferences`() =
+        runTest(dispatcher) {
+            val reading = mangaEntry.status
+            val first = model()
+            val shown = showing(first.shown, first.state)
+            try {
+                runCurrent()
+                Snapshot.sendApplyNotifications()
+                runCurrent()
+                first.control(owner, MangaListEvent.OpenSort(reading))
+                first.control(owner, MangaListEvent.SelectSort(ListSort.Score))
+                first.control(owner, MangaListEvent.SelectDirection(SortDirection.Ascending))
+                first.control(owner, MangaListEvent.StartFilter)
+                first.control(owner, MangaListEvent.FilterChanged("previous task"))
+                Snapshot.sendApplyNotifications()
+                runCurrent()
+                assertEquals(TabSort(ListSort.Score, SortDirection.Ascending), preferences.observeMangaListSorts(owner).first()[reading])
+            } finally {
+                shown.cancel()
+                first.viewModelScope.cancel()
+            }
+            val recreated = model()
+            try {
+                showing(recreated.shown, recreated.state)
+                runCurrent()
+                Snapshot.sendApplyNotifications()
+                runCurrent()
+                assertEquals(TabSort(ListSort.Score, SortDirection.Ascending), recreated.state.value.sortFor(reading))
+                assertEquals(null, recreated.state.value.filterText)
+            } finally {
+                recreated.viewModelScope.cancel()
+            }
+        }
+
+    @Test
+    fun `a delayed automatic download orders the first rows after an empty cache`() =
+        runTest(dispatcher) {
+            snapshot = snapshot.copy(entries = emptyList(), syncedAt = now.minusSeconds(7 * 24 * 60 * 60))
+            answer = CompletableDeferred()
+            val vm = model()
+            try {
+                showing(vm.shown, vm.state)
+                runCurrent()
+                assertEquals(emptyList<Any>(), (vm.state.value.content as MangaListContent.Ready).entries)
+                assertEquals(1, fetches)
+                val older = mangaEntry.copy(id = MangaId(10), updatedAt = now.minusSeconds(30))
+                val newer = mangaEntry.copy(id = MangaId(20), updatedAt = now)
+                answer.complete(Outcome.Success(snapshot.copy(entries = listOf(older, newer), syncedAt = now)))
+                runCurrent()
+                assertEquals(listOf(newer, older), (vm.state.value.content as MangaListContent.Ready).entries)
+            } finally {
+                vm.viewModelScope.cancel()
+            }
+        }
 
     @Test
     fun `a replacement owner receives no saved Manga filter or sort from the old owner`() =

@@ -28,7 +28,7 @@ internal class MangaListOrdering {
         stored: List<MangaListEntry>,
         edit: MangaEditingState?,
     ): List<MangaListEntry> {
-        val reorder = this.language != language || orderPass != lastPass
+        val reorder = orders.isEmpty() || this.language != language || orderPass != lastPass
         val hasPull = orderPass != lastPass
         this.language = language
         lastPass = orderPass

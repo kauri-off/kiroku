@@ -21,7 +21,7 @@ internal fun liveList(
     parts: LiveParts,
     session: MalSession,
     store: (LiveParts) -> LocalList,
-    forgetSorts: suspend () -> Unit,
+    forgetSorts: suspend (SignInId?) -> Unit,
 ): ListRepository =
     ListEngine(
         MalRemoteList(parts.http, session),
@@ -36,7 +36,7 @@ internal fun liveList(
 private class StoreOnFirstUse(
     build: () -> LocalList,
     private val scope: CoroutineScope,
-    private val forgetSorts: suspend () -> Unit,
+    private val forgetSorts: suspend (SignInId?) -> Unit,
 ) : LocalList {
     private val built = lazy(build)
 
@@ -72,7 +72,7 @@ private class StoreOnFirstUse(
     // Only a new owner forgets the sorts, and first: a list still the last owner's after a failure is cleared again.
     override suspend fun clear(owner: SignInId?) {
         val store = store()
-        if (store.state().owner != owner) forgetSorts()
+        if (store.state().owner != owner) forgetSorts(owner)
         store.clear(owner)
     }
 }

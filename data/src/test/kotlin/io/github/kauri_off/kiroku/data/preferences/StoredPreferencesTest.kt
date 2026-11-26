@@ -14,6 +14,8 @@ import io.github.kauri_off.kiroku.core.list.ListSort
 import io.github.kauri_off.kiroku.core.list.SortDirection
 import io.github.kauri_off.kiroku.core.list.TabSort
 import io.github.kauri_off.kiroku.core.model.ListStatus
+import io.github.kauri_off.kiroku.core.model.MangaReadingStatus
+import io.github.kauri_off.kiroku.core.model.SignInId
 import io.github.kauri_off.kiroku.core.model.TitleLanguage
 import io.github.kauri_off.kiroku.core.notify.NotificationDelay
 import io.github.kauri_off.kiroku.core.notify.NotificationSettings
@@ -191,6 +193,33 @@ class StoredPreferencesTest {
     }
 
     private val opened = stringPreferencesKey("opened_profiles")
+
+    @Test
+    fun `Manga sorts survive reopening the file and stay separate by status media and sign-in`() {
+        val owner = SignInId("first")
+        val replacement = SignInId("first_other")
+        val planned = MangaReadingStatus("plan_to_read")
+        val unfamiliar = MangaReadingStatus("__")
+        val mangaScore = TabSort(ListSort.Score, SortDirection.Ascending)
+        val mangaTitle = TabSort(ListSort.Title, SortDirection.Descending)
+        val anime = TabSort(ListSort.StartDate, SortDirection.Descending)
+        process {
+            it.setListSort(ListStatus.Planned, anime)
+            it.setMangaListSort(owner, planned, mangaScore)
+            it.setMangaListSort(owner, unfamiliar, mangaTitle)
+            it.setMangaListSort(replacement, planned, mangaTitle)
+        }
+        process {
+            assertEquals(anime, it.observeListSorts().first()[ListStatus.Planned])
+            assertEquals(mapOf(planned to mangaScore, unfamiliar to mangaTitle), it.observeMangaListSorts(owner).first())
+            assertEquals(mapOf(planned to mangaTitle), it.observeMangaListSorts(replacement).first())
+            it.forgetUsersChoices(keepMangaFor = replacement)
+            assertTrue(it.observeMangaListSorts(owner).first().isEmpty())
+            assertEquals(mapOf(planned to mangaTitle), it.observeMangaListSorts(replacement).first())
+            it.forgetUsersChoices()
+            assertTrue(it.observeMangaListSorts(replacement).first().isEmpty())
+        }
+    }
 
     private fun sort(status: String) = stringPreferencesKey("list_sort_$status")
 

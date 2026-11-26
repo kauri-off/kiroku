@@ -19,8 +19,11 @@ import io.github.kauri_off.kiroku.core.list.ListSort
 import io.github.kauri_off.kiroku.core.list.SortDirection
 import io.github.kauri_off.kiroku.core.list.TabSort
 import io.github.kauri_off.kiroku.core.list.defaultDirection
+import io.github.kauri_off.kiroku.core.list.mangaListSorts
 import io.github.kauri_off.kiroku.core.list.sortsFor
 import io.github.kauri_off.kiroku.core.model.ListStatus
+import io.github.kauri_off.kiroku.core.model.MangaReadingStatus
+import io.github.kauri_off.kiroku.core.model.SignInId
 import io.github.kauri_off.kiroku.core.model.TitleLanguage
 import io.github.kauri_off.kiroku.core.notify.NotificationDelay
 import io.github.kauri_off.kiroku.core.notify.NotificationSettings
@@ -146,13 +149,57 @@ class StoredPreferences internal constructor(
     override suspend fun setListSort(
         status: ListStatus,
         sort: TabSort,
+    ) = writeSort(sortKey(status), directionKey(status), sort)
+
+    override fun observeMangaListSorts(owner: SignInId): Flow<Map<MangaReadingStatus, TabSort>> {
+        val prefix = mangaSortPrefix(owner)
+        return data
+            .map { stored ->
+                val values = stored.asMap()
+                val statuses =
+                    values.keys.mapNotNullTo(mutableSetOf()) { key ->
+                        key.name.removePrefix(prefix).takeIf { it != key.name }
+                    }
+                statuses
+                    .mapNotNull { code ->
+                        val sortKey = stringPreferencesKey(prefix + code)
+                        val directionKey = stringPreferencesKey(mangaDirectionPrefix(owner) + code)
+                        val sort = values[sortKey]
+                        val direction = values[directionKey]
+                        val choice = readSort(mangaListSorts, sort, direction)
+                        if (choice == null || code.isBlank()) {
+                            unreadable(listOf(sortKey.name to sort, directionKey.name to direction))
+                            null
+                        } else {
+                            MangaReadingStatus(code) to choice
+                        }
+                    }.toMap()
+            }.distinctUntilChanged()
+    }
+
+    override suspend fun setMangaListSort(
+        owner: SignInId,
+        status: MangaReadingStatus,
+        sort: TabSort,
+    ) {
+        require(sort.sort in mangaListSorts)
+        writeSort(
+            stringPreferencesKey(mangaSortPrefix(owner) + status.code),
+            stringPreferencesKey(mangaDirectionPrefix(owner) + status.code),
+            sort,
+        )
+    }
+
+    private suspend fun writeSort(
+        sortKey: Preferences.Key<String>,
+        directionKey: Preferences.Key<String>,
+        sort: TabSort,
     ) {
         try {
             edit { stored ->
-                stored[sortKey(status)] = sorts.toColumn(sort.sort)
-                val key = directionKey(status)
+                stored[sortKey] = sorts.toColumn(sort.sort)
                 val direction = sort.direction
-                if (direction != null) stored[key] = directions.toColumn(direction) else stored.remove(key)
+                if (direction != null) stored[directionKey] = directions.toColumn(direction) else stored.remove(directionKey)
             }
         } catch (e: IOException) {
             unexpected(PreferencesFailure(e))
@@ -172,15 +219,26 @@ class StoredPreferences internal constructor(
         }
     }
 
+    suspend fun forgetMangaListSorts(owner: SignInId) {
+        save { stored ->
+            stored
+                .asMap()
+                .keys
+                .filter { it.name.isMangaSortOf(owner) }
+                .forEach { stored -= it }
+        }
+    }
+
     // The list's sorts and the profiles opened are the user's and go with them (S9); every other choice stays. A disk
     // that fails this throws.
-    suspend fun forgetUsersChoices() {
+    suspend fun forgetUsersChoices(keepMangaFor: SignInId? = null) {
         try {
             edit { stored ->
                 stored
                     .asMap()
                     .keys
                     .filter { it.name.startsWith(SORT) || it.name.startsWith(DIRECTION) || it == OPENED }
+                    .filterNot { keepMangaFor != null && it.name.isMangaSortOf(keepMangaFor) }
                     .forEach { stored -= it }
             }
         } catch (e: IOException) {
@@ -233,17 +291,17 @@ class StoredPreferences internal constructor(
         val keys = listOf(sortKey(status), directionKey(status))
         val (sort, direction) = keys.map { values[it] }
         if (sort == null && direction == null) return TabSort.defaultFor(status)
-        val read = readSort(status, sort, direction)
+        val read = readSort(sortsFor(status, withAiring = true), sort, direction)
         if (read == null) unreadable(keys.map { it.name to values[it] })
         return read ?: TabSort.defaultFor(status)
     }
 
     private fun readSort(
-        status: ListStatus,
+        available: List<ListSort>,
         sort: Any?,
         direction: Any?,
     ): TabSort? {
-        val chosen = (sort as? String)?.let(sorts.values::get)?.takeIf { it in sortsFor(status, withAiring = true) } ?: return null
+        val chosen = (sort as? String)?.let(sorts.values::get)?.takeIf { it in available } ?: return null
         val towards =
             when (direction) {
                 null -> null
@@ -304,6 +362,12 @@ class StoredPreferences internal constructor(
         fun sortKey(status: ListStatus) = stringPreferencesKey("$SORT${listStatuses.toColumn(status)}")
 
         fun directionKey(status: ListStatus) = stringPreferencesKey("$DIRECTION${listStatuses.toColumn(status)}")
+
+        fun mangaSortPrefix(owner: SignInId) = "${SORT}manga_${owner.value.length}_${owner.value}_"
+
+        fun mangaDirectionPrefix(owner: SignInId) = "${DIRECTION}manga_${owner.value.length}_${owner.value}_"
+
+        fun String.isMangaSortOf(owner: SignInId) = startsWith(mangaSortPrefix(owner)) || startsWith(mangaDirectionPrefix(owner))
 
         val sorts =
             Codes(ListSort.entries) {
