@@ -3,6 +3,7 @@ package io.github.kauri_off.kiroku.manga
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.lifecycle.createSavedStateHandle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation3.runtime.NavKey
 import io.github.kauri_off.kiroku.CountAsShown
@@ -39,6 +40,7 @@ internal fun mangaListPane(
                 graph.connection,
                 graph.session.observeSession(),
                 graph.titleLanguage,
+                createSavedStateHandle(),
                 onRefreshed = { editor?.listRefreshed(it) },
             ) {
                 messages.post(ShellMessage(ShellMessage.Text.RefreshFailed(it)))
@@ -72,6 +74,7 @@ internal fun mangaListPane(
         when (it) {
             MangaListEvent.SignIn -> onSignIn()
             MangaListEvent.Refresh -> list.refresh()
+            is MangaListEvent.SelectTab -> state.owner?.let { owner -> list.selectTab(owner, it.status) }
             is MangaListEvent.Edit ->
                 loaded.owner?.let { owner ->
                     if (ready != null) editor?.open(owner, it.entry.id, it.entry.titles.preferred(ready.language), origin)

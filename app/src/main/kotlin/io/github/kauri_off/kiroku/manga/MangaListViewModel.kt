@@ -1,17 +1,22 @@
 package io.github.kauri_off.kiroku.manga
 
+import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import io.github.kauri_off.kiroku.ShownLoads
 import io.github.kauri_off.kiroku.core.error.DataError
 import io.github.kauri_off.kiroku.core.error.Outcome
 import io.github.kauri_off.kiroku.core.model.MangaListSnapshot
+import io.github.kauri_off.kiroku.core.model.MangaReadingStatus
 import io.github.kauri_off.kiroku.core.model.Session
+import io.github.kauri_off.kiroku.core.model.SignInId
 import io.github.kauri_off.kiroku.core.model.TitleLanguage
 import io.github.kauri_off.kiroku.core.model.owner
 import io.github.kauri_off.kiroku.core.repository.Connection
 import io.github.kauri_off.kiroku.core.repository.MangaListReader
 import io.github.kauri_off.kiroku.core.repository.listStale
+import io.github.kauri_off.kiroku.edit.MangaEditStatus
+import io.github.kauri_off.kiroku.notShown
 import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.ensureActive
@@ -31,6 +36,7 @@ internal class MangaListViewModel(
     connection: Connection,
     private val sessions: Flow<Session>,
     language: Flow<TitleLanguage>,
+    private val saved: SavedStateHandle = SavedStateHandle(),
     private val onRefreshed: (MangaListSnapshot) -> Unit = {},
     private val onRefreshFailed: (DataError) -> Unit,
 ) : ViewModel() {
@@ -40,6 +46,7 @@ internal class MangaListViewModel(
         val refreshing: Boolean = false,
     )
 
+    private val selection = saved.getStateFlow<ArrayList<String>?>(TAB, null)
     private val page = MutableStateFlow(Page())
     private val session = MutableStateFlow<Session?>(null)
     private var load: Job? = null
@@ -66,7 +73,14 @@ internal class MangaListViewModel(
 
     val shown = loads.shown
     val state =
-        combine(page, session, language.onStart { emit(TitleLanguage.Romaji) }) { current, account, titles ->
+        combine(page, session, language.onStart { emit(TitleLanguage.Romaji) }, selection) { current, account, titles, selected ->
+            val tab =
+                selected
+                    ?.takeIf { it.firstOrNull() == account?.owner?.value }
+                    ?.getOrNull(1)
+                    ?.takeIf { it.isNotBlank() }
+                    ?.let(::MangaReadingStatus)
+                    ?: MangaEditStatus.Reading.readingStatus
             val snapshot = current.snapshot?.takeIf { it.owner == account?.owner }
             val error = current.error
             val content =
@@ -76,10 +90,17 @@ internal class MangaListViewModel(
                     error != null -> MangaListContent.Failed(error)
                     else -> MangaListContent.Loading
                 }
-            MangaListState(account?.owner, content, account is Session.Expired)
+            MangaListState(account?.owner, content, account is Session.Expired, tab)
         }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(replayExpirationMillis = 0), MangaListState())
 
     fun refresh() = read(force = true)
+
+    fun selectTab(
+        owner: SignInId,
+        tab: MangaReadingStatus,
+    ) {
+        if (session.value?.owner == owner) saved[TAB] = arrayListOf(owner.value, tab.code)
+    }
 
     private fun watchSession() {
         if (watch != null) return
@@ -95,6 +116,7 @@ internal class MangaListViewModel(
                         loads.started()
                         page.value = Page()
                     }
+                    if (selection.value?.firstOrNull() != next.owner?.value) saved[TAB] = null
                     session.value = next
                     if (previous != next) read()
                 }
@@ -165,5 +187,9 @@ internal class MangaListViewModel(
                 }
             }
         load?.start()
+    }
+
+    private companion object {
+        val TAB = notShown("mangaTab")
     }
 }

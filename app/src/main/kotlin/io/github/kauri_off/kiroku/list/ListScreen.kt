@@ -23,6 +23,7 @@ import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.PagerDefaults
+import androidx.compose.foundation.pager.PagerScope
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.selectableGroup
@@ -104,8 +105,11 @@ import io.github.kauri_off.kiroku.design.theme.Sizes
 import io.github.kauri_off.kiroku.design.theme.Spacing
 import io.github.kauri_off.kiroku.design.theme.settleMillis
 import io.github.kauri_off.kiroku.manga.MangaListBody
+import io.github.kauri_off.kiroku.manga.MangaListContent
 import io.github.kauri_off.kiroku.manga.MangaListEvent
 import io.github.kauri_off.kiroku.manga.MangaListState
+import io.github.kauri_off.kiroku.manga.MangaListTabs
+import io.github.kauri_off.kiroku.manga.rememberMangaListMotion
 import io.github.kauri_off.kiroku.notShown
 import io.github.kauri_off.kiroku.text.statusName
 import io.github.kauri_off.kiroku.title.countText
@@ -155,6 +159,13 @@ internal fun ListScreen(
         } else {
             null
         }
+    val mangaContent = manga?.state?.content as? MangaListContent.Ready
+    val mangaMotion =
+        if (manga != null && mangaContent != null) {
+            key(manga.state.owner) { rememberMangaListMotion(mangaContent, manga.state.tab) }
+        } else {
+            null
+        }
     val positions = rememberSaveableStateHolder()
     ListFrame(
         sessionExpired = state?.sessionExpired ?: (manga?.state?.sessionExpired == true),
@@ -165,15 +176,20 @@ internal fun ListScreen(
             }
         },
         snackbars,
-        modifier = if (anime != null) modifier.withoutTravelledTaps() else modifier,
+        modifier = if (anime != null || mangaMotion != null) modifier.withoutTravelledTaps() else modifier,
         ime = if (anime != null) WindowInsets.ime else null,
         topBar = { ListTopBar(anime, mode, onMode) },
-        statusTabs = { if (anime != null && motion != null && tabs != null) ListTabs(motion, tabs.statuses, anime.onEvent) },
+        statusTabs = {
+            if (anime != null && motion != null && tabs != null) ListTabs(motion, tabs.statuses, anime.onEvent)
+            if (manga != null && mangaMotion != null && mangaContent != null) {
+                MangaListTabs(mangaMotion, mangaContent.statuses, manga.onEvent)
+            }
+        },
     ) { padding ->
         positions.SaveableStateProvider(mode.name) {
             when (pane) {
                 is ListPane.Anime -> AnimeListBody(pane.state, pane.onEvent, motion, padding)
-                is ListPane.Manga -> key(pane.state.owner) { MangaListBody(pane.state, pane.onEvent, padding) }
+                is ListPane.Manga -> key(pane.state.owner) { MangaListBody(pane.state, pane.onEvent, mangaMotion, padding) }
             }
         }
     }
@@ -241,7 +257,6 @@ private fun Pages(
     padding: PaddingValues,
     onEvent: (ListEvent) -> Unit,
 ) {
-    val pager = motion.pager
     val events = rememberUpdatedState(onEvent)
     val selected = rememberUpdatedState(tab)
     val tabs = rememberUpdatedState(statuses)
@@ -253,6 +268,25 @@ private fun Pages(
     }
     val index = statuses.indexOf(tab)
     LaunchedEffect(index) { if (index >= 0) motion.show(index) }
+    ListStatusPager(motion, key = { statuses[it].pageKey }) { index ->
+        Page(
+            statuses[index],
+            shown.tabs.pages.getValue(statuses[index]),
+            shown.owner,
+            shown.now,
+            padding,
+            onEvent,
+        )
+    }
+}
+
+@Composable
+internal fun ListStatusPager(
+    motion: ListTabMotion,
+    key: (Int) -> Any,
+    content: @Composable PagerScope.(Int) -> Unit,
+) {
+    val pager = motion.pager
     val lifecycle = LocalLifecycleOwner.current.lifecycle
     LaunchedEffect(motion) {
         lifecycle.currentStateFlow.first { it.isAtLeast(Lifecycle.State.RESUMED) }
@@ -277,23 +311,15 @@ private fun Pages(
                 }
             }.nestedScroll(motion.gate),
         beyondViewportPageCount = motion.ahead,
-        key = { statuses[it].pageKey },
+        key = key,
         flingBehavior =
             PagerDefaults.flingBehavior(
                 pager,
                 snapAnimationSpec = motion.settleSpec,
                 snapPositionalThreshold = PAGE_TURN,
             ),
-    ) { index ->
-        Page(
-            statuses[index],
-            shown.tabs.pages.getValue(statuses[index]),
-            shown.owner,
-            shown.now,
-            padding,
-            onEvent,
-        )
-    }
+        pageContent = content,
+    )
 }
 
 // A page's key is saved in a Bundle, which takes MAL's code but not the status that holds it.
@@ -305,7 +331,7 @@ private val EntryStatus.pageKey: Any
         }
 
 // The bars' height read in layout, since the tab row arrives in the frame that composes the rows.
-private fun Modifier.belowBars(padding: PaddingValues): Modifier =
+internal fun Modifier.belowBars(padding: PaddingValues): Modifier =
     layout { measurable, constraints ->
         val top = padding.calculateTopPadding().roundToPx()
         val placeable = measurable.measure(constraints.offset(vertical = -top))

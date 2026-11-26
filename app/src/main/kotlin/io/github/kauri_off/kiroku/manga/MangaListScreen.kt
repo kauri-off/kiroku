@@ -2,16 +2,26 @@ package io.github.kauri_off.kiroku.manga
 
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.calculateEndPadding
+import androidx.compose.foundation.layout.calculateStartPadding
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.pager.PagerState
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.ListItem
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.key
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
@@ -24,10 +34,16 @@ import io.github.kauri_off.kiroku.core.model.TitleLanguage
 import io.github.kauri_off.kiroku.core.model.malCodeAsText
 import io.github.kauri_off.kiroku.design.component.Poster
 import io.github.kauri_off.kiroku.design.component.PosterSize
+import io.github.kauri_off.kiroku.design.component.RefreshBox
 import io.github.kauri_off.kiroku.design.component.ScreenState
 import io.github.kauri_off.kiroku.design.component.StateAction
 import io.github.kauri_off.kiroku.design.component.TitleText
-import io.github.kauri_off.kiroku.notShown
+import io.github.kauri_off.kiroku.edit.MangaEditStatus
+import io.github.kauri_off.kiroku.list.ListStatusPager
+import io.github.kauri_off.kiroku.list.ListTabMotion
+import io.github.kauri_off.kiroku.list.StatusTabs
+import io.github.kauri_off.kiroku.list.belowBars
+import io.github.kauri_off.kiroku.list.rememberListTabMotion
 import io.github.kauri_off.kiroku.title.countText
 import io.github.kauri_off.kiroku.title.message
 import io.github.kauri_off.kiroku.titlesub.SubScreenBody
@@ -38,6 +54,7 @@ internal data class MangaListState(
     val owner: SignInId? = null,
     val content: MangaListContent = MangaListContent.Loading,
     val sessionExpired: Boolean = false,
+    val tab: MangaReadingStatus = MangaEditStatus.Reading.readingStatus,
 )
 
 internal sealed interface MangaListContent {
@@ -54,13 +71,23 @@ internal sealed interface MangaListContent {
         val language: TitleLanguage,
         val refreshing: Boolean = false,
         val canEdit: Boolean = false,
-    ) : MangaListContent
+    ) : MangaListContent {
+        val pages: Map<MangaReadingStatus, List<MangaListEntry>> = entries.groupBy(MangaListEntry::status)
+        val statuses: List<MangaReadingStatus> =
+            knownMangaStatuses + (pages.keys - knownMangaStatuses.toSet()).sortedBy(MangaReadingStatus::code)
+
+        fun pageIndex(tab: MangaReadingStatus): Int = statuses.indexOf(tab).coerceAtLeast(0)
+    }
 }
 
 internal sealed interface MangaListEvent {
     data object SignIn : MangaListEvent
 
     data object Refresh : MangaListEvent
+
+    data class SelectTab(
+        val status: MangaReadingStatus,
+    ) : MangaListEvent
 
     data class Edit(
         val entry: MangaListEntry,
@@ -71,61 +98,132 @@ internal sealed interface MangaListEvent {
     ) : MangaListEvent
 }
 
+private val knownMangaStatuses = MangaEditStatus.entries.map(MangaEditStatus::readingStatus)
+
+@Composable
+internal fun rememberMangaListMotion(
+    content: MangaListContent.Ready,
+    tab: MangaReadingStatus,
+): ListTabMotion {
+    val statuses = content.statuses
+    val pager = remember(statuses) { PagerState(currentPage = content.pageIndex(tab)) { statuses.size } }
+    return rememberListTabMotion(pager)
+}
+
+@Composable
+internal fun MangaListTabs(
+    motion: ListTabMotion,
+    statuses: List<MangaReadingStatus>,
+    onEvent: (MangaListEvent) -> Unit,
+) = StatusTabs(
+    motion,
+    statuses.size,
+    label = { statuses[it].displayName() },
+    onSelect = { onEvent(MangaListEvent.SelectTab(statuses[it])) },
+)
+
 @Composable
 internal fun MangaListBody(
     state: MangaListState,
     onEvent: (MangaListEvent) -> Unit,
+    motion: ListTabMotion?,
     padding: PaddingValues,
 ) {
     val refresh = { onEvent(MangaListEvent.Refresh) }
-    val scroll = rememberLazyListState()
-    val body =
-        when (val content = state.content) {
-            MangaListContent.Loading -> SubScreenBody.State(ScreenState.Loading)
-            MangaListContent.SignedOut ->
-                SubScreenBody.State(
-                    ScreenState.Empty(
-                        stringResource(R.string.manga_list_signed_out),
-                        StateAction(stringResource(R.string.list_sign_in)) { onEvent(MangaListEvent.SignIn) },
-                    ),
+    val body = Modifier.padding(padding)
+    when (val content = state.content) {
+        MangaListContent.Loading -> ScreenState(ScreenState.Loading, body)
+        MangaListContent.SignedOut ->
+            ScreenState(
+                ScreenState.Empty(
+                    stringResource(R.string.manga_list_signed_out),
+                    StateAction(stringResource(R.string.list_sign_in)) { onEvent(MangaListEvent.SignIn) },
+                ),
+                body,
+            )
+        is MangaListContent.Failed ->
+            ScreenState(
+                if (state.sessionExpired) {
+                    ScreenState.Empty(stringResource(content.error.message()))
+                } else {
+                    errorState(content.error, refresh)
+                },
+                body,
+            )
+        is MangaListContent.Ready -> {
+            checkNotNull(motion)
+            val index = content.pageIndex(state.tab)
+            val selection = rememberUpdatedState(state.tab)
+            val events = rememberUpdatedState(onEvent)
+            LaunchedEffect(motion) {
+                motion.followRest { page ->
+                    val status = content.statuses[page]
+                    if (status != selection.value) events.value(MangaListEvent.SelectTab(status))
+                }
+            }
+            LaunchedEffect(motion, index) { motion.show(index) }
+            val direction = LocalLayoutDirection.current
+            val pagePadding =
+                PaddingValues(
+                    start = padding.calculateStartPadding(direction),
+                    end = padding.calculateEndPadding(direction),
+                    bottom = padding.calculateBottomPadding(),
                 )
-            is MangaListContent.Failed ->
-                SubScreenBody.State(
-                    if (state.sessionExpired) {
-                        ScreenState.Empty(stringResource(content.error.message()))
-                    } else {
-                        errorState(content.error, refresh)
-                    },
-                )
-            is MangaListContent.Ready ->
-                SubScreenBody.List(content.refreshing, onRefresh = refresh.takeUnless { state.sessionExpired }, scroll = scroll) {
-                    if (content.entries.isEmpty()) {
-                        item {
-                            Box(Modifier.fillParentMaxSize()) {
-                                ScreenState(ScreenState.Empty(stringResource(R.string.manga_list_empty)))
-                            }
-                        }
-                    } else {
-                        items(content.entries, key = { it.id.value }) { entry ->
-                            MangaListRow(
-                                entry,
-                                content.language,
-                                open = { onEvent(MangaListEvent.Open(entry)) },
-                                edit =
-                                    if (content.canEdit) {
-                                        { onEvent(MangaListEvent.Edit(entry)) }
-                                    } else {
-                                        null
-                                    },
-                            )
-                        }
+            val scrolls = content.statuses.associateWith { status -> key(status.code) { rememberLazyListState() } }
+            val pages: @Composable () -> Unit = {
+                key(motion) {
+                    ListStatusPager(motion, key = { content.statuses[it].code }) { page ->
+                        val status = content.statuses[page]
+                        MangaListPage(content, status, scrolls.getValue(status), onEvent, pagePadding)
                     }
                 }
+            }
+            val pagerBody = Modifier.belowBars(padding).fillMaxSize()
+            if (state.sessionExpired) {
+                Box(pagerBody) { pages() }
+            } else {
+                RefreshBox(content.refreshing, refresh, pagerBody) { pages() }
+            }
         }
-    when (body) {
-        is SubScreenBody.State -> ScreenState(body.state, Modifier.padding(padding))
-        is SubScreenBody.List -> SubScreenList(body, padding)
     }
+}
+
+@Composable
+private fun MangaListPage(
+    content: MangaListContent.Ready,
+    status: MangaReadingStatus,
+    scroll: LazyListState,
+    onEvent: (MangaListEvent) -> Unit,
+    padding: PaddingValues,
+) {
+    val entries = content.pages[status].orEmpty()
+    val empty =
+        if (entries.isNotEmpty()) {
+            null
+        } else if (content.entries.isEmpty()) {
+            stringResource(R.string.manga_list_empty)
+        } else {
+            stringResource(R.string.list_empty, status.displayName())
+        }
+    SubScreenList(
+        SubScreenBody.List(scroll = scroll) {
+            if (empty != null) {
+                item {
+                    ScreenState(ScreenState.Empty(empty), Modifier.fillParentMaxSize().padding(padding))
+                }
+            } else {
+                items(entries, key = { it.id.value }) { entry ->
+                    MangaListRow(
+                        entry,
+                        content.language,
+                        open = { onEvent(MangaListEvent.Open(entry)) },
+                        edit = if (content.canEdit) ({ onEvent(MangaListEvent.Edit(entry)) }) else null,
+                    )
+                }
+            }
+        },
+        padding,
+    )
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -136,13 +234,19 @@ private fun MangaListRow(
     open: () -> Unit,
     edit: (() -> Unit)?,
 ) {
+    val progress = entry.progressParts()
     ListItem(
         onClick = open,
         onLongClick = edit,
         onLongClickLabel = edit?.let { stringResource(R.string.list_edit) },
         leadingContent = { Poster(entry.posterUrl, PosterSize.Row) },
         trailingContent = { Icon(painterResource(R.drawable.ic_chevron_right), contentDescription = null) },
-        supportingContent = { Text(entry.progressText()) },
+        supportingContent =
+            if (progress.isNotEmpty()) {
+                { Text(progress.joinToString(stringResource(R.string.common_separator))) }
+            } else {
+                null
+            },
         content = {
             TitleText(entry.titles.preferred(language), maxLines = Int.MAX_VALUE, style = MaterialTheme.typography.titleMedium)
         },
@@ -151,18 +255,7 @@ private fun MangaListRow(
 
 @Composable
 internal fun MangaReadingStatus.displayName(): String =
-    when (code) {
-        notShown("reading") -> stringResource(R.string.manga_list_reading)
-        notShown("completed") -> stringResource(R.string.manga_list_completed)
-        notShown("on_hold") -> stringResource(R.string.manga_list_on_hold)
-        notShown("dropped") -> stringResource(R.string.manga_list_dropped)
-        notShown("plan_to_read") -> stringResource(R.string.manga_list_planned)
-        else -> malCodeAsText(code)
-    }
-
-@Composable
-internal fun MangaListEntry.progressText(): String =
-    (listOf(status.displayName()) + progressParts()).joinToString(stringResource(R.string.common_separator))
+    MangaEditStatus.entries.find { it.readingStatus == this }?.let { stringResource(it.label) } ?: malCodeAsText(code)
 
 @Composable
 internal fun MangaListEntry.progressParts(): List<String> {

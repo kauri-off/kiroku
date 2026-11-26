@@ -288,6 +288,19 @@ internal fun ListTabs(
     motion: ListTabMotion,
     statuses: List<EntryStatus>,
     onEvent: (ListEvent) -> Unit,
+) = StatusTabs(
+    motion,
+    statuses.size,
+    label = { statusName(statuses[it]) },
+    onSelect = { onEvent(ListEvent.SelectTab(statuses[it])) },
+)
+
+@Composable
+internal fun StatusTabs(
+    motion: ListTabMotion,
+    count: Int,
+    label: @Composable (Int) -> String,
+    onSelect: (Int) -> Unit,
 ) {
     val row = motion.row
     val selected = motion.selected
@@ -303,12 +316,12 @@ internal fun ListTabs(
                 contents =
                     listOf(
                         {
-                            statuses.forEachIndexed { index, status ->
+                            repeat(count) { index ->
                                 Tab(
                                     selected = index == selected,
                                     onClick = {
                                         motion.select(index)
-                                        onEvent(ListEvent.SelectTab(status))
+                                        onSelect(index)
                                     },
                                     text = {
                                         // Only the two titles around the header change weight, so only they are drawn again.
@@ -319,7 +332,7 @@ internal fun ListTabs(
                                             ) { derivedStateOf { (1f - abs(index - motion.header)).coerceIn(0f, 1f) } }
                                         // Drawn in the blend of the two colours by the header, so the stock fade has nothing to animate.
                                         BasicText(
-                                            statusName(status),
+                                            label(index),
                                             style = LocalTextStyle.current,
                                             color = { lerp(inactive, active, weight.value) },
                                         )

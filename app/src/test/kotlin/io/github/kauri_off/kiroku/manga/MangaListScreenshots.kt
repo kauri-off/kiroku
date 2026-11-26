@@ -9,9 +9,12 @@ import io.github.kauri_off.kiroku.core.model.MangaListEntry
 import io.github.kauri_off.kiroku.core.model.MangaReadingStatus
 import io.github.kauri_off.kiroku.core.model.TitleLanguage
 import io.github.kauri_off.kiroku.core.model.Titles
+import io.github.kauri_off.kiroku.design.MotionBounds
+import io.github.kauri_off.kiroku.edit.MangaEditStatus
 import io.github.kauri_off.kiroku.list.ListPane
 import io.github.kauri_off.kiroku.list.ListScreen
 import io.github.kauri_off.kiroku.screenshots.ScreenshotRegistry
+import io.github.kauri_off.kiroku.screenshots.Transition
 import io.github.kauri_off.kiroku.screenshots.WindowSize
 import io.github.kauri_off.kiroku.screenshots.case
 import io.github.kauri_off.kiroku.screenshots.contentCase
@@ -21,16 +24,26 @@ import io.github.kauri_off.kiroku.shell.ShellScreen
 import io.github.kauri_off.kiroku.shell.ShellState
 
 class MangaListScreenshots : ScreenshotRegistry() {
-    override val content = contentCase { Screen(mangaListFixture().copy(canEdit = true)) }
+    override val content = contentCase { Screen(mangaListFixture(listEntries + readingEntries).copy(canEdit = true)) }
     override val loading = shown { Screen(MangaListContent.Loading) }
     override val empty = shown { Screen(mangaListFixture(emptyList())) }
     override val error = shown { Screen(MangaListContent.Failed(DataError.NoConnection)) }
 
     override val cases =
         listOf(
+            case("reading") { Screen(mangaListFixture()) },
+            case("planned") { Screen(mangaListFixture(), tab = MangaEditStatus.Planned) },
+            case("empty-tab") { Screen(mangaListFixture(), tab = MangaEditStatus.Dropped) },
             case("signed-out") { Screen(MangaListContent.SignedOut) },
             case("wide", window = WindowSize(840, 600), largeText = true) { Screen(mangaListFixture()) },
             case("expired") { Screen(mangaListFixture(), expired = true) },
+        )
+
+    override val transitions =
+        listOf(
+            Transition("planned", start = "reading", millis = MotionBounds.ENTER, lead = 16L) { changed ->
+                Screen(mangaListFixture(), tab = if (changed) MangaEditStatus.Planned else MangaEditStatus.Reading)
+            },
         )
 }
 
@@ -65,16 +78,20 @@ private val listEntries =
         ),
     )
 
+private val readingEntries =
+    (10L..23).map { id -> mangaEntry.copy(id = MangaId(id), titles = Titles("Reading fixture $id"), posterUrl = null) }
+
 internal fun mangaListFixture(entries: List<MangaListEntry> = listEntries) = MangaListContent.Ready(entries, TitleLanguage.Romaji)
 
 @Composable
 private fun Screen(
     content: MangaListContent,
     expired: Boolean = false,
+    tab: MangaEditStatus = MangaEditStatus.Reading,
 ) {
     ShellScreen(ShellState(Destination.List), {}) {
         ListScreen(
-            ListPane.Manga(MangaListState(content = content, sessionExpired = expired), {}),
+            ListPane.Manga(MangaListState(content = content, sessionExpired = expired, tab = tab.readingStatus), {}),
             remember { SnackbarHostState() },
             onMode = {},
         )

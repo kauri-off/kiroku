@@ -38,6 +38,7 @@ import io.github.kauri_off.kiroku.core.fixtures.Fixtures
 import io.github.kauri_off.kiroku.core.model.MangaId
 import io.github.kauri_off.kiroku.core.model.MangaListEntry
 import io.github.kauri_off.kiroku.core.model.MangaListSnapshot
+import io.github.kauri_off.kiroku.core.model.MangaReadingStatus
 import io.github.kauri_off.kiroku.core.model.Session
 import io.github.kauri_off.kiroku.core.model.SignInId
 import io.github.kauri_off.kiroku.core.model.Titles
@@ -133,22 +134,34 @@ class ListModesRouteTest {
         manga.assertIsSelected()
         filter.assertDoesNotExist()
         assertEquals(listOf(ListRoot), navigator.stack)
-        scrollTo(entries.first().titles.romaji, 10)
-        val mangaRow = compose.onNodeWithText(entries[10].titles.romaji)
+        val mangaPlanned = "Planned title"
+        scrollTo(entries.first().titles.romaji, 8)
+        val readingRow = compose.onNodeWithText(entries[8].titles.romaji)
+        val readingTop = readingRow.getUnclippedBoundsInRoot().top
+        planned.performClick()
+        planned.assertIsSelected()
+        scrollTo("$mangaPlanned 1", 10)
+        val mangaRow = compose.onNodeWithText("$mangaPlanned 11")
         val mangaTop = mangaRow.getUnclippedBoundsInRoot().top
         compose
-            .onNode(hasText(entries[10].titles.romaji) and SemanticsMatcher.keyIsDefined(SemanticsActions.OnLongClick))
+            .onNode(hasText("$mangaPlanned 11") and SemanticsMatcher.keyIsDefined(SemanticsActions.OnLongClick))
             .assertDoesNotExist()
 
         anime.performClick()
         planned.assertIsSelected()
         assertEquals(animePosition, scrollPosition(FixtureAnime.premiereMonth.titles.romaji))
         manga.performClick()
+        planned.assertIsSelected()
+        assertEquals(mangaTop, mangaRow.getUnclippedBoundsInRoot().top)
+        compose.onNodeWithText("Reading").performClick()
+        assertEquals(readingTop, readingRow.getUnclippedBoundsInRoot().top)
+        planned.performClick()
         assertEquals(mangaTop, mangaRow.getUnclippedBoundsInRoot().top)
         mangaRow.performClick()
-        assertEquals(listOf(ListRoot, MangaTitleKey(entries[10].id.value)), navigator.stack)
+        assertEquals(listOf(ListRoot, MangaTitleKey(entries[10].id.value + 100)), navigator.stack)
         compose.onNodeWithContentDescription("Back").performClick()
         manga.assertIsSelected()
+        planned.assertIsSelected()
         assertEquals(mangaTop, mangaRow.getUnclippedBoundsInRoot().top)
 
         compose.onNodeWithText("Search").performClick()
@@ -157,6 +170,7 @@ class ListModesRouteTest {
         restoration.emulateSavedInstanceStateRestore()
         compose.onNodeWithText("List").performClick()
         manga.assertIsSelected()
+        planned.assertIsSelected()
         assertEquals(mangaTop, mangaRow.getUnclippedBoundsInRoot().top)
         anime.performClick()
         planned.assertIsSelected()
@@ -407,7 +421,15 @@ class ListModesRouteTest {
                 object : MangaListReader {
                     override suspend fun stored(owner: SignInId): Outcome<MangaListSnapshot?> {
                         onRead()
-                        return Outcome.Success(MangaListSnapshot(owner, entries, demo.clock.instant()))
+                        val planned =
+                            entries.map { entry ->
+                                entry.copy(
+                                    id = MangaId(entry.id.value + 100),
+                                    titles = Titles("Planned title ${entry.id.value}"),
+                                    status = MangaReadingStatus("plan_to_read"),
+                                )
+                            }
+                        return Outcome.Success(MangaListSnapshot(owner, entries + planned, demo.clock.instant()))
                     }
 
                     override suspend fun refresh(
