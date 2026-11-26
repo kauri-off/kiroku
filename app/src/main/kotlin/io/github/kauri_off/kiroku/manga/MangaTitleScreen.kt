@@ -48,6 +48,8 @@ internal data class MangaTitleState(
     val listEntry: MangaListEntry? = null,
     val membershipError: DataError? = null,
     val addAction: MangaAddAction? = null,
+    val reconcilingAdd: Boolean = false,
+    val checkingMembership: Boolean = false,
 )
 
 internal enum class MangaAddAction { Available, Saving }
@@ -117,15 +119,24 @@ internal fun MangaTitleScreen(
                                 )
                             }
                         }
-                        state.membershipError?.let {
+                        if (state.reconcilingAdd || state.membershipError != null) {
                             item {
                                 Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
                                     Text(
-                                        stringResource(R.string.manga_edit_membership_failed),
+                                        stringResource(
+                                            if (state.reconcilingAdd) {
+                                                R.string.manga_edit_unconfirmed
+                                            } else {
+                                                R.string.manga_edit_membership_failed
+                                            },
+                                        ),
                                         modifier = Modifier.padding(horizontal = Spacing.l),
                                         textAlign = TextAlign.Center,
                                     )
-                                    TextButton(onClick = { onEvent(MangaTitleEvent.RetryMembership) }) {
+                                    TextButton(
+                                        onClick = { onEvent(MangaTitleEvent.RetryMembership) },
+                                        enabled = !state.checkingMembership,
+                                    ) {
                                         Text(stringResource(R.string.manga_edit_refresh_list))
                                     }
                                 }

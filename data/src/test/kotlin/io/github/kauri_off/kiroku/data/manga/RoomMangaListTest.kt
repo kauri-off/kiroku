@@ -195,6 +195,23 @@ class RoomMangaListTest {
         }
 
     @Test
+    fun `an add settles without retry when serialized read back finds another status`() =
+        runBlocking {
+            val owner = signIn("a")
+            val list = repository()
+            val existing = entry()
+            for (ack in listOf(MangaWriteResult.Accepted, MangaWriteResult.Unknown(DataError.ServerError))) {
+                response = { Outcome.Success(emptyList()) }
+                write = { _, _, _ ->
+                    response = { Outcome.Success(listOf(existing)) }
+                    ack
+                }
+                assertEquals(MangaListEditResult.Discarded, list.addPlanned(owner, existing.id))
+                assertEquals(Outcome.Success(MangaListSnapshot(owner, listOf(existing), clock.now)), list.stored(owner))
+            }
+        }
+
+    @Test
     fun `sign-in replacement during the absence check prevents the add`() =
         runBlocking {
             val owner = signIn("a")

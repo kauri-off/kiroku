@@ -1,12 +1,14 @@
 package io.github.kauri_off.kiroku.manga
 
 import android.app.Application
+import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.hasAnyDescendant
 import androidx.compose.ui.test.hasClickAction
 import androidx.compose.ui.test.hasScrollAction
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.isHeading
 import androidx.compose.ui.test.junit4.v2.createAndroidComposeRule
+import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
@@ -137,13 +139,17 @@ internal class MangaAddRouteList(
     private val entries = MutableStateFlow<List<MangaListEntry>?>(emptyList<MangaListEntry>().takeIf { known })
     var remote = emptyList<MangaListEntry>()
     var readError: DataError? = null
+    var storedError: DataError? = null
+    var addReadBackError: DataError? = null
+    private var dirty = false
     var allowRead = CompletableDeferred(Unit)
     val membershipReads = mutableListOf<SignInId>()
     val additions = mutableListOf<Pair<SignInId, MangaId>>()
 
     override fun observe(owner: SignInId) = entries.map { Outcome.Success(snapshot(owner, it)) }
 
-    override suspend fun stored(owner: SignInId) = Outcome.Success(snapshot(owner, entries.value))
+    override suspend fun stored(owner: SignInId): Outcome<MangaListSnapshot?> =
+        storedError?.let { Outcome.Failure(it) } ?: Outcome.Success(snapshot(owner, entries.value))
 
     override suspend fun refresh(
         owner: SignInId,
@@ -153,6 +159,7 @@ internal class MangaAddRouteList(
         if (!canDispatch()) return null
         membershipReads += owner
         readError?.let { return Outcome.Failure(it) }
+        dirty = false
         entries.value = remote
         return Outcome.Success(MangaListSnapshot(owner, remote, clock.instant()))
     }
@@ -166,6 +173,10 @@ internal class MangaAddRouteList(
         additions += owner to id
         val added = mangaEntry.copy(status = MangaListStatus.PlanToRead.readingStatus)
         remote = remote + added
+        addReadBackError?.let {
+            dirty = true
+            return MangaListEditResult.Uncertain(it, needsRefresh = true)
+        }
         entries.value = remote
         return MangaListEditResult.Confirmed(added)
     }
@@ -186,7 +197,7 @@ internal class MangaAddRouteList(
     private fun snapshot(
         owner: SignInId,
         entries: List<MangaListEntry>?,
-    ) = entries?.let { MangaListSnapshot(owner, it, clock.instant()) }
+    ) = entries?.let { MangaListSnapshot(owner, it, clock.instant().takeUnless { dirty }) }
 }
 
 @RunWith(RobolectricTestRunner::class)
@@ -294,6 +305,39 @@ class MangaTitleLinkRouteTest {
         compose.onNodeWithContentDescription("Chapters read").assertExists()
         assertEquals(listOf(mangaFixture.id), list.additions.map { it.second })
         assertEquals(2, list.membershipReads.size)
+    }
+
+    @Test
+    @Config(application = StartedByOwnedMangaLinkApplication::class)
+    fun `refresh remains on the title when the unconfirmed add snackbar expires`() {
+        val list = (app as StartedByOwnedMangaLinkApplication).personalManga
+        compose.runOnUiThread { list.addReadBackError = DataError.ServerError }
+        compose.onNodeWithText("Add to list").performClick()
+        compose.onAllNodesWithText("Could not confirm save").assertCountEquals(2)
+        compose.mainClock.advanceTimeBy(12_000)
+        compose.onAllNodesWithText("Could not confirm save").assertCountEquals(1)
+        compose.onNodeWithText("Refresh list").performClick()
+        compose.onNode(hasText("Planned") and hasClickAction()).assertExists()
+        assertEquals(1, list.additions.size)
+        assertEquals(list.additions.map { it.first }, list.membershipReads)
+    }
+
+    @Test
+    @Config(application = StartedByUnknownMangaLinkApplication::class)
+    fun `successful download with unreadable storage still offers Refresh list`() {
+        val list = (app as StartedByUnknownMangaLinkApplication).personalManga
+        val refresh = compose.onNodeWithText("Refresh list")
+        refresh.assertExists()
+        compose.runOnUiThread {
+            list.readError = null
+            list.storedError = DataError.StorageError
+        }
+        refresh.performClick()
+        compose.onNodeWithText("Could not check your list").assertExists()
+        compose.onNodeWithText("Add to list").assertDoesNotExist()
+        compose.runOnUiThread { list.storedError = null }
+        refresh.performClick()
+        compose.onNodeWithText("Add to list").assertExists()
     }
 
     private fun showsManga() {

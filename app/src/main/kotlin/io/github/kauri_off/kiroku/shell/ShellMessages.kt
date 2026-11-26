@@ -213,7 +213,7 @@ class ShellMessages(
                 is ShellMessage.Action.Retry -> write(action.write)
                 is ShellMessage.Action.Change -> requested.value = action
                 is ShellMessage.Action.MangaRecovery -> action.run()
-                is MangaChange -> mangaRequested.value = action
+                is MangaChange -> if (shown.value == posted) mangaRequested.value = action
                 null -> Unit
             }
         }
@@ -223,6 +223,16 @@ class ShellMessages(
     internal fun remove(action: ShellMessage.Action.MangaRecovery) {
         waiting.removeAll { it.posted.message.action == action }
         if (shown.value?.message?.action == action) showNext()
+    }
+
+    internal fun retireMangaChange(
+        owner: SignInId,
+        id: MangaId,
+    ) {
+        fun matches(change: MangaChange?) = change?.owner == owner && change.id == id
+
+        mangaRequested.value?.takeIf(::matches)?.let(::editTaken)
+        if (matches(shown.value?.message?.action as? MangaChange)) showNext()
     }
 
     internal fun retireManga(owner: SignInId) {

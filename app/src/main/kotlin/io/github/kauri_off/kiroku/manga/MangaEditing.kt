@@ -29,7 +29,6 @@ import io.github.kauri_off.kiroku.shell.MangaChange
 import io.github.kauri_off.kiroku.shell.ShellMessage
 import io.github.kauri_off.kiroku.shell.ShellMessages
 import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Job
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -215,19 +214,28 @@ internal class MangaEditing(
             stored
         }
 
-    fun listRefreshed(snapshot: MangaListSnapshot): Job {
+    fun listRefreshed(snapshot: MangaListSnapshot) {
+        val removals = removalRefreshes(snapshot.owner)
+        scope.launch { publishRefresh(snapshot, removals) }
+    }
+
+    private fun removalRefreshes(owner: SignInId): List<Operation> =
+        operations.values.filter { it.owner == owner && it.removing && it.phase == Phase.Refresh }
+
+    private suspend fun publishRefresh(
+        snapshot: MangaListSnapshot,
+        removalRefreshes: List<Operation> = removalRefreshes(snapshot.owner),
+    ): Outcome<MangaListSnapshot?> {
         val owner = snapshot.owner
-        val removalRefreshes = operations.values.filter { it.owner == owner && it.removing && it.phase == Phase.Refresh }
-        return scope.launch {
-            if (!active(owner)) return@launch
-            if (snapshot.syncedAt != null) {
-                removalRefreshes.forEach { op ->
-                    if (operations[op.id] === op) readyToRetry(op, snapshot)
-                }
+        if (!active(owner)) return Outcome.Failure(DataError.ListEnded)
+        if (snapshot.syncedAt != null) {
+            removalRefreshes.forEach { op ->
+                if (operations[op.id] === op) readyToRetry(op, snapshot)
             }
-            readSnapshot(owner)
-            if (mutable.value.owner == owner && observerStopped) observation.value++
         }
+        val stored = readSnapshot(owner)
+        if (mutable.value.owner == owner && observerStopped) observation.value++
+        return stored
     }
 
     suspend fun loadMembership(
@@ -239,8 +247,12 @@ internal class MangaEditing(
         if (!active(owner) || !isShowing()) return null
         if (!force && mutable.value.let { it.snapshotReadable && it.snapshot?.syncedAt != null }) return null
         val result = editor.refresh(owner) { caller.isActive && isShowing() && mutable.value.owner == owner && mutable.value.signedIn }
-        if (result is Outcome.Success) listRefreshed(result.value).join()
-        return result.takeIf { active(owner) }
+        if (!active(owner)) return null
+        if (result !is Outcome.Success) return result
+        return when (val stored = publishRefresh(result.value)) {
+            is Outcome.Success -> stored.value?.let { Outcome.Success(it) } ?: Outcome.Failure(DataError.StorageError)
+            is Outcome.Failure -> stored
+        }.takeIf { active(owner) }
     }
 
     fun addPlanned(
@@ -269,15 +281,24 @@ internal class MangaEditing(
             if (!active(owner)) return@launch
             val snapshot = (stored as? Outcome.Success)?.value?.takeIf { it.syncedAt != null }
             val entry = snapshot?.entries?.find { it.id == id }
-            val mayHaveAdded =
-                result is MangaListEditResult.Confirmed || result is MangaListEditResult.Accepted || result is MangaListEditResult.Uncertain
+            val needsReadBack =
+                when (result) {
+                    is MangaListEditResult.Accepted ->
+                        result.readBack is Outcome.Failure &&
+                            result.readBack != Outcome.Failure(DataError.NotFound)
+                    is MangaListEditResult.Uncertain -> result.needsRefresh
+                    else -> false
+                }
             when {
-                entry != null -> finishAdd(change, added = mayHaveAdded && entry.isPlanned)
+                result is MangaListEditResult.Confirmed -> finishAdd(change, added = true)
+                result == MangaListEditResult.Discarded || result is MangaListEditResult.Accepted && result.readBack is Outcome.Success ->
+                    finishAdd(change)
+                entry != null -> finishAdd(change, added = needsReadBack && entry.isPlanned)
                 result == MangaListEditResult.Failed(DataError.SessionExpired) -> {
                     finishAdd(change)
                     messages.post(ShellMessage(ShellMessage.Text.CouldNotSave, mangaOwner = owner))
                 }
-                else -> offerAddRecovery(change, readOnly = mayHaveAdded && snapshot == null)
+                else -> offerAddRecovery(change, readOnly = snapshot == null)
             }
         }
     }
@@ -307,13 +328,22 @@ internal class MangaEditing(
         messages.post(ShellMessage(text, recovery, mangaOwner = owner))
     }
 
+    fun refreshAdd(
+        owner: SignInId,
+        id: MangaId,
+    ) {
+        val addition = additions[id]?.takeIf { it.change.owner == owner && it.recovery.readOnly } ?: return
+        addition.recovery.run()
+    }
+
     private fun reconcileAdd(change: MangaChange) {
         val (id, owner) = change
         clearAddRecovery(id)
+        mutable.value = mutable.value.copy(adding = mutable.value.adding + id)
         scope.launch {
             if (!active(owner)) return@launch
-            val refreshed = editor.refresh(owner)
-            val result = if (refreshed is Outcome.Success) readSnapshot(owner) else refreshed
+            val result = editor.refresh(owner)
+            if (result is Outcome.Success) readSnapshot(owner)
             if (!active(owner)) return@launch
             if (result == Outcome.Failure(DataError.ListEnded)) {
                 retire(null, signedIn = false)
@@ -324,7 +354,16 @@ internal class MangaEditing(
             if (entry != null) {
                 finishAdd(change, added = entry.isPlanned)
             } else {
-                offerAddRecovery(change, readOnly = snapshot == null)
+                val current = mutable.value
+                when {
+                    current.snapshot?.entries?.any { it.id == id } == true -> finishAdd(change)
+                    else ->
+                        offerAddRecovery(
+                            change,
+                            readOnly =
+                                snapshot == null || !current.snapshotReadable || current.snapshot?.syncedAt == null,
+                        )
+                }
             }
         }
     }
@@ -340,7 +379,10 @@ internal class MangaEditing(
         clearAddRecovery(change.id)
         val state = mutable.value
         mutable.value = state.copy(adding = state.adding - change.id, reconcilingAdd = state.reconcilingAdd - change.id)
-        if (added) messages.post(ShellMessage(ShellMessage.Text.AddedToPlanned, change, mangaOwner = change.owner))
+        if (added) {
+            val action = change.takeIf { state.snapshotReadable && state.snapshot?.entries?.any { it.id == change.id } == true }
+            messages.post(ShellMessage(ShellMessage.Text.AddedToPlanned, action, mangaOwner = change.owner))
+        }
     }
 
     private val MangaListEntry.isPlanned get() = status == MangaListStatus.PlanToRead.readingStatus
@@ -502,6 +544,7 @@ internal class MangaEditing(
     }
 
     private suspend fun settle(op: Operation) {
+        if (op.removing) messages.retireMangaChange(op.owner, op.id)
         val stored = readSnapshot(op.owner)
         if (!active(op.owner) || operations[op.id] !== op) return
         if (stored == Outcome.Failure(DataError.ListEnded)) {
@@ -648,6 +691,7 @@ internal class MangaEditing(
         failed: Boolean = false,
     ) {
         operations.remove(op.id)?.action?.let(messages::remove)
+        if (op.removing && !failed) messages.retireMangaChange(op.owner, op.id)
         val state = mutable.value
         val open =
             state.open?.let {

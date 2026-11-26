@@ -191,6 +191,118 @@ class MangaEditingTest {
         }
 
     @Test
+    fun confirmedAddKeepsALaterDirtySnapshotAndDoesNotRequireReadBack() =
+        runTest {
+            val backend = Backend()
+            val subject = start(backend)
+            val empty = MangaListSnapshot(owner, emptyList(), Instant.EPOCH)
+            val planned = entry.copy(status = MangaListStatus.PlanToRead.readingStatus)
+            val newer = snapshot(owner, planned.copy(chaptersRead = 15)).copy(syncedAt = null)
+            backend.cache.value = empty
+            runCurrent()
+            subject.add()
+            runCurrent()
+            backend.cache.value = newer
+            backend.addAnswer.complete(MangaListEditResult.Confirmed(planned))
+            runCurrent()
+
+            assertEquals(newer, subject.editing.state.value.snapshot)
+            assertTrue(
+                subject.editing.state.value.reconcilingAdd
+                    .isEmpty(),
+            )
+            val message = checkNotNull(subject.messages.current.value).message
+            assertEquals(ShellMessage.Text.AddedToPlanned, message.text)
+            assertTrue(message.action is MangaChange)
+        }
+
+    @Test
+    fun completedAndSkippedAddCannotOfferRetryAfterALaterRemoval() =
+        runTest {
+            val planned = entry.copy(status = MangaListStatus.PlanToRead.readingStatus)
+            for (result in listOf(MangaListEditResult.Confirmed(planned), MangaListEditResult.Discarded)) {
+                val backend = Backend()
+                val subject = start(backend)
+                val empty = MangaListSnapshot(owner, emptyList(), Instant.EPOCH)
+                backend.cache.value = empty
+                runCurrent()
+                subject.add()
+                runCurrent()
+                val later = empty.copy(syncedAt = Instant.EPOCH.plusSeconds(1))
+                backend.cache.value = later
+                backend.addAnswer.complete(result)
+                runCurrent()
+
+                assertEquals(later, subject.editing.state.value.snapshot)
+                assertTrue(
+                    subject.editing.state.value
+                        .canAdd(entry.id),
+                )
+                val message =
+                    subject.messages.current.value
+                        ?.message
+                assertNull(message?.action)
+                assertEquals(ShellMessage.Text.AddedToPlanned.takeIf { result is MangaListEditResult.Confirmed }, message?.text)
+                assertEquals(listOf(owner to entry.id), backend.adds)
+            }
+        }
+
+    @Test
+    fun confirmedRemovalRetiresOnlyItsAddChangeAndCannotDispatchItAgain() =
+        runTest {
+            for (requested in listOf(false, true)) {
+                val backend = Backend()
+                val subject = start(backend)
+                subject.editing.dismissPresentation()
+                val empty = MangaListSnapshot(owner, emptyList(), Instant.EPOCH)
+                val planned = entry.copy(status = MangaListStatus.PlanToRead.readingStatus)
+                backend.cache.value = empty
+                runCurrent()
+                subject.add()
+                runCurrent()
+                backend.cache.value = snapshot(owner, planned)
+                backend.addAnswer.complete(MangaListEditResult.Confirmed(planned))
+                runCurrent()
+                val added = checkNotNull(subject.messages.current.value)
+                if (requested) {
+                    subject.messages.ended(added, actionPerformed = true)
+                    assertTrue(subject.messages.mangaEditRequest.value != null)
+                }
+
+                subject.editing.open(owner, entry.id, entry.titles.romaji)
+                subject.confirmRemove()
+                runCurrent()
+                backend.cache.value = empty
+                backend.removalAnswer.complete(MangaListRemovalResult.Removed)
+                runCurrent()
+                assertNull(subject.messages.current.value)
+                subject.messages.ended(added, actionPerformed = true)
+                assertNull(subject.messages.mangaEditRequest.value)
+            }
+        }
+
+    @Test
+    fun confirmedRemovalLeavesAnotherTitlesAddChangeAvailable() =
+        runTest {
+            val backend = Backend()
+            val subject = start(backend)
+            val otherId = MangaId(entry.id.value + 1)
+            val change = MangaChange(otherId, owner, entry.titles.romaji, MangaEditTotals())
+            subject.messages.post(ShellMessage(ShellMessage.Text.AddedToPlanned, change, mangaOwner = owner))
+            subject.confirmRemove()
+            runCurrent()
+            backend.cache.value = MangaListSnapshot(owner, emptyList(), Instant.EPOCH)
+            backend.removalAnswer.complete(MangaListRemovalResult.Removed)
+            runCurrent()
+            assertEquals(
+                change,
+                subject.messages.current.value
+                    ?.message
+                    ?.action,
+            )
+        }
+
+    @Test
     fun uncertainAddReconcilesWithoutResendingAndOnlyOffersRetryAfterConfirmedAbsence() =
         runTest {
             val backend = Backend()

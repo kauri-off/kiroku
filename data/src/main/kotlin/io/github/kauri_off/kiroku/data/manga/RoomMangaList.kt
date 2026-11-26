@@ -190,7 +190,7 @@ class RoomMangaList internal constructor(
                 Outcome.Success(Unit)
             }
         if (prepared is Outcome.Failure) return MangaListEditResult.Failed(prepared.error)
-        return sendPatch(owner, id, MangaListEdit(status = MangaListStatus.PlanToRead), writer)
+        return sendPatch(owner, id, MangaListEdit(status = MangaListStatus.PlanToRead), writer, creating = true)
     }
 
     override suspend fun edit(
@@ -329,6 +329,7 @@ class RoomMangaList internal constructor(
         id: MangaId,
         patch: MangaListEdit,
         writer: MangaListWriter,
+        creating: Boolean = false,
     ): MangaListEditResult {
         val sent = send { writer.patch(owner, id, patch) }
         if (sent is MangaWriteResult.Refused) {
@@ -354,6 +355,7 @@ class RoomMangaList internal constructor(
         if (entry is Outcome.Success && patch.isPresentIn(entry.value)) {
             return MangaListEditResult.Confirmed(entry.value)
         }
+        if (creating && entry is Outcome.Success) return MangaListEditResult.Discarded
         if (sent == MangaWriteResult.Accepted) return MangaListEditResult.Accepted(entry)
         check(sent is MangaWriteResult.Unknown)
         return MangaListEditResult.Uncertain(sent.error, needsRefresh = entry is Outcome.Failure && entry.error != DataError.NotFound)

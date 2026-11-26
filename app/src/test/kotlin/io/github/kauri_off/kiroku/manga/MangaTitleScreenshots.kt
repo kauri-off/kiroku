@@ -35,6 +35,7 @@ class MangaTitleScreenshots : ScreenshotRegistry() {
     override val cases =
         listOf(
             case("add-to-list", largeText = true) { Screen(mangaFixture.shown(), addAction = MangaAddAction.Available) },
+            case("add-unconfirmed", largeText = true) { Screen(mangaFixture.shown(), reconcilingAdd = true) },
             case("adding") { Screen(mangaFixture.shown(), addAction = MangaAddAction.Saving) },
             case("added-to-planned", largeText = true) { Added() },
             case("membership-offline", largeText = true) { Screen(mangaFixture.shown(), membershipError = DataError.NoConnection) },
@@ -139,9 +140,16 @@ private fun Screen(
     membershipError: DataError? = null,
     addAction: MangaAddAction? = null,
     message: ShellMessage? = null,
+    reconcilingAdd: Boolean = false,
 ) {
     MangaTitleScreen(
-        MangaTitleState(content, listEntry = entry, membershipError = membershipError, addAction = addAction),
+        MangaTitleState(
+            content,
+            listEntry = entry,
+            membershipError = membershipError,
+            addAction = addAction,
+            reconcilingAdd = reconcilingAdd,
+        ),
         {},
         rememberHostShowing(message),
     )

@@ -95,9 +95,11 @@ internal fun MangaTitleRoute(
     val membershipError = membership?.error?.collectAsScreenState()?.value
     val checking = membership?.checking?.collectAsScreenState()?.value == true
     val id = MangaId(key.id)
+    val reconciling = membership != null && !state.sessionExpired && editing?.reconcilingAdd?.contains(id) == true
     val addAction =
         when {
             membership == null || editing == null || state.sessionExpired -> null
+            reconciling -> null
             id in editing.adding -> MangaAddAction.Saving
             !checking && membershipError == null && editing.canAdd(id) -> MangaAddAction.Available
             else -> null
@@ -113,12 +115,16 @@ internal fun MangaTitleRoute(
             listEntry = entry.takeIf { editing?.signedIn == true && addAction == null },
             membershipError = membershipError,
             addAction = addAction,
+            reconcilingAdd = reconciling,
+            checkingMembership = checking || (reconciling && id in editing.adding),
         ),
         onEvent = {
             when (it) {
                 MangaTitleEvent.Back -> onBack()
                 MangaTitleEvent.SignIn -> onSignIn()
-                MangaTitleEvent.RetryMembership -> membership?.request(force = true)
+                MangaTitleEvent.RetryMembership -> {
+                    if (reconciling && owner != null) editor.refreshAdd(owner, id) else membership?.request(force = true)
+                }
                 MangaTitleEvent.AddToList ->
                     if (addAction == MangaAddAction.Available &&
                         membership?.checking?.value == false &&
