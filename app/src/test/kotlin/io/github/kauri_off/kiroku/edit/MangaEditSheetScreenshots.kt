@@ -35,7 +35,9 @@ class MangaEditSheetScreenshots : ScreenshotRegistry() {
 
     override val cases =
         listOf(
-            case("unknown-fields") { MangaEditSheet(MangaEditFixtures.unknown) {} },
+            case("unknown-fields", largeText = true) { MangaEditSheet(MangaEditFixtures.unknown) {} },
+            case("paired-existing", largeText = true) { MangaEditSheet(MangaEditFixtures.paired) {} },
+            case("paired-wide", window = WindowSize(840, 600)) { MangaEditSheet(MangaEditFixtures.paired) {} },
             case("invalid-count", largeText = true) { MangaEditSheet(MangaEditFixtures.existing.copy(chapters = "2147483648")) {} },
             case("score-cleared") { MangaEditSheet(MangaEditFixtures.existing.copy(score = 0)) {} },
             case("saving", largeText = true) { MangaEditSheet(MangaEditFixtures.saving) {} },
@@ -100,11 +102,12 @@ class MangaEditSheetScreenshots : ScreenshotRegistry() {
             },
             case("keyboard-open", keyboard = true, window = WindowSize(360, 640), largeText = true) {
                 CompositionLocalProvider(LocalCursorBlinkEnabled provides false) {
-                    MangaEditSheet(MangaEditFixtures.changed, focusVolumes = true, openScoreMenu = false) {}
+                    MangaEditSheet(MangaEditFixtures.changed, focusVolumes = true) {}
                 }
             },
-            case("score-menu", window = WindowSize(360, 640), largeText = true) {
-                MangaEditSheet(MangaEditFixtures.unknown, focusVolumes = false, openScoreMenu = true) {}
+            case("score-unknown", window = WindowSize(360, 640), largeText = true) {
+                val unknownScore = MangaEditFixtures.existing.baseline.copy(score = null)
+                MangaEditSheet(MangaEditFixtures.existing.copy(baseline = unknownScore, score = null)) {}
             },
             case("restore-status") {
                 MangaEditSheet(MangaEditFixtures.unknown.copy(status = MangaEditStatus.OnHold, chapters = "13")) {}
@@ -171,6 +174,14 @@ internal object MangaEditFixtures {
         MangaEditSheetState(
             title = existing.title,
             baseline = MangaEditBaseline(MangaReadingStatus("rereading"), chaptersRead = null, volumesRead = null, score = null),
+        )
+
+    val paired =
+        existing.copy(
+            title = EditFixtures.paired.title,
+            baseline = existing.baseline.copy(score = 7),
+            canRemove = true,
+            totals = MangaEditTotals(EditFixtures.paired.total, 6),
         )
 
     val changed = existing.copy(chapters = "13", volumes = "3")

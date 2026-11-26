@@ -23,6 +23,11 @@ internal data class MangaEditBaseline(
     val score: Int?,
 )
 
+internal data class MangaEditTotals(
+    val chapters: Int? = null,
+    val volumes: Int? = null,
+)
+
 internal data class MangaEditChanges(
     val status: MangaEditStatus? = null,
     val chaptersRead: Int? = null,
@@ -64,6 +69,7 @@ internal data class MangaEditSheetState(
     val closing: Boolean = false,
     val canRemove: Boolean = false,
     val confirmRemove: Boolean = false,
+    val totals: MangaEditTotals = MangaEditTotals(),
 ) {
     val canRestoreStatus: Boolean get() = status != null && MangaEditStatus.entries.none { it.readingStatus == baseline.status }
     val editable: Boolean get() = submission == MangaEditSubmission.Editing && !closing && !confirmDiscard && !confirmRemove

@@ -18,6 +18,7 @@ import androidx.compose.ui.res.stringResource
 import io.github.kauri_off.kiroku.R
 import io.github.kauri_off.kiroku.core.error.DataError
 import io.github.kauri_off.kiroku.core.model.MangaListEntry
+import io.github.kauri_off.kiroku.core.model.MangaReadingStatus
 import io.github.kauri_off.kiroku.core.model.SignInId
 import io.github.kauri_off.kiroku.core.model.TitleLanguage
 import io.github.kauri_off.kiroku.core.model.malCodeAsText
@@ -149,18 +150,24 @@ private fun MangaListRow(
 }
 
 @Composable
-internal fun MangaListEntry.progressText(): String {
-    val statusLabel =
-        when (status.code) {
-            notShown("reading") -> stringResource(R.string.manga_list_reading)
-            notShown("completed") -> stringResource(R.string.manga_list_completed)
-            notShown("on_hold") -> stringResource(R.string.manga_list_on_hold)
-            notShown("dropped") -> stringResource(R.string.manga_list_dropped)
-            notShown("plan_to_read") -> stringResource(R.string.manga_list_planned)
-            else -> malCodeAsText(status.code)
-        }
+internal fun MangaReadingStatus.displayName(): String =
+    when (code) {
+        notShown("reading") -> stringResource(R.string.manga_list_reading)
+        notShown("completed") -> stringResource(R.string.manga_list_completed)
+        notShown("on_hold") -> stringResource(R.string.manga_list_on_hold)
+        notShown("dropped") -> stringResource(R.string.manga_list_dropped)
+        notShown("plan_to_read") -> stringResource(R.string.manga_list_planned)
+        else -> malCodeAsText(code)
+    }
+
+@Composable
+internal fun MangaListEntry.progressText(): String =
+    (listOf(status.displayName()) + progressParts()).joinToString(stringResource(R.string.common_separator))
+
+@Composable
+internal fun MangaListEntry.progressParts(): List<String> {
     val chapters = chaptersRead?.let { pluralStringResource(R.plurals.manga_chapters, it, countText(it)) }
     val volumes = volumesRead?.let { pluralStringResource(R.plurals.manga_volumes, it, countText(it)) }
     val scoreLabel = score?.let { stringResource(R.string.title_your_score_spoken, it) }
-    return listOfNotNull(statusLabel, chapters, volumes, scoreLabel).joinToString(stringResource(R.string.common_separator))
+    return listOfNotNull(chapters, volumes, scoreLabel)
 }

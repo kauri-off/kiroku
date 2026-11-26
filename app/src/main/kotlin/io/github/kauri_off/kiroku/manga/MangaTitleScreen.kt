@@ -33,6 +33,7 @@ import io.github.kauri_off.kiroku.design.component.SectionHeader
 import io.github.kauri_off.kiroku.design.component.TitleSelection
 import io.github.kauri_off.kiroku.design.component.TitleText
 import io.github.kauri_off.kiroku.design.theme.Spacing
+import io.github.kauri_off.kiroku.title.TitleStatusButton
 import io.github.kauri_off.kiroku.title.countText
 import io.github.kauri_off.kiroku.title.message
 import io.github.kauri_off.kiroku.title.scoreText
@@ -97,7 +98,10 @@ internal fun MangaTitleScreen(
                     )
                 is MangaTitleContent.Shown ->
                     SubScreenBody.List(content.refreshing, onRefresh = { onEvent(MangaTitleEvent.Refresh) }) {
-                        item { MangaHeader(content, state.listEntry) { onEvent(MangaTitleEvent.Edit) } }
+                        item { MangaHeader(content) }
+                        state.listEntry?.let { entry ->
+                            item { MangaOnList(entry) { onEvent(MangaTitleEvent.Edit) } }
+                        }
                         state.membershipError?.let {
                             item {
                                 Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
@@ -137,11 +141,7 @@ internal fun MangaTitleScreen(
 }
 
 @Composable
-private fun MangaHeader(
-    content: MangaTitleContent.Shown,
-    entry: MangaListEntry?,
-    onEdit: () -> Unit,
-) {
+private fun MangaHeader(content: MangaTitleContent.Shown) {
     val details = content.details
     Column(
         Modifier.fillMaxWidth().padding(horizontal = Spacing.l),
@@ -185,9 +185,28 @@ private fun MangaHeader(
                 textAlign = TextAlign.Center,
             )
         }
-        if (entry != null) {
-            Text(entry.progressText(), style = MaterialTheme.typography.bodyMedium, textAlign = TextAlign.Center)
-            TextButton(onClick = onEdit) { Text(stringResource(R.string.title_change)) }
+    }
+}
+
+@Composable
+private fun MangaOnList(
+    entry: MangaListEntry,
+    onEdit: () -> Unit,
+) {
+    Column(
+        Modifier.fillMaxWidth().padding(start = Spacing.l, end = Spacing.l, top = Spacing.xl),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(Spacing.m),
+    ) {
+        TitleStatusButton(entry.status.displayName(), onEdit, Modifier.fillMaxWidth())
+        val progress = entry.progressParts()
+        val shown = if (entry.explicitlyUnrated) progress + stringResource(R.string.edit_score_0) else progress
+        if (shown.isNotEmpty()) {
+            Text(
+                shown.joinToString(stringResource(R.string.common_separator)),
+                style = MaterialTheme.typography.bodyMedium,
+                textAlign = TextAlign.Center,
+            )
         }
     }
 }

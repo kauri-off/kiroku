@@ -94,6 +94,8 @@ class TitleScreenshots : ScreenshotRegistry() {
             case("completed-snackbar") { Screen(TitleFixtures.completed, TitleFixtures.completedMessage) },
             case("above-total") { Screen(TitleFixtures.aboveTotal) },
             case("opened-from-related") { Screen(TitleFixtures.openedFromRelated) },
+            case("paired-owned", largeText = true) { Screen(TitleFixtures.pairedOwned) },
+            case("paired-owned-wide", window = WindowSize(840, 600)) { Screen(TitleFixtures.pairedOwned) },
             case("poster-arriving") { Arriving(inMemory = false, arrived = false) },
             case("poster-arrived") { Arriving(inMemory = true, arrived = false) },
             case("chain-loading") { Screen(TitleFixtures.chainLoading) },
@@ -192,6 +194,13 @@ object TitleFixtures {
         session: Session = set.session,
         moment: TitleMoment = TitleMoment(),
     ): TitleState.Shown = TitleState.Shown(page(anime, entry, airing, details), session, moment)
+
+    val pairedOwned: TitleState.Shown
+        get() {
+            val anime = FixtureAnime.exactToWatch
+            val entry = checkNotNull(set.entryFor(anime.id))
+            return of(anime, entry.copy(values = entry.values.copy(status = ListStatus.Watching, watchedEpisodes = 12, score = 8)))
+        }
 
     // The longest status name beside the longest score text.
     val plannedScored: TitleState.Shown

@@ -75,7 +75,6 @@ import io.github.kauri_off.kiroku.R
 import io.github.kauri_off.kiroku.core.airing.AiringPhase
 import io.github.kauri_off.kiroku.core.error.DataError
 import io.github.kauri_off.kiroku.core.model.AnimeDetails
-import io.github.kauri_off.kiroku.core.model.EntryStatus
 import io.github.kauri_off.kiroku.core.model.Genre
 import io.github.kauri_off.kiroku.core.model.ListStatus
 import io.github.kauri_off.kiroku.core.model.ListValues
@@ -368,7 +367,7 @@ private fun OnList(
     onEvent: (TitleEvent) -> Unit,
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(Spacing.m)) {
-        StatusButton(entry.status, onEvent, Modifier.padding(horizontal = Spacing.l).fillMaxWidth())
+        TitleStatusButton(statusName(entry.status), { onEvent(TitleEvent.Edit) }, Modifier.padding(horizontal = Spacing.l).fillMaxWidth())
         // A step button's touch margin counts towards the gaps.
         val margin = stepButtonMargin
         FlowRow(
@@ -389,18 +388,18 @@ private fun OnList(
 }
 
 @Composable
-private fun StatusButton(
-    status: EntryStatus,
-    onEvent: (TitleEvent) -> Unit,
+internal fun TitleStatusButton(
+    label: String,
+    onClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     FilledTonalButton(
-        onClick = { onEvent(TitleEvent.Edit) },
+        onClick = onClick,
         shapes = ButtonDefaults.shapesFor(PrimaryButtonHeight),
         contentPadding = ButtonDefaults.contentPaddingFor(PrimaryButtonHeight, hasEndIcon = true),
         modifier = modifier.heightIn(min = PrimaryButtonHeight),
     ) {
-        Text(statusName(status), style = ButtonDefaults.textStyleFor(PrimaryButtonHeight))
+        Text(label, style = ButtonDefaults.textStyleFor(PrimaryButtonHeight))
         Spacer(Modifier.size(ButtonDefaults.iconSpacingFor(PrimaryButtonHeight)))
         Icon(
             painterResource(R.drawable.ic_arrow_drop_down),

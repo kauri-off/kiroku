@@ -2,6 +2,7 @@ package io.github.kauri_off.kiroku.manga
 
 import android.app.Application
 import androidx.compose.ui.test.hasAnyDescendant
+import androidx.compose.ui.test.hasClickAction
 import androidx.compose.ui.test.hasScrollAction
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.isHeading
@@ -205,16 +206,17 @@ class MangaTitleLinkRouteTest {
     fun `pull on a linked title refreshes a complete cached absence and then presence`() {
         val owned = app as StartedByOwnedMangaLinkApplication
         showsManga()
-        compose.onNodeWithText("Change").assertDoesNotExist()
+        val reading = compose.onNode(hasText("Reading") and hasClickAction())
+        reading.assertDoesNotExist()
         assertTrue(owned.membershipReads.isEmpty())
         val content = compose.onNode(hasScrollAction() and hasAnyDescendant(isHeading() and hasText(mangaFixture.titles.romaji)))
         compose.runOnUiThread { owned.remote = listOf(mangaEntry) }
         content.performTouchInput { swipeDown(startY = centerY, endY = bottom) }
-        compose.onNodeWithText("Change").assertExists()
+        reading.assertExists()
 
         compose.runOnUiThread { owned.remote = emptyList() }
         content.performTouchInput { swipeDown(startY = centerY, endY = bottom) }
-        compose.onNodeWithText("Change").assertDoesNotExist()
+        reading.assertDoesNotExist()
         assertEquals(2, owned.membershipReads.size)
         assertEquals(1, owned.membershipReads.distinct().size)
     }

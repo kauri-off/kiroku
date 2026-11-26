@@ -293,7 +293,7 @@ class ListModesRouteTest {
         compose.onNodeWithText("Manga").performClick()
         val editRow = compose.onNode(hasText(entry.titles.romaji) and SemanticsMatcher.keyIsDefined(SemanticsActions.OnLongClick))
         editRow.performSemanticsAction(SemanticsActions.OnLongClick)
-        val chapters = compose.onNode(hasText("Chapters read") and hasSetTextAction())
+        val chapters = compose.onNodeWithContentDescription("Chapters read")
         chapters.performTextReplacement("26")
         chapters.performImeAction()
         compose.onNodeWithText("Save").performClick()
@@ -306,7 +306,7 @@ class ListModesRouteTest {
         if (pull) {
             val dragHandle = compose.activity.getString(androidx.compose.material3.R.string.m3c_bottom_sheet_drag_handle_description)
             compose.onNodeWithContentDescription(dragHandle).performSemanticsAction(SemanticsActions.Dismiss)
-            compose.onNodeWithText("Chapters read").assertDoesNotExist()
+            compose.onNodeWithContentDescription("Chapters read").assertDoesNotExist()
             compose.onNode(scroller(entry.titles.romaji)).performTouchInput { swipeDown(startY = centerY, endY = bottom) }
         } else {
             compose.onNodeWithText("Refresh list").performClick()
@@ -387,7 +387,7 @@ class ListModesRouteTest {
         compose.runOnIdle { assertTrue(removalStarted) }
         val dragHandle = compose.activity.getString(androidx.compose.material3.R.string.m3c_bottom_sheet_drag_handle_description)
         compose.onNodeWithContentDescription(dragHandle).performSemanticsAction(SemanticsActions.Dismiss)
-        compose.onNodeWithText("Chapters read").assertDoesNotExist()
+        compose.onNodeWithContentDescription("Chapters read").assertDoesNotExist()
         compose.onNode(scroller(survivor)).performTouchInput { swipeDown(startY = centerY, endY = bottom) }
         compose.runOnIdle {
             assertTrue(refreshQueued)

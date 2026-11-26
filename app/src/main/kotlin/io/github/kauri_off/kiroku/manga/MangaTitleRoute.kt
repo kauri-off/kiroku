@@ -19,6 +19,7 @@ import io.github.kauri_off.kiroku.core.model.MangaId
 import io.github.kauri_off.kiroku.core.model.SignInId
 import io.github.kauri_off.kiroku.core.model.TitleLanguage
 import io.github.kauri_off.kiroku.core.repository.Connection
+import io.github.kauri_off.kiroku.edit.MangaEditTotals
 import io.github.kauri_off.kiroku.shell.ShellMessage
 import io.github.kauri_off.kiroku.shell.ShellMessages
 import io.github.kauri_off.kiroku.wiring.AppGraph
@@ -110,7 +111,13 @@ internal fun MangaTitleRoute(
                         owner != null &&
                         content != null
                     ) {
-                        editor.open(owner, entry.id, content.title, origin)
+                        editor.open(
+                            owner,
+                            entry.id,
+                            content.title,
+                            origin,
+                            MangaEditTotals(content.details.chapters, content.details.volumes),
+                        )
                     }
                 MangaTitleEvent.Retry, MangaTitleEvent.Refresh -> {
                     membership?.request(force = true)

@@ -5,6 +5,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import io.github.kauri_off.kiroku.core.error.DataError
 import io.github.kauri_off.kiroku.core.fixtures.FixtureAnime
+import io.github.kauri_off.kiroku.core.fixtures.Fixtures
 import io.github.kauri_off.kiroku.core.model.MangaDetails
 import io.github.kauri_off.kiroku.core.model.MangaFormat
 import io.github.kauri_off.kiroku.core.model.MangaId
@@ -28,6 +29,8 @@ class MangaTitleScreenshots : ScreenshotRegistry() {
         listOf(
             case("membership-offline", largeText = true) { Screen(mangaFixture.shown(), membershipError = DataError.NoConnection) },
             case("on-personal-list", largeText = true) { Screen(mangaFixture.shown(), mangaEntry.copy(score = 8)) },
+            case("paired-owned", largeText = true) { Screen(pairedManga.shown(), mangaEntry.copy(score = 8)) },
+            case("paired-owned-wide", window = WindowSize(840, 600)) { Screen(pairedManga.shown(), mangaEntry.copy(score = 8)) },
             case("opened-with-summary") { Screen(openingSummary) },
             case("opened-with-summary-offline") { Screen(openingSummary.copy(detailsError = DataError.NoConnection)) },
             case("unavailable") { Screen(MangaTitleContent.Failed(MangaTitleProblem.Unavailable)) },
@@ -72,6 +75,18 @@ private val openingSummary =
     mangaFixture
         .copy(synopsis = null, format = null, publication = null, volumes = null, chapters = null, meanScore = null)
         .shown()
+
+private val pairedManga =
+    FixtureAnime.exactToWatch.let { anime ->
+        mangaFixture.copy(
+            titles = anime.titles,
+            largePosterUrl = anime.largePosterUrl,
+            chapters = anime.malEpisodes,
+            volumes = 6,
+            meanScore = anime.meanScore,
+            synopsis = Fixtures.reference.details[anime.id]?.synopsis,
+        )
+    }
 
 private fun MangaDetails.shown() = MangaTitleContent.Shown(this, titles.romaji)
 

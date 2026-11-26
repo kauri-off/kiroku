@@ -2,11 +2,14 @@
 <resources>
     <string name="manga_edit_chapters_read">Прочитано глав</string>
     <string name="manga_edit_volumes_read">Прочитано томов</string>
+    <string name="manga_edit_chapter_minus">Минус одна глава</string>
+    <string name="manga_edit_chapter_plus">Плюс одна глава</string>
+    <string name="manga_edit_volume_minus">Минус один том</string>
+    <string name="manga_edit_volume_plus">Плюс один том</string>
     <string name="manga_edit_current_status">Текущий статус: %1$s</string>
     <string name="manga_edit_submitted_status">Статус в изменении: %1$s</string>
     <string name="manga_edit_restore_status">Вернуть исходный статус</string>
-    <string name="manga_edit_score">Ваша оценка</string>
-    <string name="manga_edit_unknown_score">Неизвестно</string>
+    <string name="manga_edit_unknown">Неизвестно</string>
     <string name="manga_edit_invalid_count">Укажите целое число от\u00A0%1$s до\u00A0%2$s</string>
     <string name="manga_edit_saving">Сохранение…</string>
     <string name="manga_edit_unconfirmed">Не удалось подтвердить сохранение</string>

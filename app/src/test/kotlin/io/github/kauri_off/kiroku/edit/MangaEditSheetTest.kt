@@ -11,6 +11,7 @@ import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.SemanticsNodeInteraction
+import androidx.compose.ui.test.assert
 import androidx.compose.ui.test.assertAll
 import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
@@ -65,17 +66,21 @@ class MangaEditSheetTest {
     private val chapters get() = countField("Chapters read")
     private val volumes get() = countField("Volumes read")
 
-    private fun countField(label: String) =
-        compose.onNode(
-            hasText(label) and SemanticsMatcher.keyIsDefined(SemanticsProperties.EditableText),
-        )
+    private fun countField(label: String) = compose.onNodeWithContentDescription(label)
 
     private fun SemanticsNodeInteraction.enterCount(text: String) {
         performTextReplacement(text)
         performImeAction()
     }
 
-    private val score get() = compose.onNode(hasText("Your score") and hasClickAction())
+    private val score get() = compose.onNodeWithContentDescription("Score")
+
+    private fun setScore(value: Int) {
+        score.performSemanticsAction(SemanticsActions.SetProgress) { it(value.toFloat()) }
+    }
+
+    private fun scoreShows(value: String) = score.assert(SemanticsMatcher.expectValue(SemanticsProperties.StateDescription, value))
+
     private val save get() = compose.onNodeWithText("Save")
 
     private fun sheet(initial: MangaEditSheetState = MangaEditFixtures.existing) {
@@ -101,11 +106,30 @@ class MangaEditSheetTest {
         sheet(MangaEditFixtures.unknown)
         compose.onNodeWithText("Current status: Rereading").assertIsDisplayed()
         compose.onAllNodes(isToggleable()).assertCountEquals(5).assertAll(isOff())
-        score.assertTextContains("Unknown")
+        scoreShows("Unknown")
         save.assertIsNotEnabled()
         chapters.enterCount("0")
         save.performClick()
         compose.onNodeWithText("Saving…").assertIsDisplayed()
+        assertEquals(MangaEditSheetEvent.Save(MangaEditChanges(chaptersRead = 0)), events.last())
+    }
+
+    @Test
+    fun steppersKeepAnUnknownCountSeparateFromZeroAndFromTheOtherCount() {
+        sheet(MangaEditFixtures.unknown)
+        val chapterMinus = compose.onNodeWithContentDescription("Minus one chapter")
+        val chapterPlus = compose.onNodeWithContentDescription("Plus one chapter")
+        val volumePlus = compose.onNodeWithContentDescription("Plus one volume")
+        chapterMinus.assertIsNotEnabled()
+        chapterPlus.performClick()
+        chapters.assertTextContains("1")
+        chapterMinus.performClick()
+        chapters.assertTextContains("0")
+        chapterMinus.assertIsNotEnabled()
+        volumePlus.performClick()
+        volumes.assertTextContains("1")
+        volumes.enterCount("")
+        save.performClick()
         assertEquals(MangaEditSheetEvent.Save(MangaEditChanges(chaptersRead = 0)), events.last())
     }
 
@@ -115,9 +139,8 @@ class MangaEditSheetTest {
         chapters.enterCount("28")
         volumes.enterCount("3")
         compose.onNodeWithText("On hold").performClick()
-        score.performClick()
-        compose.onNodeWithText("Not scored").performClick()
-        score.assertTextContains("Not scored")
+        setScore(0)
+        scoreShows("Not scored")
         save.performClick()
         assertEquals(
             MangaEditSheetEvent.Save(MangaEditChanges(MangaEditStatus.OnHold, chaptersRead = 28, volumesRead = 3, score = 0)),
@@ -129,11 +152,10 @@ class MangaEditSheetTest {
     fun restoringAnUnknownScoreKeepsTheChapterEdit() {
         sheet(MangaEditFixtures.unknown)
         chapters.enterCount("13")
-        score.performClick()
-        compose.onNodeWithText("Not scored").performClick()
-        score.performClick()
-        compose.onNodeWithText("Unknown").performClick()
-        score.assertTextContains("Unknown")
+        setScore(0)
+        scoreShows("Not scored")
+        setScore(UNKNOWN_SCORE_POSITION)
+        scoreShows("Unknown")
         save.performClick()
         assertEquals(MangaEditSheetEvent.Save(MangaEditChanges(chaptersRead = 13)), events.last())
     }
@@ -169,19 +191,26 @@ class MangaEditSheetTest {
         dropped.performKeyInput { pressKey(Key.Enter) }
         dropped.assertIsFocused()
         assertEquals(MangaEditSheetEvent.StatusChosen(MangaEditStatus.Dropped), events.last())
-        dropped.performKeyInput { pressKey(Key.Tab) }
-        chapters.assertIsFocused()
-        chapters.performKeyInput { pressKey(Key.Tab) }
-        volumes.assertIsFocused()
-        volumes.performKeyInput { pressKey(Key.Tab) }
-        score.assertIsFocused()
-        score.performKeyInput { pressKey(Key.Tab) }
-        save.assertIsFocused()
+        var focused = dropped
+        for (control in listOf(
+            compose.onNodeWithContentDescription("Minus one chapter"),
+            chapters,
+            compose.onNodeWithContentDescription("Plus one chapter"),
+            compose.onNodeWithContentDescription("Minus one volume"),
+            volumes,
+            compose.onNodeWithContentDescription("Plus one volume"),
+            score,
+            save,
+        )) {
+            focused.performKeyInput { pressKey(Key.Tab) }
+            control.assertIsFocused()
+            focused = control
+        }
     }
 
     @Test
     @Config(qualifiers = "en-w360dp-h640dp", fontScale = 2f)
-    fun compactFormScrollsToCountsAndTheLastScoreOption() {
+    fun compactFormScrollsToTheVolumeStepperAndScoreSlider() {
         sheet()
         chapters.performScrollTo().enterCount("15")
         volumes.performScrollTo().performClick()
@@ -193,9 +222,9 @@ class MangaEditSheetTest {
         volumes.assertIsNotFocused()
         applyImeInsets(visible = false)
         save.assertIsDisplayed()
-        score.performScrollTo().performClick()
-        compose.onNodeWithText("1 · Appalling").performScrollTo().performClick()
-        score.assertTextContains("1 · Appalling")
+        score.performScrollTo().assertIsDisplayed()
+        setScore(1)
+        scoreShows("1 · Appalling")
         save.performClick()
         assertEquals(MangaEditSheetEvent.Save(MangaEditChanges(chaptersRead = 15, volumesRead = 4, score = 1)), events.last())
     }
@@ -236,6 +265,7 @@ class MangaEditSheetTest {
         sheet(MangaEditFixtures.saving)
         chapters.assertTextContains("13").assertIsNotEnabled()
         volumes.assertTextContains("3").assertIsNotEnabled()
+        score.assertIsNotEnabled()
         assertSubmittedStatus()
         compose.onNodeWithText("Saving…").assertIsDisplayed()
         compose.onNodeWithText("Retry").assertDoesNotExist()

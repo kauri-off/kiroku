@@ -5,11 +5,14 @@ import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.assertIsSelected
 import androidx.compose.ui.test.hasAnyDescendant
+import androidx.compose.ui.test.hasClickAction
 import androidx.compose.ui.test.hasScrollAction
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.isHeading
 import androidx.compose.ui.test.junit4.v2.createAndroidComposeRule
+import androidx.compose.ui.test.onAllNodesWithContentDescription
 import androidx.compose.ui.test.onAllNodesWithText
+import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performImeAction
@@ -92,6 +95,8 @@ class SandboxMangaRouteTest {
         shadowOf(Looper.getMainLooper()).idle()
         compose.onAllNodesWithText(text, substring = substring).fetchSemanticsNodes().isNotEmpty()
     }
+
+    private val readingStatus get() = compose.onNode(hasText("Reading") and hasClickAction())
 
     private fun openList() {
         shows("Manga")
@@ -210,8 +215,8 @@ class SandboxMangaRouteTest {
         shows("23\u00A0chapters", substring = true)
 
         compose.onNodeWithText("Paper Observatory").performClick()
-        shows("Change")
-        compose.onNodeWithText("Change").performClick()
+        shows("Reading")
+        readingStatus.performClick()
         shows("Save")
         graph.scenarios.set(Scenario(writes = WriteFault.Refused))
         setChapters("24")
@@ -236,8 +241,8 @@ class SandboxMangaRouteTest {
         openList()
         shows("Paper Observatory")
         compose.onNodeWithText("Paper Observatory").performClick()
-        shows("Change")
-        compose.onNodeWithText("Change").performClick()
+        shows("Reading")
+        readingStatus.performClick()
         shows("Save")
         graph.scenarios.set(Scenario(writes = WriteFault.Refused))
         setChapters("27")
@@ -260,8 +265,8 @@ class SandboxMangaRouteTest {
         openList()
         shows("Paper Observatory")
         compose.onNodeWithText("Paper Observatory").performClick()
-        shows("Change")
-        compose.onNodeWithText("Change").performClick()
+        shows("Reading")
+        readingStatus.performClick()
         shows("Remove from list")
         compose.onNodeWithText("Remove from list").performClick()
         shows("Remove Paper Observatory from your list?")
@@ -280,7 +285,7 @@ class SandboxMangaRouteTest {
         shows("Retry")
         compose.onNodeWithText("Retry").performClick()
         awaitEditClosed()
-        compose.onNodeWithText("Change").assertDoesNotExist()
+        readingStatus.assertDoesNotExist()
         compose.onNode(isHeading() and hasText("Paper Observatory")).assertExists()
         compose.runOnUiThread { compose.activity.onBackPressedDispatcher.onBackPressed() }
         shows("Manga")
@@ -309,8 +314,8 @@ class SandboxMangaRouteTest {
         for (confirming in listOf(false, true)) {
             links.opened(paper)
             shows("Paper Observatory")
-            shows("Change")
-            compose.onNodeWithText("Change").performClick()
+            shows("Reading")
+            readingStatus.performClick()
             shows("Save")
             setChapters("27")
             if (confirming) {
@@ -326,7 +331,7 @@ class SandboxMangaRouteTest {
     }
 
     @Test
-    fun `a cached linked title gains Change after cold membership fails offline and reconnects`() {
+    fun `a cached linked title gains its reading status button after cold membership fails offline and reconnects`() {
         val account = signIn()
         val id = MangaId(1)
         waited {
@@ -338,9 +343,9 @@ class SandboxMangaRouteTest {
         checkNotNull(RuntimeEnvironment.getApplication().appLinks).opened(Link.MangaTitle(id))
         shows("Paper Observatory")
         shows("Could not check your list")
-        compose.onNodeWithText("Change").assertDoesNotExist()
+        readingStatus.assertDoesNotExist()
         graph.scenarios.set(Scenario())
-        shows("Change")
+        shows("Reading")
         compose.onNodeWithText("Could not check your list").assertDoesNotExist()
     }
 
@@ -350,8 +355,8 @@ class SandboxMangaRouteTest {
         openList()
         shows("Paper Observatory")
         compose.onNodeWithText("Paper Observatory").performClick()
-        shows("Change")
-        compose.onNodeWithText("Change").performClick()
+        shows("Reading")
+        readingStatus.performClick()
         shows("Remove from list")
         graph.scenarios.set(Scenario(writes = WriteFault.Refused))
         compose.onNodeWithText("Remove from list").performClick()
@@ -387,12 +392,12 @@ class SandboxMangaRouteTest {
     private fun awaitEditClosed() {
         compose.waitUntil(WAIT) {
             shadowOf(Looper.getMainLooper()).idle()
-            compose.onAllNodesWithText("Chapters read").fetchSemanticsNodes().isEmpty()
+            compose.onAllNodesWithContentDescription("Chapters read").fetchSemanticsNodes().isEmpty()
         }
     }
 
     private fun setChapters(value: String) {
-        val input = compose.onNode(hasText("Chapters read") and SemanticsMatcher.keyIsDefined(SemanticsActions.SetText))
+        val input = compose.onNodeWithContentDescription("Chapters read")
         input.performTextReplacement(value)
         input.performImeAction()
     }

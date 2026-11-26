@@ -23,6 +23,7 @@ import io.github.kauri_off.kiroku.edit.MangaEditChanges
 import io.github.kauri_off.kiroku.edit.MangaEditSheetEvent
 import io.github.kauri_off.kiroku.edit.MangaEditSheetState
 import io.github.kauri_off.kiroku.edit.MangaEditSubmission
+import io.github.kauri_off.kiroku.edit.MangaEditTotals
 import io.github.kauri_off.kiroku.shell.Destination
 import io.github.kauri_off.kiroku.shell.ShellMessage
 import io.github.kauri_off.kiroku.shell.ShellMessages
@@ -213,6 +214,7 @@ internal class MangaEditing(
         id: MangaId,
         title: String,
         origin: MangaEditOrigin? = null,
+        totals: MangaEditTotals = MangaEditTotals(),
     ) {
         if (!mutable.value.signedIn || mutable.value.owner != owner || mutable.value.open != null) return
         val entry =
@@ -220,7 +222,8 @@ internal class MangaEditing(
                 ?.entries
                 ?.find { it.id == id } ?: return
         val operation = operations[id]
-        val form = operation?.form?.copy(title = title) ?: MangaEditSheetState(title, entry.displayBaseline(), canRemove = true)
+        val form =
+            operation?.form?.at(title, totals) ?: MangaEditSheetState(title, entry.displayBaseline(), canRemove = true, totals = totals)
         mutable.value = mutable.value.copy(open = OpenMangaEditor(++instance, owner, operation?.baseline ?: entry, form, origin))
     }
 
@@ -237,7 +240,7 @@ internal class MangaEditing(
                 operations.remove(op.id)
                 op.action?.let(messages::remove)
                 dismissPresentation()
-                open(current.owner, op.id, current.form.title, current.origin)
+                open(current.owner, op.id, current.form.title, current.origin, current.form.totals)
             }
             is MangaEditSheetEvent.Save -> {
                 if (event.changes != current.form.saveChanges || operations[current.baseline.id] != null) return
@@ -273,7 +276,7 @@ internal class MangaEditing(
         operations[op.id]?.action?.let(messages::remove)
         operations[op.id] = op
         val state = mutable.value
-        val open = state.open?.let { if (it.baseline.id == op.id) it.copy(form = op.form.copy(title = it.form.title)) else it }
+        val open = state.open?.let { if (it.baseline.id == op.id) it.copy(form = op.form.at(it.form.title, it.form.totals)) else it }
         mutable.value =
             state.copy(
                 pending =
@@ -522,7 +525,13 @@ internal class MangaEditing(
     }
 }
 
-private fun MangaEditSheetState.showing(entry: MangaListEntry) = MangaEditSheetState(title, entry.displayBaseline(), canRemove = true)
+private fun MangaEditSheetState.showing(entry: MangaListEntry) =
+    MangaEditSheetState(title, entry.displayBaseline(), canRemove = true, totals = totals)
+
+private fun MangaEditSheetState.at(
+    title: String,
+    displayed: MangaEditTotals,
+) = copy(title = title, totals = MangaEditTotals(displayed.chapters ?: totals.chapters, displayed.volumes ?: totals.volumes))
 
 internal fun MangaListEntry.displayBaseline(): MangaEditBaseline =
     MangaEditBaseline(status, chaptersRead, volumesRead, score ?: 0.takeIf { explicitlyUnrated })
