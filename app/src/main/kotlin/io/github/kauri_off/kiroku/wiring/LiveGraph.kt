@@ -170,6 +170,8 @@ internal class LiveGraph(
     override val list by lazy { liveList(parts, account, listStore) { preferences.forgetUsersChoices() } }
     override val anime by lazy { liveTitles(parts, preferences = { preferences }) }
     override val mangaCatalogue by lazy { MalMangaCatalogue(parts.http) }
+    val recorder = liveRecorder(parts, built)
+
     private val mangaReader =
         lazy { RoomMangaList({ parts.database }, account, parts.http, clock, liveMangaObserver(this), ::wasRetiredOnDisk) }
     override val mangaList: RoomMangaList
@@ -287,9 +289,6 @@ internal class LiveGraph(
     override fun imageLoaderFor(session: Session) = imageCache.loader(session.owner)
 
     override fun imagesRetired(session: Session) = imageCache.wasRetired(session.owner)
-
-    // What debug and preview builds record MAL's answers with; it looks at once for a title an earlier run left on the list.
-    val recorder = liveRecorder(parts, built)
 
     // For whatever is about to end the process: a session nobody asked for has nothing to write.
     suspend fun writeOwed() {
