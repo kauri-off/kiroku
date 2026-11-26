@@ -1,5 +1,6 @@
 package io.github.kauri_off.kiroku.edit
 
+import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
@@ -7,6 +8,8 @@ import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.isImeVisible
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.relocation.BringIntoViewRequester
+import androidx.compose.foundation.relocation.bringIntoViewRequester
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
@@ -24,6 +27,7 @@ import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.SheetValue
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -32,7 +36,11 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.LiveRegionMode
@@ -50,11 +58,23 @@ import io.github.kauri_off.kiroku.design.component.WaitIndicator
 import io.github.kauri_off.kiroku.design.component.WindowWithoutAutofill
 import io.github.kauri_off.kiroku.design.component.withoutAutofill
 import io.github.kauri_off.kiroku.design.theme.Spacing
+import io.github.kauri_off.kiroku.title.countText
+import kotlinx.coroutines.android.awaitFrame
+import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.first
+
+@Composable
+internal fun MangaEditSheet(
+    state: MangaEditSheetState,
+    onEvent: (MangaEditSheetEvent) -> Unit,
+) = MangaEditSheet(state, focusVolumes = false, openScoreMenu = false, onEvent)
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
 internal fun MangaEditSheet(
     state: MangaEditSheetState,
+    focusVolumes: Boolean,
+    openScoreMenu: Boolean,
     onEvent: (MangaEditSheetEvent) -> Unit,
 ) {
     CoversMessages()
@@ -82,18 +102,25 @@ internal fun MangaEditSheet(
     ) {
         WindowWithoutAutofill()
         val focus = LocalFocusManager.current
+        var chaptersFocused by remember { mutableStateOf(false) }
+        var volumesFocused by remember { mutableStateOf(false) }
+        val volumeFocus = remember { FocusRequester() }
+        val scroll = rememberScrollState()
+        LaunchedEffect(focusVolumes, sheetState.currentValue) {
+            if (focusVolumes && sheetState.currentValue == SheetValue.Expanded) volumeFocus.requestFocus()
+        }
         Column(
             Modifier.padding(start = Spacing.l, end = Spacing.l, bottom = Spacing.l),
             verticalArrangement = Arrangement.spacedBy(Spacing.l),
         ) {
             Column(
-                Modifier.weight(1f, fill = false).verticalScroll(rememberScrollState()),
+                Modifier.weight(1f, fill = false).verticalScroll(scroll),
                 verticalArrangement = Arrangement.spacedBy(Spacing.l),
             ) {
                 TitleText(state.title, maxLines = 1, style = MaterialTheme.typography.titleMedium)
-                MangaStatusChoice(state) {
-                    focus.clearFocus()
-                    onEvent(MangaEditSheetEvent.StatusChosen(it))
+                MangaStatusChoice(state) { event ->
+                    if (chaptersFocused || volumesFocused) focus.clearFocus()
+                    onEvent(event)
                 }
                 Column(verticalArrangement = Arrangement.spacedBy(Spacing.s)) {
                     MangaCountField(
@@ -102,6 +129,8 @@ internal fun MangaEditSheet(
                         invalid = state.chaptersInvalid,
                         enabled = state.editable,
                         onChange = { onEvent(MangaEditSheetEvent.ChaptersTyped(it)) },
+                        scroll = scroll,
+                        onFocusChange = { chaptersFocused = it },
                     )
                     MangaCountField(
                         text = state.volumes,
@@ -109,9 +138,14 @@ internal fun MangaEditSheet(
                         invalid = state.volumesInvalid,
                         enabled = state.editable,
                         onChange = { onEvent(MangaEditSheetEvent.VolumesTyped(it)) },
+                        scroll = scroll,
+                        onFocusChange = { volumesFocused = it },
+                        modifier = Modifier.focusRequester(volumeFocus),
                     )
                 }
-                MangaScoreChoice(state.score, state.editable) { onEvent(MangaEditSheetEvent.ScoreChosen(it)) }
+                MangaScoreChoice(state, openScoreMenu && sheetState.currentValue == SheetValue.Expanded) {
+                    onEvent(MangaEditSheetEvent.ScoreChosen(it))
+                }
             }
             if (!WindowInsets.isImeVisible) {
                 MangaEditFooter(state, onEvent)
@@ -134,23 +168,33 @@ internal fun MangaEditSheet(
 @Composable
 private fun MangaStatusChoice(
     state: MangaEditSheetState,
-    onChoose: (MangaEditStatus) -> Unit,
+    onEvent: (MangaEditSheetEvent) -> Unit,
 ) {
     val statuses = MangaEditStatus.entries
     Column(verticalArrangement = Arrangement.spacedBy(Spacing.xs)) {
-        if (state.status == null) {
+        val submitted = state.submission != MangaEditSubmission.Editing
+        if (state.status == null || submitted) {
+            val status = state.status?.let { stringResource(it.label) } ?: malCodeAsText(state.baseline.status.code)
+            val label = if (submitted) R.string.manga_edit_submitted_status else R.string.manga_edit_current_status
             Text(
-                stringResource(R.string.manga_edit_current_status, malCodeAsText(state.baseline.status.code)),
+                stringResource(label, status),
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
-        ConnectedChoice(
-            labels = statuses.map { stringResource(it.label) },
-            chosen = statuses.indexOfFirst { it == state.status },
-            onChoose = { onChoose(statuses[it]) },
-            enabled = state.editable,
-        )
+        if (!submitted) {
+            ConnectedChoice(
+                labels = statuses.map { stringResource(it.label) },
+                chosen = statuses.indexOfFirst { it == state.status },
+                onChoose = { onEvent(MangaEditSheetEvent.StatusChosen(statuses[it])) },
+                enabled = state.editable,
+            )
+            if (state.canRestoreStatus) {
+                TextButton(onClick = { onEvent(MangaEditSheetEvent.RestoreStatus) }, enabled = state.editable) {
+                    Text(stringResource(R.string.manga_edit_restore_status))
+                }
+            }
+        }
     }
 }
 
@@ -161,18 +205,37 @@ private fun MangaCountField(
     invalid: Boolean,
     enabled: Boolean,
     onChange: (String) -> Unit,
+    scroll: ScrollState,
+    onFocusChange: (Boolean) -> Unit,
+    modifier: Modifier = Modifier,
 ) {
     val focus = LocalFocusManager.current
+    val bringIntoView = remember { BringIntoViewRequester() }
+    var focused by remember { mutableStateOf(false) }
+    LaunchedEffect(focused, scroll) {
+        if (focused) {
+            snapshotFlow { scroll.viewportSize }.collectLatest {
+                awaitFrame()
+                snapshotFlow { scroll.isScrollInProgress }.first { !it }
+                bringIntoView.bringIntoView()
+            }
+        }
+    }
+    val field =
+        Modifier.fillMaxWidth().bringIntoViewRequester(bringIntoView).onFocusChanged {
+            focused = it.isFocused
+            onFocusChange(it.isFocused)
+        }
     OutlinedTextField(
         value = text,
         onValueChange = onChange,
-        modifier = Modifier.withoutAutofill().fillMaxWidth(),
+        modifier = modifier.withoutAutofill().then(field),
         enabled = enabled,
         label = { Text(label) },
         isError = invalid,
         supportingText =
             if (invalid) {
-                { Text(stringResource(R.string.manga_edit_invalid_count)) }
+                { Text(stringResource(R.string.manga_edit_invalid_count, countText(0), countText(Int.MAX_VALUE))) }
             } else {
                 null
             },
@@ -185,15 +248,17 @@ private fun MangaCountField(
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun MangaScoreChoice(
-    score: Int?,
-    enabled: Boolean,
-    onChoose: (Int) -> Unit,
+    state: MangaEditSheetState,
+    openScoreMenu: Boolean,
+    onChoose: (Int?) -> Unit,
 ) {
-    var expanded by remember(enabled) { mutableStateOf(false) }
+    val enabled = state.editable
+    var expanded by remember(enabled, openScoreMenu) { mutableStateOf(enabled && openScoreMenu) }
+    val unknown = stringResource(R.string.manga_edit_unknown_score)
     val anchor = ExposedDropdownMenuAnchorType.PrimaryNotEditable
     ExposedDropdownMenuBox(expanded = expanded, onExpandedChange = { expanded = it }) {
         OutlinedTextField(
-            value = score?.let { scoreText(it) } ?: stringResource(R.string.manga_edit_unknown_score),
+            value = state.score?.let { scoreText(it) } ?: unknown,
             onValueChange = {},
             modifier = Modifier.withoutAutofill().menuAnchor(anchor, enabled).fillMaxWidth(),
             enabled = enabled,
@@ -202,10 +267,10 @@ private fun MangaScoreChoice(
             trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) },
         )
         ExposedDropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
-            val options = listOf(0) + (10 downTo 1)
+            val options = if (state.baseline.score == null) listOf(null, 0) + (10 downTo 1) else listOf(0) + (10 downTo 1)
             options.forEach { option ->
                 DropdownMenuItem(
-                    text = { Text(scoreText(option)) },
+                    text = { Text(option?.let { scoreText(it) } ?: unknown) },
                     onClick = {
                         expanded = false
                         onChoose(option)

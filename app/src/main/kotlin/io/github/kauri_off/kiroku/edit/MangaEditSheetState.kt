@@ -54,6 +54,7 @@ internal data class MangaEditSheetState(
     val confirmDiscard: Boolean = false,
     val closing: Boolean = false,
 ) {
+    val canRestoreStatus: Boolean get() = status != null && MangaEditStatus.entries.none { it.readingStatus == baseline.status }
     val editable: Boolean get() = submission == MangaEditSubmission.Editing && !closing && !confirmDiscard
     val chaptersInvalid: Boolean get() = !chapters.isValidCount(baseline.chaptersRead)
     val volumesInvalid: Boolean get() = !volumes.isValidCount(baseline.volumesRead)
@@ -77,7 +78,9 @@ internal data class MangaEditSheetState(
             is MangaEditSheetEvent.ChaptersTyped -> if (editable) copy(chapters = event.text) else this
             is MangaEditSheetEvent.VolumesTyped -> if (editable) copy(volumes = event.text) else this
             is MangaEditSheetEvent.StatusChosen -> if (editable) copy(status = event.status) else this
-            is MangaEditSheetEvent.ScoreChosen -> if (editable && event.score in 0..10) copy(score = event.score) else this
+            MangaEditSheetEvent.RestoreStatus -> if (editable && canRestoreStatus) copy(status = null) else this
+            is MangaEditSheetEvent.ScoreChosen ->
+                if (editable && (event.score?.let { it in 0..10 } ?: (baseline.score == null))) copy(score = event.score) else this
             MangaEditSheetEvent.DismissAsked -> if (mayLeave) this else copy(confirmDiscard = true)
             MangaEditSheetEvent.KeepEditing -> copy(confirmDiscard = false)
             MangaEditSheetEvent.Discard -> if (confirmDiscard) copy(confirmDiscard = false, closing = true) else this
@@ -100,8 +103,10 @@ internal sealed interface MangaEditSheetEvent {
         val status: MangaEditStatus,
     ) : MangaEditSheetEvent
 
+    data object RestoreStatus : MangaEditSheetEvent
+
     data class ScoreChosen(
-        val score: Int,
+        val score: Int?,
     ) : MangaEditSheetEvent
 
     data class Save(

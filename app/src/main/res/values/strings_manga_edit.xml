@@ -3,8 +3,10 @@
     <string name="manga_edit_chapters_read">Chapters read</string>
     <string name="manga_edit_volumes_read">Volumes read</string>
     <string name="manga_edit_current_status">Current status: %1$s</string>
+    <string name="manga_edit_submitted_status">Status in this edit: %1$s</string>
+    <string name="manga_edit_restore_status">Restore opening status</string>
     <string name="manga_edit_score">Your score</string>
     <string name="manga_edit_unknown_score">Unknown</string>
-    <string name="manga_edit_invalid_count">Enter a valid whole number</string>
+    <string name="manga_edit_invalid_count">Enter a whole number from\u00A0%1$s to\u00A0%2$s</string>
     <string name="manga_edit_saving">Saving…</string>
 </resources>

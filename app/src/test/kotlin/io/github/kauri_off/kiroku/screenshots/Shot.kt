@@ -70,9 +70,11 @@ class Shot private constructor(
 
     fun image(): Bitmap {
         settle()
-        val indicators = indeterminateIndicators()
-        check(LoopingAnimations.running <= indicators.sumOf { it.loops }) {
-            "${LoopingAnimations.running} looping animations run with ${indicators.size} progress indicators: " +
+        val nodes = windows().flatMap { it.composeRoots() }.flatMap { it.semanticsOwner.unmergedRootSemanticsNode.descendants() }
+        val indicators = nodes.filter { it.isIndeterminateIndicator }
+        val popups = nodes.count { SemanticsProperties.IsPopup in it.config }
+        check(LoopingAnimations.running <= indicators.sumOf { it.loops } + popups) {
+            "${LoopingAnimations.running} loops run with ${indicators.size} progress indicators and $popups popup position polls: " +
                 "nothing but a progress indicator may loop (ARCHITECTURE section 8.5)"
         }
         val screen = RoboComponent.Screen(fetchRobolectricWindowRoots(), options).image ?: error("Nothing was drawn")
@@ -235,10 +237,14 @@ class Shot private constructor(
     fun scrollRangeDp(): Int {
         val node = largestScrollable(windows().last(), SemanticsProperties.VerticalScrollAxisRange) ?: return 0
         val step = node.boundsInRoot.height
+        val range = node.config[SemanticsProperties.VerticalScrollAxisRange]
+        while (range.value() > 0f) {
+            if (scrollBy(node, Offset(0f, -step)).y > -0.5f) break
+        }
         var total = 0f
         // Content composed by the scroll is given the patience too, so a loading state in it has its indicator.
         repeat(2) {
-            while (node.config[SemanticsProperties.VerticalScrollAxisRange].let { it.value() < it.maxValue() }) {
+            while (range.value() < range.maxValue()) {
                 val moved = scrollBy(node, Offset(0f, step)).y
                 if (moved < 0.5f) break
                 total += moved
@@ -250,14 +256,10 @@ class Shot private constructor(
 
     fun stripCount(): Int = strips().size
 
-    private fun indeterminateIndicators(): List<SemanticsNode> =
-        windows()
-            .flatMap { it.composeRoots() }
-            .flatMap { it.semanticsOwner.unmergedRootSemanticsNode.descendants() }
-            .filter {
-                it.config.getOrNull(SemanticsProperties.ProgressBarRangeInfo) == ProgressBarRangeInfo.Indeterminate ||
-                    it.config.getOrNull(SemanticsProperties.TestTag) == COUNTED_WAVY_INDICATOR
-            }
+    private val SemanticsNode.isIndeterminateIndicator: Boolean
+        get() =
+            config.getOrNull(SemanticsProperties.ProgressBarRangeInfo) == ProgressBarRangeInfo.Indeterminate ||
+                config.getOrNull(SemanticsProperties.TestTag) == COUNTED_WAVY_INDICATOR
 
     private val SemanticsNode.loops: Int
         get() =
