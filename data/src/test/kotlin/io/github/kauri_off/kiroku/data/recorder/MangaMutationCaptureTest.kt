@@ -66,6 +66,22 @@ class MangaMutationCaptureTest {
         assertThrows(IllegalStateException::class.java) { validateMangaMutationCapture(staging) }
     }
 
+    @Test
+    fun `validator rejects off-form add and edit version contradictions and pre-edit drift`() {
+        val invalid =
+            listOf(
+                "manga_add" to """{"status":"plan_to_read","score":0}""",
+                "manga_edit" to """{"score":7,"updated_at":"2026-11-25T10:03:00Z"}""",
+                MANGA_BEFORE_EDIT to PLANNED.replace("10:01", "10:00"),
+            )
+        for ((name, body) in invalid) {
+            val folder = example()
+            folder.resolve("$MANGA_REMOVED.204.txt").writeText("204\n")
+            folder.resolve("$name.200.json").writeText(body)
+            assertThrows(IllegalStateException::class.java) { validateMangaMutationCapture(folder) }
+        }
+    }
+
     private fun example(): File =
         temporary.root.resolve("capture-${java.util.UUID.randomUUID()}").apply {
             check(mkdir())
@@ -73,7 +89,8 @@ class MangaMutationCaptureTest {
             for ((name, body) in mapOf(
                 MANGA_ABSENT to ABSENT,
                 "manga_add" to """{"status":"plan_to_read"}""",
-                "manga_add_read" to PRESENT.replace(EDIT, """"status":"plan_to_read""""),
+                "manga_add_read" to PLANNED,
+                MANGA_BEFORE_EDIT to PLANNED,
                 "manga_edit" to """{"score":7}""",
                 "manga_edit_read" to PRESENT,
                 MANGA_REMOVED_READ to ABSENT,
@@ -84,8 +101,10 @@ class MangaMutationCaptureTest {
 
     private companion object {
         const val ABSENT = """{"pages":1,"complete":true,"present":false}"""
-        const val EDIT = """"status":"reading","score":7,"num_chapters_read":1,"num_volumes_read":1"""
+        const val EDIT = """"status":"reading","score":7,"num_chapters_read":1,"num_volumes_read":1,"updated_at":"2026-11-25T10:02:00Z""""
         const val PRESENT = """{"pages":2,"complete":true,"present":true,"list_status":{$EDIT}}"""
+        const val PLANNED =
+            """{"pages":2,"complete":true,"present":true,"list_status":{"status":"plan_to_read","score":8,"updated_at":"2026-11-25T10:01:00Z"}}"""
     }
 }
 
@@ -100,14 +119,23 @@ internal fun validateMangaMutationCapture(folder: File) {
         check(read.keys == setOf("pages", "complete", "present"))
     }
 
-    absent(MANGA_ABSENT)
-    for ((name, form) in MangaWrites) {
-        val write = checkNotNull(files.remove("$name.200.json")).verifiedFields()
-        check(write.isNotEmpty() && write.agreeWith(form))
-        val read = checkNotNull(files.remove("${name}_read.200.json")).membership(present = true)
+    fun checkpoint(name: String): JsonObject {
+        val read = checkNotNull(files.remove("$name.200.json")).membership(present = true)
         check(read.keys == setOf("pages", "complete", "present", "list_status"))
-        val values = (read["list_status"] as? JsonObject)?.verifiedFields() ?: error("Invalid projection")
-        check(values.matches(form))
+        val values = (read["list_status"] as? JsonObject)?.verifiedCheckpoint() ?: error("Invalid projection")
+        check(MANGA_VERSION in values)
+        return values
+    }
+
+    absent(MANGA_ABSENT)
+    var previous: JsonObject? = null
+    for ((name, form) in MangaWrites) {
+        if (previous != null) check(checkpoint(MANGA_BEFORE_EDIT) == previous)
+        val write = checkNotNull(files.remove("$name.200.json")).objectBody().verifiedCheckpoint()
+        check(write.keys.any { it != MANGA_VERSION } && write.agreeWith(form))
+        val read = checkpoint("${name}_read")
+        check(read.matches(form) && write.agreesWithReadBack(read))
+        previous = read
     }
     absent(MANGA_REMOVED_READ)
     val (name, reply) = files.entries.singleOrNull() ?: error("Expected one deletion reply")
@@ -125,6 +153,8 @@ private fun File.membership(present: Boolean): JsonObject =
         check(count != null && !count.isString && count.intOrNull?.let { it in 1..50 } == true)
         check(get("complete") == JsonPrimitive(true) && get("present") == JsonPrimitive(present))
     }
+
+private fun JsonObject.verifiedCheckpoint(): JsonObject = apply { check(projectMangaCheckpoint() == this) }
 
 private fun JsonObject.verifiedFields(): JsonObject = apply { check(projectMangaValues() == this) }
 

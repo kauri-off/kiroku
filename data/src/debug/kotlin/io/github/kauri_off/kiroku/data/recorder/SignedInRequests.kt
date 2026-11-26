@@ -30,6 +30,7 @@ internal fun isSignedInAnswer(name: String): Boolean =
     name in SignedInAnswers ||
         name in MangaMutationAnswers ||
         name == MANGA_ABSENT ||
+        name == MANGA_BEFORE_EDIT ||
         name == MANGA_REMOVED ||
         name == MANGA_REMOVED_READ ||
         MangaWrites.any { name == it.first || name == "${it.first}_read" } ||
@@ -97,10 +98,11 @@ internal val MangaWrites =
         "manga_edit" to MangaListEdit(status = MangaListStatus.Reading, chaptersRead = 1, volumesRead = 1, score = 7).form(),
     )
 
+internal const val MANGA_BEFORE_EDIT = "manga_edit_before"
 internal const val MANGA_ABSENT = "manga_entry_absent"
 internal const val MANGA_REMOVED = "manga_removed"
 internal const val MANGA_REMOVED_READ = "manga_removed_read"
 
-val MangaRecordingAnswers: Int = 3 + 2 * MangaWrites.size
+val MangaRecordingAnswers: Int = 4 + 2 * MangaWrites.size
 
 internal fun mangaDeleted(status: Int) = status == 200 || status == 204

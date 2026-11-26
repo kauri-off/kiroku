@@ -85,6 +85,8 @@ sealed interface RecorderEvent {
     data object Dismiss : RecorderEvent
 
     data object Remove : RecorderEvent
+
+    data object Recheck : RecorderEvent
 }
 
 private const val ID_DIGITS = 9
@@ -111,6 +113,7 @@ fun RecorderRoute() {
             is RecorderEvent.RecordReads -> recorder?.recordReads(event.capture)
             RecorderEvent.Dismiss -> recorder?.dismiss()
             RecorderEvent.Remove -> recorder?.remove()
+            RecorderEvent.Recheck -> recorder?.recheck()
         }
     }
 }
@@ -312,7 +315,15 @@ private fun Report(
         }
     }
     OutlinedButton(
-        onClick = { onEvent(if (list?.needsRecovery == true) RecorderEvent.Remove else RecorderEvent.Dismiss) },
+        onClick = {
+            onEvent(
+                when (list) {
+                    ListAfter.Left -> RecorderEvent.Remove
+                    ListAfter.Unresolved -> RecorderEvent.Recheck
+                    else -> RecorderEvent.Dismiss
+                },
+            )
+        },
         modifier = Modifier.padding(horizontal = Spacing.l),
     ) {
         val label =
@@ -406,6 +417,7 @@ private fun Halt.text(): String =
         Halt.NoAnswer -> stringResource(R.string.recorder_halt_no_answer)
         Halt.Interrupted -> stringResource(R.string.recorder_halt_interrupted)
         Halt.Unconfirmed -> stringResource(R.string.recorder_manga_unconfirmed)
+        Halt.JournalRetained -> stringResource(R.string.recorder_halt_journal_retained)
         Halt.JournalUnreadable -> stringResource(R.string.recorder_halt_journal)
         Halt.BackingOff -> stringResource(R.string.recorder_halt_backing_off)
         Halt.Storage -> stringResource(R.string.recorder_halt_storage)

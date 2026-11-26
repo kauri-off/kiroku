@@ -74,7 +74,14 @@ internal fun mangaReply(
 internal fun JsonObject.mangaText(key: String): String? =
     (get(key) as? JsonPrimitive)?.takeIf { it.isString }?.content?.takeIf { it.isNotBlank() }
 
-internal fun JsonObject.mangaProof(values: JsonObject): JsonObject? {
-    val updated = mangaText("updated_at")?.let(::updatedAtOf) ?: return null
-    return JsonObject(values + ("updated_at" to JsonPrimitive(updated.toString())))
+internal const val MANGA_VERSION = "updated_at"
+
+internal fun JsonObject.projectMangaCheckpoint(): JsonObject? {
+    val values = projectMangaValues() ?: return null
+    if (MANGA_VERSION !in this) return values
+    val updated = mangaText(MANGA_VERSION)?.let(::updatedAtOf) ?: return null
+    return JsonObject(values + (MANGA_VERSION to JsonPrimitive(updated.toString())))
 }
+
+internal fun JsonObject.agreesWithReadBack(read: JsonObject): Boolean =
+    all { (key, value) -> if (key in read || key == MANGA_VERSION) read[key] == value else true }

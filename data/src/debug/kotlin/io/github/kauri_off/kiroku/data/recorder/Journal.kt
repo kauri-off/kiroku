@@ -27,7 +27,10 @@ internal class Journal(
         val title: RecordedTitle,
         val user: String,
         val mangaProof: JsonObject? = null,
-    )
+        val mangaPendingEdit: Boolean = false,
+    ) {
+        val removableMangaProof: JsonObject? get() = mangaProof.takeUnless { mangaPendingEdit }
+    }
 
     class Unreadable : IOException()
 
@@ -58,17 +61,21 @@ internal class Journal(
             } else {
                 RecorderMedia.Anime
             }
+        if (PROOF in values && LEGACY_PROOF in values) throw Unreadable()
         val proof =
-            if (PROOF in values) {
+            if (PROOF in values || LEGACY_PROOF in values) {
                 if (media != RecorderMedia.Manga) throw Unreadable()
-                val row = values[PROOF] as? JsonObject ?: throw Unreadable()
-                val projected = row.projectMangaValues() ?: throw Unreadable()
-                if (row.mangaProof(projected) != row || MangaWrites.none { (_, form) -> projected.matches(form) }) throw Unreadable()
-                row
+                val row = (values[PROOF] ?: values[LEGACY_PROOF]) as? JsonObject ?: throw Unreadable()
+                if (MANGA_VERSION !in row || row.projectMangaCheckpoint() != row || MangaWrites.none { (_, form) -> row.matches(form) }) {
+                    throw Unreadable()
+                }
+                row.takeIf { PROOF in values }
             } else {
                 null
             }
-        return Left(RecordedTitle(id, name, episodes, media), user, proof)
+        val pending = PENDING_EDIT in values
+        if (pending && (proof == null || values[PENDING_EDIT] != JsonPrimitive(true))) throw Unreadable()
+        return Left(RecordedTitle(id, name, episodes, media), user, proof, pending)
     }
 
     // On the disk when this returns: a write to the list never goes out before it.
@@ -81,6 +88,7 @@ internal class Journal(
                 put(USER, left.user)
                 if (left.title.media != RecorderMedia.Anime) put(MEDIA, left.title.media.name)
                 left.mangaProof?.let { put(PROOF, it) }
+                if (left.mangaPendingEdit) put(PENDING_EDIT, true)
             }.toString()
         val next = File(file.path + NEXT)
         try {
@@ -106,7 +114,9 @@ internal class Journal(
     }
 
     private companion object {
-        const val PROOF = "manga_row"
+        const val PENDING_EDIT = "manga_pending_edit"
+        const val LEGACY_PROOF = "manga_row"
+        const val PROOF = "manga_row_v2"
         const val MEDIA = "media"
         const val ID = "id"
         const val EPISODES = "episodes"

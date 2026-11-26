@@ -94,7 +94,17 @@ class RecorderSectionTest {
         compose.onNodeWithText("Check manga title").assertIsNotEnabled()
         compose.onNodeWithText("Record anime suggestions").assertIsNotEnabled()
         compose.onNodeWithText("Check again").performClick()
-        assertEquals(listOf(RecorderEvent.Remove), events)
+        assertEquals(listOf(RecorderEvent.Recheck), events)
+    }
+
+    @Test
+    fun `a retained journal is reported alongside the original manga refusal`() {
+        val manga = title.copy(episodes = 0, media = RecorderMedia.Manga)
+        showManga(Recording.Stopped(manga, "manga_add", Halt.Refused(429), 1, null, ListAfter.Unresolved, Halt.JournalRetained))
+
+        compose.onNodeWithText("The recording stopped at the request manga_add").assertExists()
+        compose.onNodeWithText("MyAnimeList is refusing requests (answer\u00A0429), try again later").assertExists()
+        compose.onNodeWithText("The recovery file could not be cleared").assertExists()
     }
 
     @Test

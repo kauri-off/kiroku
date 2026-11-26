@@ -215,7 +215,7 @@ class MangaRecordingTest {
         }
 
     @Test
-    fun `an unconfirmed edit is cleaned up and never published as complete`() =
+    fun `an unconfirmed edit leaves verify-only recovery and never publishes`() =
         runBlocking {
             val recorder = recorder()
             val title = checked(recorder)
@@ -228,9 +228,11 @@ class MangaRecordingTest {
             val stopped = recorder.state.value as Recording.Stopped
             assertEquals(Halt.Unconfirmed, stopped.halt)
             assertEquals("manga_edit_read", stopped.at)
-            assertEquals(ListAfter.Removed, stopped.list)
-            assertEquals(null, values)
-            assertFalse(journal.exists())
+            assertEquals(ListAfter.Unresolved, stopped.list)
+            assertEquals(planned, values)
+            assertTrue(journal.exists())
+            recorder.recheck().join()
+            assertEquals(listOf("PATCH", "PATCH"), writes.map { it.method })
             assertFalse(checkNotNull(stopped.folder).resolve(MANGA_CAPTURE_COMPLETE).exists())
         }
 
@@ -436,13 +438,13 @@ class MangaRecordingTest {
             recorder.record(title).join()
             val reopened = recorder()
             assertEquals("Unresolved", (reopened.state.value as Recording.Leftover).list.name)
-            reopened.remove().join()
+            reopened.recheck().join()
             assertEquals(listOf("PATCH"), writes.map { it.method })
             assertTrue(journal.exists())
             assertEquals(planned, values)
 
             values = null
-            reopened.remove().join()
+            reopened.recheck().join()
             assertEquals("Absent", (reopened.state.value as Recording.Leftover).list.name)
             assertFalse(journal.exists())
         }
@@ -463,7 +465,7 @@ class MangaRecordingTest {
             val stopped = recorder.state.value as Recording.Stopped
             assertEquals("manga_add_read", stopped.at)
             assertEquals(ListAfter.Unresolved, stopped.list)
-            recorder.remove().join()
+            recorder.recheck().join()
             assertEquals(listOf("PATCH"), writes.map { it.method })
             assertTrue(journal.exists())
         }
@@ -486,6 +488,165 @@ class MangaRecordingTest {
             assertTrue(journal.exists())
             assertEquals(replacement, values)
         }
+
+    @Test
+    fun `an add acknowledgement and read-back cannot disagree on score or authorize edit or cleanup`() =
+        runBlocking {
+            val recorder = recorder()
+            val title = checked(recorder)
+            val changed = JsonObject(planned + ("score" to JsonPrimitive(8)) + ("updated_at" to JsonPrimitive(CHANGED)))
+            override = { request ->
+                if (request.method == "PATCH") {
+                    values = changed
+                    json("""{"status":"plan_to_read","score":0}""")
+                } else {
+                    null
+                }
+            }
+            recorder.record(title).join()
+
+            assertConflict(recorder, "manga_add_read", listOf("PATCH"))
+            assertEquals(changed, values)
+        }
+
+    @Test
+    fun `an edit and read-back with matching fields but different versions cannot authorize cleanup`() =
+        runBlocking {
+            val recorder = recorder()
+            val title = checked(recorder)
+            override = { request ->
+                if (request.method == "PATCH" && form(request)["status"] == "reading") {
+                    values =
+                        Json
+                            .parseToJsonElement(
+                                """{"status":"reading","score":7,"num_chapters_read":1,"num_volumes_read":1,"updated_at":"$CHANGED"}""",
+                            ).jsonObject
+                    json("""{"status":"reading","score":7,"num_chapters_read":1,"num_volumes_read":1,"updated_at":"$UPDATED"}""")
+                } else {
+                    null
+                }
+            }
+            recorder.record(title).join()
+
+            values = planned
+            assertConflict(recorder, "manga_edit_read", listOf("PATCH", "PATCH"))
+            assertEquals(planned, values)
+        }
+
+    @Test
+    fun `a row changed after the add checkpoint cannot be edited even if the prior version later returns`() =
+        runBlocking {
+            val recorder = recorder()
+            val title = checked(recorder)
+            var reads = 0
+            override = { request ->
+                if (request.url.encodedPath.endsWith("/mangalist") && writes.size == 1 && ++reads == 2) {
+                    values = JsonObject(planned + ("updated_at" to JsonPrimitive(CHANGED)))
+                }
+                null
+            }
+            recorder.record(title).join()
+
+            values = planned
+            assertConflict(recorder, "manga_edit_before", listOf("PATCH"))
+            assertEquals(planned, values)
+        }
+
+    @Test
+    fun `checking again after a recovery mismatch is read only even when the exact row returns`() =
+        runBlocking {
+            val recorder = recorder()
+            override = { request -> if (request.method == "DELETE") MockResponse(code = 204) else null }
+            recorder.record(checked(recorder)).join()
+            val verified = checkNotNull(values)
+            values = JsonObject(verified + ("updated_at" to JsonPrimitive(CHANGED)))
+            override = { null }
+            recorder.remove().join()
+            assertEquals(ListAfter.Unresolved, (recorder.state.value as Recording.Stopped).list)
+            val before = writes.size
+
+            override = { request ->
+                if (request.url.encodedPath.endsWith("/mangalist")) response(500, """{"error":"server_error"}""") else null
+            }
+            recorder.recheck().join()
+            assertEquals(ListAfter.Unresolved, (recorder.state.value as Recording.Stopped).list)
+            assertEquals(before, writes.size)
+
+            values = verified
+            override = { null }
+            recorder.recheck().join()
+            assertEquals(ListAfter.Left, (recorder.state.value as Recording.Stopped).list)
+            assertEquals(before, writes.size)
+            recorder.remove().join()
+            assertEquals(ListAfter.Removed, (recorder.state.value as Recording.Stopped).list)
+            assertEquals(before + 1, writes.size)
+        }
+
+    @Test
+    fun `proof from an older manga journal is verify only`() =
+        runBlocking {
+            val recorder = recorder()
+            override = { request -> if (request.method == "DELETE") MockResponse(code = 204) else null }
+            recorder.record(checked(recorder)).join()
+            assertEquals(ListAfter.Left, (recorder.state.value as Recording.Stopped).list)
+            journal.writeText(journal.readText().replace("manga_row_v2", "manga_row"))
+            override = { null }
+            val before = writes.size
+
+            val reopened = recorder()
+            assertEquals(ListAfter.Unresolved, (reopened.state.value as Recording.Leftover).list)
+            reopened.recheck().join()
+            assertEquals(ListAfter.Unresolved, (reopened.state.value as Recording.Leftover).list)
+            assertEquals(before, writes.size)
+        }
+
+    @Test
+    fun `a failed intent unlink preserves the first patch refusal and its stage`() =
+        runBlocking {
+            val recorder =
+                recorder { file, contents ->
+                    if (contents == "429\n") {
+                        val intent = journal.readBytes()
+                        check(journal.delete())
+                        check(journal.mkdir())
+                        journal.resolve("intent").writeBytes(intent)
+                        throw IOException("fixture failed to save refusal")
+                    }
+                    file.writeText(contents)
+                }
+            val title = checked(recorder)
+            override = { request -> if (request.method == "PATCH") MockResponse(code = 429) else null }
+            recorder.record(title).join()
+
+            val stopped = recorder.state.value as Recording.Stopped
+            assertEquals(Halt.Refused(429), stopped.halt)
+            assertEquals("manga_add", stopped.at)
+            assertEquals(Halt.JournalRetained, stopped.cleanupHalt)
+            assertEquals(ListAfter.Unresolved, stopped.list)
+            assertTrue(journal.resolve("intent").isFile)
+            assertEquals("PATCH", requests.last().method)
+            assertEquals(listOf("PATCH"), writes.map { it.method })
+        }
+
+    private suspend fun assertConflict(
+        recorder: SignedInRecorder,
+        step: String,
+        expectedWrites: List<String>,
+    ) {
+        val stopped = recorder.state.value as Recording.Stopped
+        assertEquals(Halt.Unconfirmed, stopped.halt)
+        assertEquals(step, stopped.at)
+        assertEquals(ListAfter.Unresolved, stopped.list)
+        assertEquals(expectedWrites, writes.map { it.method })
+
+        val reopened = recorder()
+        assertEquals(ListAfter.Unresolved, (reopened.state.value as Recording.Leftover).list)
+        reopened.recheck().join()
+        assertEquals(ListAfter.Unresolved, (reopened.state.value as Recording.Leftover).list)
+        reopened.remove().join()
+        assertEquals(expectedWrites, writes.map { it.method })
+        assertTrue(journal.exists())
+    }
 
     @Test
     fun `an invalid journal blocks both scenarios and is never replaced after confirmation`() =
@@ -746,6 +907,7 @@ class MangaRecordingTest {
     private companion object {
         const val ID = 478L
         const val UPDATED = "2026-11-25T10:01:00Z"
+        const val CHANGED = "2026-11-25T10:02:00Z"
         const val CONTRADICTORY = """{"error":"server_error","data":[],"paging":{}}"""
         const val EMPTY_LIST = """{"data":[],"paging":{}}"""
         const val ACCESS = "manga-test-access"
