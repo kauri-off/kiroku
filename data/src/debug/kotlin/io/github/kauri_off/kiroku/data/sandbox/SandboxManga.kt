@@ -22,7 +22,9 @@ import io.github.kauri_off.kiroku.data.network.Device
 import io.github.kauri_off.kiroku.data.session.Attempt
 import io.github.kauri_off.kiroku.data.session.MalSession
 import kotlinx.coroutines.delay
+import java.io.File
 import java.time.Clock
+import java.time.Instant
 
 class SandboxManga(
     database: () -> KirokuDatabase,
@@ -33,6 +35,7 @@ class SandboxManga(
     poster: (Long) -> String,
     unexpected: (Throwable) -> Unit,
     private val retired: (SignInId) -> Boolean,
+    private val removalsFile: File,
 ) : MangaListEditor,
     MangaRepository {
     private val entries = Entries.map { it.copy(posterUrl = poster(it.id.value), explicitlyUnrated = it.score == null) }
@@ -90,8 +93,11 @@ class SandboxManga(
                         SandboxWrites.Refused -> Outcome.Failure(DataError.Refused)
                         SandboxWrites.Fail -> Outcome.Success(MangaWriteResult.Unknown(DataError.ServerError))
                         SandboxWrites.Work -> {
-                            if (currentEntries.none { it.id == id }) return@withList Outcome.Failure(DataError.NotFound)
-                            currentEntries = currentEntries.mapNotNull { if (it.id == id) change(it) else it }
+                            val entry = currentEntries.firstOrNull { it.id == id } ?: return@withList Outcome.Failure(DataError.NotFound)
+                            val replacement = change(entry)
+                            val next = currentEntries.mapNotNull { if (it.id == id) replacement else it }
+                            if (replacement == null) keepRemovals(owner, next)
+                            currentEntries = next
                             Outcome.Success(MangaWriteResult.Accepted)
                         }
                     }
@@ -115,8 +121,9 @@ class SandboxManga(
                     session.whileOwner(owner) {
                         if (session.mayWriteAs(owner) && !retired(owner)) {
                             if (listOwner != owner) {
+                                val removed = removals(owner)
+                                currentEntries = entries.filterNot { it.id in removed }
                                 listOwner = owner
-                                currentEntries = entries
                             }
                             result = run()
                         }
@@ -126,6 +133,24 @@ class SandboxManga(
                 }
             }
         }
+
+    private fun removals(owner: SignInId): Set<MangaId> {
+        if (!removalsFile.exists()) return emptySet()
+        val lines = removalsFile.readLines()
+        if (lines.first() != owner.value) return emptySet()
+        return lines.drop(1).map { MangaId(it.toLong()) }.toSet()
+    }
+
+    private fun keepRemovals(
+        owner: SignInId,
+        remaining: List<MangaListEntry>,
+    ) {
+        val remainingIds = remaining.map { it.id }.toSet()
+        val removed = entries.map { it.id }.filterNot { it in remainingIds }
+        val next = File(removalsFile.path + ".next")
+        next.writeText((listOf(owner.value) + removed.map { it.value.toString() }).joinToString("\n"))
+        check(next.renameTo(removalsFile)) { "The sandbox manga removals were not kept" }
+    }
 
     private var cardOwner: SessionOwner? = null
     private val cards = mutableMapOf<MangaId, StoredManga>()
@@ -179,7 +204,15 @@ class SandboxManga(
     private companion object {
         val Entries =
             listOf(
-                MangaListEntry(MangaId(1), Titles("Paper Observatory"), MangaReadingStatus("reading"), chaptersRead = 12, volumesRead = 2),
+                MangaListEntry(
+                    MangaId(1),
+                    Titles("Paper Observatory"),
+                    MangaReadingStatus("reading"),
+                    chaptersRead = 12,
+                    volumesRead = 2,
+                    explicitlyUnrated = true,
+                    updatedAt = Instant.parse("2026-01-01T00:00:00Z"),
+                ),
                 MangaListEntry(MangaId(2), Titles("The Lantern District"), MangaReadingStatus("completed"), chaptersRead = 54, score = 9),
                 MangaListEntry(MangaId(3), Titles("Rain at the Edge of Town"), MangaReadingStatus("plan_to_read"), chaptersRead = 0),
                 MangaListEntry(MangaId(4), Titles("Between the Tides"), MangaReadingStatus("on_hold"), chaptersRead = 7),

@@ -105,6 +105,7 @@ sealed interface MangaListRemovalResult {
 
     data class Failed(
         val error: DataError,
+        val needsRefresh: Boolean = false,
     ) : MangaListRemovalResult
 
     data class ReadRequired(

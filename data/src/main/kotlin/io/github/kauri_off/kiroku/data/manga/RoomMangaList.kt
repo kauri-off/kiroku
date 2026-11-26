@@ -223,7 +223,17 @@ class RoomMangaList internal constructor(
         }
 
         val result = send { remover.remove(owner, baseline.id) }
-        if (result is MangaWriteResult.Refused) return MangaListRemovalResult.Failed(clearRefusal(owner, result.error))
+        if (result is MangaWriteResult.Refused) {
+            return when (val cleared = clearRefusal(owner)) {
+                is Outcome.Success -> MangaListRemovalResult.Failed(result.error)
+                is Outcome.Failure ->
+                    if (cleared.error == DataError.ListEnded) {
+                        MangaListRemovalResult.Failed(DataError.ListEnded)
+                    } else {
+                        MangaListRemovalResult.Failed(result.error, needsRefresh = true)
+                    }
+            }
+        }
         return when (val readBack = checkNotNull(download(owner) { true })) {
             is Outcome.Failure ->
                 if (readBack.error == DataError.ListEnded) {
@@ -280,7 +290,11 @@ class RoomMangaList internal constructor(
         if (patch.isEmpty) return MangaListEditResult.Discarded
 
         val sent = send { writer.patch(owner, id, patch) }
-        if (sent is MangaWriteResult.Refused) return MangaListEditResult.Failed(clearRefusal(owner, sent.error))
+        if (sent is MangaWriteResult.Refused) {
+            val cleared = clearRefusal(owner)
+            val error = if (cleared == Outcome.Failure(DataError.ListEnded)) DataError.ListEnded else sent.error
+            return MangaListEditResult.Failed(error)
+        }
 
         val readBack = checkNotNull(download(owner) { true })
         if (readBack == Outcome.Failure(DataError.ListEnded)) return MangaListEditResult.Failed(DataError.ListEnded)
@@ -309,17 +323,11 @@ class RoomMangaList internal constructor(
             null -> error("A manga list write cannot be deferred")
         }
 
-    private suspend fun clearRefusal(
-        owner: SignInId,
-        error: DataError,
-    ): DataError {
-        val cleared =
-            whileOwner(owner) {
-                dao.requireRefresh(owner.value, false)
-                Outcome.Success(Unit)
-            }
-        return if (cleared == Outcome.Failure(DataError.ListEnded)) DataError.ListEnded else error
-    }
+    private suspend fun clearRefusal(owner: SignInId): Outcome<Unit> =
+        whileOwner(owner) {
+            dao.requireRefresh(owner.value, false)
+            Outcome.Success(Unit)
+        }
 
     private suspend fun download(
         owner: SignInId,

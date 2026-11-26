@@ -18,6 +18,7 @@ import io.github.kauri_off.kiroku.core.repository.MangaListRemovalResult
 import io.github.kauri_off.kiroku.core.repository.MangaListStatus
 import io.github.kauri_off.kiroku.data.anime.edited
 import io.github.kauri_off.kiroku.data.db.KirokuDatabase
+import io.github.kauri_off.kiroku.data.db.execute
 import io.github.kauri_off.kiroku.data.network.MalJson
 import io.github.kauri_off.kiroku.data.network.NetworkFixture
 import io.github.kauri_off.kiroku.data.network.NetworkFixture.Companion.answer
@@ -165,6 +166,34 @@ class RoomMangaListTest {
             database = KirokuDatabase.open(context, name)
             assertEquals(expected, repository().stored(owner))
             assertTrue(reported.isEmpty())
+        }
+
+    @Test
+    fun `a refused removal reports refresh debt if Room cannot clear its marker`() =
+        runBlocking {
+            val owner = signIn("a")
+            val list = repository()
+            val initial = entry()
+            response = { Outcome.Success(listOf(initial)) }
+            list.refresh(owner)
+            var sent = 0
+            delete = { _, _ ->
+                sent++
+                database.execute(
+                    "CREATE TRIGGER fail_clear BEFORE UPDATE OF needs_refresh ON manga_list_state " +
+                        "WHEN NEW.needs_refresh = 0 BEGIN SELECT RAISE(ABORT, 'cannot clear'); END",
+                )
+                MangaWriteResult.Refused(DataError.Refused)
+            }
+
+            assertEquals(MangaListRemovalResult.Failed(DataError.Refused, needsRefresh = true), list.remove(owner, initial))
+            assertEquals(Outcome.Success(MangaListSnapshot(owner, listOf(initial), null)), list.stored(owner))
+            assertEquals(MangaListRemovalResult.RefreshRequired, list.remove(owner, initial, retry = true))
+            assertEquals(1, sent)
+            assertEquals(1, reported.size)
+
+            database.execute("DROP TRIGGER fail_clear")
+            assertEquals(Outcome.Success(MangaListSnapshot(owner, listOf(initial), clock.now)), list.refresh(owner))
         }
 
     @Test

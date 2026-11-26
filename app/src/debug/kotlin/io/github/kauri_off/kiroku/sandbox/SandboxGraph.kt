@@ -84,6 +84,7 @@ class SandboxGraph internal constructor(
             poster = { id -> notShown("${FixtureAnime.POSTER_URL}$id.jpg") },
             unexpected = parts.unexpected,
             retired = live::wasRetiredOnDisk,
+            removalsFile = File(parts.context.noBackupFilesDir, notShown("$NAME.mal.manga-removals")),
         )
     }
 
