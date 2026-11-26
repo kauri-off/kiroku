@@ -330,8 +330,9 @@ Not to forget:
 - [x] Manga search and ranking.
 - [x] Read the personal manga list.
 - [x] Switch between Anime and Manga in My list.
-- [ ] Edit status, chapter and volume progress, and score on the personal manga list.
-- [ ] Remove entries from the personal manga list.
+- [x] Edit personal manga list entries.
+  - [x] Owner-bound edits and read-back reconciliation.
+- [x] Remove entries from the personal manga list.
 - [x] Delete individual recent searches.
 - [x] Open anime from MyAnimeList links pasted in Search.
 

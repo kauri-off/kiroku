@@ -75,8 +75,8 @@ import io.github.kauri_off.kiroku.core.model.ListStatus
 import io.github.kauri_off.kiroku.core.model.PartialDate
 import io.github.kauri_off.kiroku.design.component.ConnectedChoice
 import io.github.kauri_off.kiroku.design.component.CoversMessages
-import io.github.kauri_off.kiroku.design.component.EpisodeStepperLayout
 import io.github.kauri_off.kiroku.design.component.LineOrStack
+import io.github.kauri_off.kiroku.design.component.ProgressStepperLayout
 import io.github.kauri_off.kiroku.design.component.TitleText
 import io.github.kauri_off.kiroku.design.component.WindowWithoutAutofill
 import io.github.kauri_off.kiroku.design.component.stepButtonMargin
@@ -162,8 +162,9 @@ internal fun EditSheet(
             focusManager.clearFocus()
             onEvent(event)
         }
-        Column(Modifier.padding(start = Spacing.l, end = Spacing.l, bottom = Spacing.l)) {
-            Column(Modifier.weight(1f, fill = false).verticalScroll(scroll)) {
+        EditSheetContent(
+            scroll,
+            content = {
                 // The gaps between groups look equal once the controls' own invisible margins are counted.
                 TitleText(state.title, maxLines = 1, style = MaterialTheme.typography.titleMedium)
                 Spacer(Modifier.height(Spacing.l))
@@ -175,9 +176,9 @@ internal fun EditSheet(
                         countSpan = top until top + it.size.height
                     },
                 ) {
-                    Label(stringResource(R.string.design_episodes_watched))
+                    EditLabel(stringResource(R.string.design_episodes_watched))
                     Spacer(Modifier.height(Spacing.xs))
-                    EpisodeStepperLayout(
+                    ProgressStepperLayout(
                         text = state.typed ?: state.draft.watchedEpisodes.toString(),
                         current = state.draft.watchedEpisodes,
                         total = state.total,
@@ -196,17 +197,7 @@ internal fun EditSheet(
                     )
                 }
                 // With key input the chips take the first focus, not the drag handle, whose tooltip would show unasked.
-                val window = LocalWindowInfo.current
-                val inputMode = LocalInputModeManager.current
-                LaunchedEffect(Unit) {
-                    if (focusCount) {
-                        countFocus.requestFocus()
-                    } else {
-                        snapshotFlow { window.isWindowFocused }.first { it }
-                        awaitFrame()
-                        if (inputMode.inputMode == InputMode.Keyboard) statusFocus.requestFocus()
-                    }
-                }
+                EditInitialFocus(statusFocus, countFocus.takeIf { focusCount })
                 Spacer(Modifier.height(Spacing.xl))
                 ScoreSlider(state.draft.score ?: 0) { edit(EditSheetEvent.ScoreChanged(it)) }
                 Spacer(Modifier.height(Spacing.xl))
@@ -214,11 +205,9 @@ internal fun EditSheet(
                     DateInput(DateField.Start, state.draft.startDate, edit)
                     DateInput(DateField.Finish, state.draft.finishDate, edit)
                 }
-            }
-            // Out of the scroll, so Save is on screen whenever the keyboard is closed.
-            if (!WindowInsets.isImeVisible) {
-                Spacer(Modifier.height(Spacing.xl))
-                Actions(
+            },
+            footer = {
+                EditActions(
                     remove =
                         if (state.isNew) {
                             null
@@ -239,14 +228,14 @@ internal fun EditSheet(
                         }
                     },
                 )
-            }
-        }
+            },
+        )
     }
 
     when (val dialog = state.dialog) {
         is EditDialog.PickDate -> DateDialog(dialog.field, state, onEvent)
         EditDialog.ConfirmRemove ->
-            Confirmation(
+            EditConfirmation(
                 title = stringResource(R.string.edit_remove_title),
                 text = stringResource(R.string.edit_remove_text),
                 confirm = stringResource(R.string.edit_remove_confirm),
@@ -255,7 +244,7 @@ internal fun EditSheet(
                 onDismiss = { onEvent(EditSheetEvent.DialogDismissed) },
             )
         EditDialog.ConfirmDiscard ->
-            Confirmation(
+            EditConfirmation(
                 title = stringResource(R.string.edit_discard_title),
                 text = null,
                 confirm = stringResource(R.string.edit_discard_confirm),
@@ -267,9 +256,43 @@ internal fun EditSheet(
     }
 }
 
+@Composable
+internal fun EditInitialFocus(
+    firstChoice: FocusRequester,
+    field: FocusRequester? = null,
+) {
+    val window = LocalWindowInfo.current
+    val inputMode = LocalInputModeManager.current
+    LaunchedEffect(Unit) {
+        if (field != null) {
+            field.requestFocus()
+        } else {
+            snapshotFlow { window.isWindowFocused }.first { it }
+            awaitFrame()
+            if (inputMode.inputMode == InputMode.Keyboard) firstChoice.requestFocus()
+        }
+    }
+}
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+internal fun EditSheetContent(
+    scroll: ScrollState,
+    content: @Composable () -> Unit,
+    footer: @Composable () -> Unit,
+) {
+    Column(Modifier.padding(start = Spacing.l, end = Spacing.l, bottom = Spacing.l)) {
+        Column(Modifier.weight(1f, fill = false).verticalScroll(scroll)) { content() }
+        if (!WindowInsets.isImeVisible) {
+            Spacer(Modifier.height(Spacing.xl))
+            footer()
+        }
+    }
+}
+
 // A stock dialog that keeps the window's side margin however wide its text grows.
 @Composable
-private fun Confirmation(
+internal fun EditConfirmation(
     title: String,
     text: String?,
     confirm: String,
@@ -289,7 +312,7 @@ private fun Confirmation(
 // Remove at the start and Save at the end of one line; when they do not fit, Save above Remove, both at the end.
 // Remove's text, not its padding, lines up with the content edge.
 @Composable
-private fun Actions(
+internal fun EditActions(
     remove: (@Composable () -> Unit)?,
     save: @Composable () -> Unit,
 ) {
@@ -343,7 +366,7 @@ private fun StatusChoice(
 
 // Read by the control it names, so a screen reader hears it once.
 @Composable
-private fun Label(text: String) =
+internal fun EditLabel(text: String) =
     Text(
         text,
         style = MaterialTheme.typography.bodyMedium,
@@ -359,28 +382,37 @@ private suspend fun ScrollState.scrollToShow(span: IntRange) {
 }
 
 // Lets a control's own padding reach into the sheet's, so its glyph lines up with the content edge.
-private fun Modifier.bleed(start: Dp): Modifier =
+internal fun Modifier.bleed(start: Dp): Modifier =
     layout { measurable, constraints ->
         val inset = start.roundToPx()
         val placeable = measurable.measure(constraints.offset(horizontal = inset))
         layout((placeable.width - inset).coerceAtLeast(0), placeable.height) { placeable.placeRelative(-inset, 0) }
     }
 
+internal const val UNKNOWN_SCORE_POSITION = -1
+
 @Composable
-private fun ScoreSlider(
+internal fun ScoreSlider(
     score: Int,
+    enabled: Boolean = true,
+    unknownLabel: String? = null,
     onChange: (Int) -> Unit,
 ) {
     val label = stringResource(R.string.edit_score)
-    val value = scoreText(score)
+    val value = if (score == UNKNOWN_SCORE_POSITION) checkNotNull(unknownLabel) else scoreText(score)
+    val minimum = if (unknownLabel == null) 0 else UNKNOWN_SCORE_POSITION
     LineOrStack(gap = Spacing.l, modifier = Modifier.clearAndSetSemantics {}) {
-        Label(label)
+        EditLabel(label)
         Text(value, style = MaterialTheme.typography.labelLarge)
     }
-    val slider = remember { SliderState(score.toFloat(), steps = MAX_SCORE - 1, trackRange = 0f..MAX_SCORE.toFloat()) }
+    val slider =
+        remember(minimum) {
+            SliderState(score.toFloat(), steps = MAX_SCORE - minimum - 1, trackRange = minimum.toFloat()..MAX_SCORE.toFloat())
+        }
     slider.value = score.toFloat()
     Slider(
         state = slider,
+        enabled = enabled,
         onValueChange = { position -> position.roundToInt().let { if (it != score) onChange(it) } },
         modifier =
             Modifier.semantics {
@@ -391,7 +423,7 @@ private fun ScoreSlider(
 }
 
 @Composable
-private fun scoreText(score: Int): String {
+internal fun scoreText(score: Int): String {
     val name =
         stringResource(
             when (score) {

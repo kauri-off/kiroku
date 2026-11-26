@@ -112,6 +112,7 @@ internal class MangaTitleViewModel(
                                 current.refreshing,
                                 current.coverAttempt,
                                 detailsError = (current.problem as? MangaTitleProblem.ReadFailed)?.error.takeIf { cached == null },
+                                detailsRead = cached != null,
                             )
                         current.problem != null -> MangaTitleContent.Failed(current.problem)
                         else -> MangaTitleContent.Loading

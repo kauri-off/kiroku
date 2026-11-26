@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="manga_edit_chapters_read">Chapters read</string>
+    <string name="manga_edit_volumes_read">Volumes read</string>
+    <string name="manga_edit_chapter_minus">Minus one chapter</string>
+    <string name="manga_edit_chapter_plus">Plus one chapter</string>
+    <string name="manga_edit_volume_minus">Minus one volume</string>
+    <string name="manga_edit_volume_plus">Plus one volume</string>
+    <string name="manga_edit_current_status">Current status: %1$s</string>
+    <string name="manga_edit_submitted_status">Status in this edit: %1$s</string>
+    <string name="manga_edit_restore_status">Restore opening status</string>
+    <string name="manga_edit_unknown">Unknown</string>
+    <string name="manga_edit_invalid_count">Enter a whole number from\u00A0%1$s to\u00A0%2$s</string>
+    <string name="manga_edit_saving">Saving…</string>
+    <string name="manga_edit_unconfirmed">Could not confirm save</string>
+    <string name="manga_edit_refresh_list">Refresh list</string>
+    <string name="manga_edit_checking_save">Checking save…</string>
+    <string name="manga_edit_remove_title">Remove %1$s from your list?</string>
+    <string name="manga_edit_remove_text">Progress and score will be lost</string>
+    <string name="manga_edit_removing">Removing…</string>
+    <string name="manga_edit_checking_removal">Checking removal…</string>
+    <string name="manga_edit_removal_unconfirmed">Could not confirm removal</string>
+    <string name="manga_edit_could_not_remove">Could not remove</string>
+    <string name="manga_edit_start_over">Start over</string>
+    <string name="manga_edit_membership_failed">Could not check your list</string>
+    <string name="manga_edit_could_not_remove_title">Could not remove %1$s</string>
+</resources>

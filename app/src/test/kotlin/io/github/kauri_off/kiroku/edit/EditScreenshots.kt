@@ -11,6 +11,7 @@ import io.github.kauri_off.kiroku.core.model.TitleLanguage
 import io.github.kauri_off.kiroku.design.MotionBounds
 import io.github.kauri_off.kiroku.screenshots.ScreenshotRegistry
 import io.github.kauri_off.kiroku.screenshots.Transition
+import io.github.kauri_off.kiroku.screenshots.WindowSize
 import io.github.kauri_off.kiroku.screenshots.case
 import io.github.kauri_off.kiroku.screenshots.contentCase
 import io.github.kauri_off.kiroku.screenshots.notShown
@@ -40,6 +41,8 @@ class EditScreenshots : ScreenshotRegistry() {
             case("date-picker") { EditSheet(EditFixtures.existing.copy(dialog = EditDialog.PickDate(DateField.Start)), onEvent = {}) },
             case("status-chosen") { EditSheet(EditFixtures.statusChosen, onEvent = {}) },
             case("unknown-status") { EditSheet(EditFixtures.unknownStatus, onEvent = {}) },
+            case("paired-existing", largeText = true) { EditSheet(EditFixtures.paired, onEvent = {}) },
+            case("paired-wide", window = WindowSize(840, 600)) { EditSheet(EditFixtures.paired, onEvent = {}) },
         )
 
     // Choosing a status reshapes and recolours two toggle buttons, the stock component's own motion; no button moves.
@@ -82,6 +85,11 @@ object EditFixtures {
         )
 
     val existing = onList(FixtureAnime.exactToWatch)
+
+    val paired =
+        existing.draft.copy(status = ListStatus.Watching, watchedEpisodes = 12, score = 8).let {
+            existing.copy(saved = it.copy(score = 7), draft = it)
+        }
 
     val unknownTotal = onList(FixtureAnime.unknownTotal)
 

@@ -4,9 +4,15 @@ import android.database.DatabaseUtils
 import android.database.sqlite.SQLiteDatabase
 import io.github.kauri_off.kiroku.core.error.DataError
 import io.github.kauri_off.kiroku.core.error.Outcome
+import io.github.kauri_off.kiroku.core.model.MangaListSnapshot
 import io.github.kauri_off.kiroku.core.model.Session
+import io.github.kauri_off.kiroku.core.repository.MangaListEdit
+import io.github.kauri_off.kiroku.core.repository.MangaListEditResult
+import io.github.kauri_off.kiroku.core.repository.MangaListRemovalResult
+import io.github.kauri_off.kiroku.core.repository.MangaListStatus
 import io.github.kauri_off.kiroku.core.repository.SignInStep
 import io.github.kauri_off.kiroku.data.sandbox.SandboxMal
+import io.github.kauri_off.kiroku.data.sandbox.SandboxWrites
 import io.github.kauri_off.kiroku.source.DataSource
 import io.github.kauri_off.kiroku.source.StartsOn
 import io.github.kauri_off.kiroku.wiring.AppEnds
@@ -144,6 +150,75 @@ class SandboxProfileTest {
         process { graph ->
             assertEquals(Session.SignedOut, graph.session.observeSession().first())
             awaitMangaRows(listOf(0L, 0L))
+        }
+        assertEquals(emptyList<URI>(), connections.asked)
+        assertEquals(emptyList<Throwable>(), reports)
+    }
+
+    @Test
+    fun `the sandbox manga editor shares reads and isolates writable fixtures by sign in`() {
+        process { graph ->
+            val first = signIn(graph).signIn
+            val editor = graph.mangaListEditor
+            val baseline = (graph.mangaList.refresh(first) as Outcome.Success).value
+            val entry = baseline.entries.first()
+            val changes = MangaListEdit(MangaListStatus.Completed, score = 0, chaptersRead = 23, volumesRead = 3)
+
+            graph.sandbox.mal.writes = SandboxWrites.Refused
+            assertEquals(MangaListEditResult.Failed(DataError.Refused), editor.edit(first, entry.id, changes))
+            assertEquals(Outcome.Success(baseline), graph.mangaList.stored(first))
+
+            graph.sandbox.mal.writes = SandboxWrites.Work
+            val saved = (editor.edit(first, entry.id, changes) as MangaListEditResult.Confirmed).entry
+            assertEquals(changes.appliedTo(entry), saved.copy(updatedAt = entry.updatedAt))
+            val observed = (editor.observe(first).first() as Outcome.Success<MangaListSnapshot?>).value
+            assertEquals(saved, observed?.entries?.first())
+            val refreshed = (graph.mangaList.refresh(first) as Outcome.Success).value
+            assertEquals(saved, refreshed.entries.first())
+
+            val second = signIn(graph).signIn
+            assertNotEquals(first, second)
+            assertEquals(MangaListEditResult.Failed(DataError.ListEnded), editor.edit(first, entry.id, changes))
+            val replacement = (graph.mangaList.refresh(second) as Outcome.Success).value
+            assertEquals(baseline.entries, replacement.entries)
+        }
+        assertEquals(emptyList<URI>(), connections.asked)
+        assertEquals(emptyList<Throwable>(), reports)
+    }
+
+    @Test
+    fun `sandbox manga removal can retry and stays removed after restarting under the same sign in`() {
+        val (owner, baseline) =
+            process { graph ->
+                val owner = saveManga(graph).signIn
+                val editor = graph.mangaListEditor
+                val baseline = (editor.stored(owner) as Outcome.Success).value ?: error("Missing list")
+                val entry = baseline.entries.first()
+                val sparse = baseline.entries.last()
+
+                graph.sandbox.mal.writes = SandboxWrites.Fail
+                assertEquals(MangaListRemovalResult.StillPresent(canRetry = false), editor.remove(owner, sparse))
+                assertEquals(MangaListRemovalResult.StillPresent(canRetry = true), editor.remove(owner, entry))
+                val beforeRefusal = editor.stored(owner)
+                graph.sandbox.mal.writes = SandboxWrites.Refused
+                assertEquals(MangaListRemovalResult.Failed(DataError.Refused), editor.remove(owner, entry))
+                assertEquals(beforeRefusal, graph.mangaList.stored(owner))
+
+                graph.sandbox.mal.writes = SandboxWrites.Work
+                assertEquals(MangaListRemovalResult.Discarded, editor.remove(owner, sparse, retry = true))
+                assertEquals(MangaListRemovalResult.Removed, editor.remove(owner, entry, retry = true))
+                owner to baseline
+            }
+
+        process { graph ->
+            assertEquals(Session.SignedIn(owner), graph.session.observeSession().first())
+            val editor = graph.mangaListEditor
+            val entries = baseline.entries.drop(1)
+            assertEquals(entries, (editor.stored(owner) as Outcome.Success).value?.entries)
+            assertEquals(entries, (editor.refresh(owner) as Outcome.Success).value.entries)
+            val replacement = signIn(graph).signIn
+            assertNotEquals(owner, replacement)
+            assertEquals(baseline.entries, (editor.refresh(replacement) as Outcome.Success).value.entries)
         }
         assertEquals(emptyList<URI>(), connections.asked)
         assertEquals(emptyList<Throwable>(), reports)

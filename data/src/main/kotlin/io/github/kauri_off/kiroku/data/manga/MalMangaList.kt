@@ -3,8 +3,11 @@ package io.github.kauri_off.kiroku.data.manga
 import io.github.kauri_off.kiroku.core.error.DataError
 import io.github.kauri_off.kiroku.core.error.Outcome
 import io.github.kauri_off.kiroku.core.model.MangaId
+import io.github.kauri_off.kiroku.core.model.Session
 import io.github.kauri_off.kiroku.core.model.SignInId
 import io.github.kauri_off.kiroku.core.model.owner
+import io.github.kauri_off.kiroku.core.repository.MangaListEdit
+import io.github.kauri_off.kiroku.core.repository.readingStatus
 import io.github.kauri_off.kiroku.data.network.AUTHORIZATION
 import io.github.kauri_off.kiroku.data.network.MalHttp
 import io.github.kauri_off.kiroku.data.network.MalJson
@@ -33,6 +36,7 @@ import retrofit2.http.QueryMap
 internal class MalMangaList(
     private val http: MalHttp,
     private val session: MalSession,
+    private val retired: (SignInId) -> Boolean = { false },
 ) {
     private val api by http.api(MangaListApi::class)
 
@@ -59,21 +63,23 @@ internal class MalMangaList(
 
     suspend fun patch(
         id: MangaId,
-        patch: MangaListPatch,
+        patch: MangaListEdit,
         expectedOwner: SignInId,
+        onHttpFailure: (DataError) -> Unit = {},
     ): Outcome<MangaListWriteAnswer> {
         if (id.value <= 0) return Outcome.Failure(DataError.NotFound)
         val form = patch.form()
         if (form.isEmpty()) return Outcome.Failure(DataError.InvalidRequest)
-        return request(expectedOwner) { api.patch(id.value, form, it).writeAnswer() }
+        return request(expectedOwner, write = true, onHttpFailure = onHttpFailure) { api.patch(id.value, form, it).writeAnswer() }
     }
 
     suspend fun delete(
         id: MangaId,
         expectedOwner: SignInId,
+        onHttpFailure: (DataError) -> Unit = {},
     ): Outcome<MangaListWriteAnswer> {
         if (id.value <= 0) return Outcome.Failure(DataError.NotFound)
-        return request(expectedOwner) { api.delete(id.value, it).writeAnswer() }
+        return request(expectedOwner, write = true, onHttpFailure = onHttpFailure) { api.delete(id.value, it).writeAnswer() }
     }
 
     private suspend fun page(
@@ -102,11 +108,18 @@ internal class MalMangaList(
     private suspend fun <T> request(
         expectedOwner: SignInId,
         firstRead: (() -> ReadAdmission)? = null,
+        write: Boolean = false,
+        onHttpFailure: (DataError) -> Unit = {},
         send: suspend (String) -> T,
     ): Outcome<T> {
-        val answer = session.authorised(http, expectedOwner, firstRead, send)
+        val writeAllowed: (() -> Boolean)? = if (write) ({ !retired(expectedOwner) }) else null
+        val answer = session.authorised(http, expectedOwner, firstRead, writeAllowed, onHttpFailure, send)
         val current = session.currentSession()
-        return if (current != null && current.owner != expectedOwner) Outcome.Failure(DataError.ListEnded) else answer
+        return when {
+            current != null && current.owner != expectedOwner -> Outcome.Failure(DataError.ListEnded)
+            current is Session.Expired && answer == Outcome.Failure(DataError.ListEnded) -> Outcome.Failure(DataError.SessionExpired)
+            else -> answer
+        }
     }
 
     private class Page(
@@ -153,36 +166,13 @@ private fun JsonObject.mangaNextOffset(): Int? {
     return checkNotNull(offset?.takeIf { it >= 0 }) { "Invalid manga list offset" }
 }
 
-internal enum class MangaListStatus(
-    val code: String,
-) {
-    Reading("reading"),
-    Completed("completed"),
-    OnHold("on_hold"),
-    Dropped("dropped"),
-    PlanToRead("plan_to_read"),
-}
-
-internal class MangaListPatch(
-    private val status: MangaListStatus? = null,
-    private val score: Int? = null,
-    private val chaptersRead: Int? = null,
-    private val volumesRead: Int? = null,
-) {
-    init {
-        require(score == null || score in 0..10)
-        require(chaptersRead == null || chaptersRead >= 0)
-        require(volumesRead == null || volumesRead >= 0)
+internal fun MangaListEdit.form(): Map<String, String> =
+    buildMap {
+        status?.let { put("status", it.readingStatus.code) }
+        score?.let { put("score", it.toString()) }
+        chaptersRead?.let { put("num_chapters_read", it.toString()) }
+        volumesRead?.let { put("num_volumes_read", it.toString()) }
     }
-
-    internal fun form(): Map<String, String> =
-        buildMap {
-            status?.let { put("status", it.code) }
-            score?.let { put("score", it.toString()) }
-            chaptersRead?.let { put("num_chapters_read", it.toString()) }
-            volumesRead?.let { put("num_volumes_read", it.toString()) }
-        }
-}
 
 internal class MangaListWriteAnswer(
     val status: Int,

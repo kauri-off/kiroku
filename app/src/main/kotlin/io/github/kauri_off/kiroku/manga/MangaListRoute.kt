@@ -1,6 +1,7 @@
 package io.github.kauri_off.kiroku.manga
 
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation3.runtime.NavKey
@@ -28,18 +29,53 @@ internal fun mangaListPane(
     onSignIn: () -> Unit,
     onOpen: (MangaTitleKey) -> Unit,
 ): ListPane.Manga {
+    val editor = LocalMangaEditing.current
+    val origin = LocalMangaEditOrigin.current
     val list =
         viewModel {
-            MangaListViewModel(lists, graph.clock, graph.connection, graph.session.observeSession(), graph.titleLanguage) {
+            MangaListViewModel(
+                lists,
+                graph.clock,
+                graph.connection,
+                graph.session.observeSession(),
+                graph.titleLanguage,
+                onRefreshed = { editor?.listRefreshed(it) },
+            ) {
                 messages.post(ShellMessage(ShellMessage.Text.RefreshFailed(it)))
             }
         }
-    val state by list.state.collectAsScreenState()
+    val loaded by list.state.collectAsScreenState()
+    LaunchedEffect(editor) { editor?.watch() }
+    val editing =
+        editor
+            ?.state
+            ?.collectAsScreenState()
+            ?.value
+            ?.takeIf { it.owner == loaded.owner }
+    val ready = loaded.content as? MangaListContent.Ready
+    val snapshot = editing?.snapshot
+    val state =
+        if (ready != null && snapshot != null) {
+            loaded.copy(
+                content =
+                    ready.copy(
+                        entries = snapshot.entries.map(editing::displayed),
+                        canEdit =
+                            editing.signedIn && !loaded.sessionExpired,
+                    ),
+            )
+        } else {
+            loaded
+        }
     CountAsShown(list.shown)
     return ListPane.Manga(state) {
         when (it) {
             MangaListEvent.SignIn -> onSignIn()
             MangaListEvent.Refresh -> list.refresh()
+            is MangaListEvent.Edit ->
+                loaded.owner?.let { owner ->
+                    if (ready != null) editor?.open(owner, it.entry.id, it.entry.titles.preferred(ready.language), origin)
+                }
             is MangaListEvent.Open -> {
                 val content = state.content as? MangaListContent.Ready
                 val owner = state.owner

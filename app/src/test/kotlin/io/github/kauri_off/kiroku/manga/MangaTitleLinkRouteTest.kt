@@ -1,12 +1,17 @@
 package io.github.kauri_off.kiroku.manga
 
 import android.app.Application
+import androidx.compose.ui.test.hasAnyDescendant
+import androidx.compose.ui.test.hasClickAction
+import androidx.compose.ui.test.hasScrollAction
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.isHeading
 import androidx.compose.ui.test.junit4.v2.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performTouchInput
+import androidx.compose.ui.test.swipeDown
 import io.github.kauri_off.kiroku.MainActivity
 import io.github.kauri_off.kiroku.core.demo.Demo
 import io.github.kauri_off.kiroku.core.error.DataError
@@ -15,8 +20,13 @@ import io.github.kauri_off.kiroku.core.fixtures.FixtureAnime
 import io.github.kauri_off.kiroku.core.fixtures.Fixtures
 import io.github.kauri_off.kiroku.core.link.readLink
 import io.github.kauri_off.kiroku.core.model.MangaId
+import io.github.kauri_off.kiroku.core.model.MangaListEntry
+import io.github.kauri_off.kiroku.core.model.MangaListSnapshot
 import io.github.kauri_off.kiroku.core.model.SessionOwner
+import io.github.kauri_off.kiroku.core.model.SignInId
 import io.github.kauri_off.kiroku.core.model.owner
+import io.github.kauri_off.kiroku.core.repository.MangaListEdit
+import io.github.kauri_off.kiroku.core.repository.MangaListEditor
 import io.github.kauri_off.kiroku.core.repository.MangaRepository
 import io.github.kauri_off.kiroku.core.repository.StoredManga
 import io.github.kauri_off.kiroku.link.AppLinks
@@ -27,6 +37,7 @@ import io.github.kauri_off.kiroku.wiring.TestGraph
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.map
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -82,6 +93,67 @@ class StartedByUnavailableMangaLinkApplication : StartedByMangaLinkApplication()
     override val graph: AppGraph get() = test
 }
 
+class StartedByOwnedMangaLinkApplication : StartedByMangaLinkApplication() {
+    var remote = emptyList<MangaListEntry>()
+    val membershipReads = mutableListOf<SignInId>()
+
+    override val graph: AppGraph by lazy {
+        object : AppGraph by test {
+            override val manga =
+                object : MangaRepository {
+                    override fun observeOwner() = test.session.observeSession().map { SessionOwner(it.owner) }
+
+                    override suspend fun stored(
+                        id: MangaId,
+                        owner: SessionOwner,
+                    ) = Outcome.Success(StoredManga(mangaFixture, clock.instant()))
+
+                    override suspend fun refresh(
+                        id: MangaId,
+                        owner: SessionOwner,
+                        canDispatch: () -> Boolean,
+                    ) = if (canDispatch()) stored(id, owner) else null
+                }
+            override val mangaListEditor =
+                object : MangaListEditor {
+                    private val entries = MutableStateFlow(emptyList<MangaListEntry>())
+
+                    override fun observe(owner: SignInId) = entries.map { Outcome.Success(snapshot(owner, it)) }
+
+                    override suspend fun stored(owner: SignInId) = Outcome.Success(snapshot(owner, entries.value))
+
+                    override suspend fun refresh(
+                        owner: SignInId,
+                        canDispatch: () -> Boolean,
+                    ): Outcome<MangaListSnapshot>? {
+                        if (!canDispatch()) return null
+                        membershipReads += owner
+                        entries.value = remote
+                        return stored(owner)
+                    }
+
+                    override suspend fun edit(
+                        owner: SignInId,
+                        id: MangaId,
+                        changes: MangaListEdit,
+                        retryFrom: MangaListEntry?,
+                    ) = error("Membership refresh never writes")
+
+                    override suspend fun remove(
+                        owner: SignInId,
+                        baseline: MangaListEntry,
+                        retry: Boolean,
+                    ) = error("Membership refresh never writes")
+
+                    private fun snapshot(
+                        owner: SignInId,
+                        entries: List<MangaListEntry>,
+                    ) = MangaListSnapshot(owner, entries, clock.instant())
+                }
+        }
+    }
+}
+
 @RunWith(RobolectricTestRunner::class)
 @Config(application = StartedByMangaLinkApplication::class, qualifiers = "en-w411dp-h891dp")
 class MangaTitleLinkRouteTest {
@@ -89,6 +161,19 @@ class MangaTitleLinkRouteTest {
     val compose = createAndroidComposeRule<MainActivity>()
 
     private val app get() = RuntimeEnvironment.getApplication() as StartedByMangaLinkApplication
+
+    @Test
+    fun `public manga shows score rank and members in the anime order without list ownership`() {
+        compose.onNodeWithText("Retry").performClick()
+        val score = compose.onNodeWithText("MAL score").fetchSemanticsNode().boundsInRoot
+        val rank = compose.onNodeWithText("Rank").fetchSemanticsNode().boundsInRoot
+        val members = compose.onNodeWithText("Members").fetchSemanticsNode().boundsInRoot
+        assertTrue(score.left < rank.left && rank.left < members.left)
+        compose.onNodeWithText("9.16").assertExists()
+        compose.onNodeWithText("#18").assertExists()
+        compose.onNodeWithText("299,750").assertExists()
+        compose.onNode(hasText("Reading") and hasClickAction()).assertDoesNotExist()
+    }
 
     @Test
     fun `cold manga link offers retry, restores the page, and goes back to the List`() {
@@ -127,6 +212,26 @@ class MangaTitleLinkRouteTest {
     fun `a Demo manga link has no retry action`() {
         compose.onNodeWithText("Manga pages are unavailable in this mode").assertExists()
         compose.onNodeWithText("Retry").assertDoesNotExist()
+    }
+
+    @Test
+    @Config(application = StartedByOwnedMangaLinkApplication::class)
+    fun `pull on a linked title refreshes a complete cached absence and then presence`() {
+        val owned = app as StartedByOwnedMangaLinkApplication
+        showsManga()
+        val reading = compose.onNode(hasText("Reading") and hasClickAction())
+        reading.assertDoesNotExist()
+        assertTrue(owned.membershipReads.isEmpty())
+        val content = compose.onNode(hasScrollAction() and hasAnyDescendant(isHeading() and hasText(mangaFixture.titles.romaji)))
+        compose.runOnUiThread { owned.remote = listOf(mangaEntry) }
+        content.performTouchInput { swipeDown(startY = centerY, endY = bottom) }
+        reading.assertExists()
+
+        compose.runOnUiThread { owned.remote = emptyList() }
+        content.performTouchInput { swipeDown(startY = centerY, endY = bottom) }
+        reading.assertDoesNotExist()
+        assertEquals(2, owned.membershipReads.size)
+        assertEquals(1, owned.membershipReads.distinct().size)
     }
 
     private fun showsManga() {

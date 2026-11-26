@@ -10,6 +10,7 @@ import io.github.kauri_off.kiroku.core.repository.AnimeRepository
 import io.github.kauri_off.kiroku.core.repository.Connection
 import io.github.kauri_off.kiroku.core.repository.ListRepository
 import io.github.kauri_off.kiroku.core.repository.MangaCatalogue
+import io.github.kauri_off.kiroku.core.repository.MangaListEditor
 import io.github.kauri_off.kiroku.core.repository.MangaListReader
 import io.github.kauri_off.kiroku.core.repository.MangaRepository
 import io.github.kauri_off.kiroku.core.repository.NotificationsRepository
@@ -34,6 +35,7 @@ interface AppGraph {
     val manga: MangaRepository? get() = null
     val mangaCatalogue: MangaCatalogue? get() = null
     val mangaList: MangaListReader? get() = null
+    val mangaListEditor: MangaListEditor? get() = null
     val airing: AiringRepository
 
     // A title's score distribution, from a service apart from MAL's pages.

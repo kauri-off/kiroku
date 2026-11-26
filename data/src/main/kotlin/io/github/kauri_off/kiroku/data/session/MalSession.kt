@@ -117,6 +117,9 @@ class MalSession internal constructor(
     // Held by every change of the tokens, a refresh's request to MAL included.
     private val gate = Mutex()
 
+    @Volatile
+    private var signingOut = false
+
     // The value the file did not take yet; changed only with the gate held.
     private var owed: Stored? = null
 
@@ -166,7 +169,7 @@ class MalSession internal constructor(
 
     override suspend fun signOut() {
         guarded(Unit) {
-            change { kept(Stored.SignedOut) }
+            change { retiring { kept(Stored.SignedOut) } }
         }
     }
 
@@ -217,11 +220,22 @@ class MalSession internal constructor(
         guarded(false) {
             change {
                 if (state.value?.session?.owner != owner) return@change false
-                beforeSignOut()
-                kept(Stored.SignedOut, onWriteFailure)
-                true
+                retiring {
+                    beforeSignOut()
+                    kept(Stored.SignedOut, onWriteFailure)
+                    true
+                }
             }
         }
+
+    private suspend fun <T> retiring(run: suspend () -> T): T {
+        signingOut = true
+        try {
+            return run()
+        } finally {
+            signingOut = false
+        }
+    }
 
     // A new sign-in with the tokens MAL granted; nobody is signed in when they cannot be stored.
     internal suspend fun signIn(grant: TokenGrant): Outcome<Unit> =
@@ -239,6 +253,10 @@ class MalSession internal constructor(
         }
 
     internal fun isSignedInAs(owner: SignInId): Boolean = state.value?.session == Session.SignedIn(owner)
+
+    internal fun mayWriteAs(owner: SignInId): Boolean = !signingOut && isSignedInAs(owner)
+
+    internal fun mayObserveAs(owner: SignInId): Boolean = !signingOut && state.value?.session?.owner == owner
 
     internal fun signedInOwner(): SessionOwner? = owners.value?.takeIf { it.id?.let(::isSignedInAs) == true }
 

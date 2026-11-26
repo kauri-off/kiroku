@@ -10,6 +10,7 @@ import androidx.room.Query
 import androidx.room.Upsert
 import io.github.kauri_off.kiroku.core.model.MangaId
 import io.github.kauri_off.kiroku.core.model.MangaListEntry
+import io.github.kauri_off.kiroku.core.model.MangaListNumber
 import io.github.kauri_off.kiroku.core.model.MangaReadingStatus
 import io.github.kauri_off.kiroku.core.model.SignInId
 import io.github.kauri_off.kiroku.core.model.Titles
@@ -18,6 +19,7 @@ import io.github.kauri_off.kiroku.core.model.Titles
 internal data class MangaListStateRow(
     @PrimaryKey val owner: String,
     @ColumnInfo(name = "synced_at") val syncedAt: Long,
+    @ColumnInfo(name = "needs_refresh", defaultValue = "0") val needsRefresh: Boolean = false,
 )
 
 @Entity(
@@ -45,6 +47,7 @@ internal data class MangaListEntryRow(
     @ColumnInfo(name = "volumes_read") val volumesRead: Int?,
     val score: Int?,
     @ColumnInfo(name = "updated_at") val updatedAt: Long?,
+    @ColumnInfo(name = "unverified_numbers", defaultValue = "7") val unverifiedNumbers: Int,
 ) {
     fun toEntry(): MangaListEntry =
         MangaListEntry(
@@ -54,7 +57,9 @@ internal data class MangaListEntryRow(
             posterUrl = poster,
             chaptersRead = chaptersRead,
             volumesRead = volumesRead,
-            score = score,
+            score = score?.takeUnless { it == 0 },
+            explicitlyUnrated = score == 0,
+            unverifiedNumbers = UnverifiedNumbers.filterValues { unverifiedNumbers and it != 0 }.keys,
             updatedAt = updatedAt?.let(::instantOf),
         )
 }
@@ -71,9 +76,13 @@ internal fun MangaListEntry.toRow(owner: SignInId): MangaListEntryRow =
         status = status.code,
         chaptersRead = chaptersRead,
         volumesRead = volumesRead,
-        score = score,
+        score = score ?: 0.takeIf { explicitlyUnrated },
         updatedAt = updatedAt?.toColumn(),
+        unverifiedNumbers = unverifiedNumbers.sumOf { UnverifiedNumbers.getValue(it) },
     )
+
+private val UnverifiedNumbers =
+    mapOf(MangaListNumber.Score to 1, MangaListNumber.ChaptersRead to 2, MangaListNumber.VolumesRead to 4)
 
 @Dao
 internal interface MangaListDao {
@@ -82,6 +91,18 @@ internal interface MangaListDao {
 
     @Query("SELECT * FROM manga_list_entry WHERE owner = :owner ORDER BY manga_id")
     suspend fun entries(owner: String): List<MangaListEntryRow>
+
+    @Query("SELECT * FROM manga_list_entry WHERE owner = :owner AND manga_id = :id")
+    suspend fun entry(
+        owner: String,
+        id: Long,
+    ): MangaListEntryRow?
+
+    @Query("UPDATE manga_list_state SET needs_refresh = :needed WHERE owner = :owner")
+    suspend fun requireRefresh(
+        owner: String,
+        needed: Boolean,
+    )
 
     @Query("DELETE FROM manga_list_entry WHERE owner = :owner")
     suspend fun deleteEntries(owner: String)

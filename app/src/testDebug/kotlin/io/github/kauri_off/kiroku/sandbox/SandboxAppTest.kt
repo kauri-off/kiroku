@@ -6,6 +6,7 @@ import android.os.Looper
 import androidx.compose.ui.test.hasClickAction
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.v2.createAndroidComposeRule
+import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
@@ -599,6 +600,7 @@ class SandboxAppTest {
 
     // Another user's profile by name, as the person opens it on the Profile shown.
     private fun openProfile(name: String) {
+        meanwhile { compose.onAllNodesWithTag(ProfileTags.page).fetchSemanticsNodes().size == 1 }
         compose.onNodeWithTag(ProfileTags.page).performScrollToNode(hasText("Open another profile"))
         compose.onNodeWithText("Open another profile").performClick()
         compose.onNodeWithTag(ProfileTags.nameField).performTextInput(name)

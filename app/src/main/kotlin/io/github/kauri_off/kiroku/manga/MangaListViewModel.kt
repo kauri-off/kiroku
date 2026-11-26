@@ -31,6 +31,7 @@ internal class MangaListViewModel(
     connection: Connection,
     private val sessions: Flow<Session>,
     language: Flow<TitleLanguage>,
+    private val onRefreshed: (MangaListSnapshot) -> Unit = {},
     private val onRefreshFailed: (DataError) -> Unit,
 ) : ViewModel() {
     private data class Page(
@@ -147,6 +148,7 @@ internal class MangaListViewModel(
                         recoveryPending = false
                         val updated = result.value.takeIf { it.owner == owner }
                         page.value = if (updated != null) Page(updated) else Page(error = DataError.ListEnded)
+                        if (updated != null) onRefreshed(updated)
                         loads.ended(null)
                     }
                     is Outcome.Failure -> {

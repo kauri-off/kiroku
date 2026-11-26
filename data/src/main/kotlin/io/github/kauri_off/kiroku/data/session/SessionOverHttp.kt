@@ -32,14 +32,26 @@ internal suspend fun <T> MalSession.authorised(
     http: MalHttp,
     expectedOwner: SignInId? = null,
     firstRead: (() -> ReadAdmission)? = null,
+    writeAllowed: (() -> Boolean)? = null,
+    onHttpFailure: (DataError) -> Unit = {},
     request: suspend (authorization: String) -> T,
 ): Outcome<T> {
     var admission = firstRead
     return authorised(expectedOwner) { accessToken ->
-        val maySendRead = expectedOwner?.let { owner -> { isSignedInAs(owner) } }
-        when (val answer = http.call(maySendRead = maySendRead, firstRead = admission) { request(bearer(accessToken)) }) {
+        val maySend = expectedOwner?.let { owner -> { isSignedInAs(owner) } }
+        val maySendWrite = writeAllowed?.let { allowed -> { expectedOwner != null && allowed() && mayWriteAs(expectedOwner) } }
+        val answer =
+            http.call(
+                maySendRead = maySend,
+                firstRead = admission,
+                maySendWrite = maySendWrite,
+            ) { request(bearer(accessToken)) }
+        when (answer) {
             is MalAnswer.Success -> Attempt.Answered(Outcome.Success(answer.value))
-            is MalAnswer.Failed -> Attempt.Answered(Outcome.Failure(answer.error))
+            is MalAnswer.Failed -> {
+                onHttpFailure(answer.error)
+                Attempt.Answered(Outcome.Failure(answer.error))
+            }
             MalAnswer.Rejected -> {
                 admission = null
                 Attempt.Rejected

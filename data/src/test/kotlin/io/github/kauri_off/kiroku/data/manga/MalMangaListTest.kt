@@ -5,6 +5,8 @@ import io.github.kauri_off.kiroku.core.error.Outcome
 import io.github.kauri_off.kiroku.core.model.MangaId
 import io.github.kauri_off.kiroku.core.model.SignInId
 import io.github.kauri_off.kiroku.core.model.owner
+import io.github.kauri_off.kiroku.core.repository.MangaListEdit
+import io.github.kauri_off.kiroku.core.repository.MangaListStatus
 import io.github.kauri_off.kiroku.data.anime.edited
 import io.github.kauri_off.kiroku.data.anime.recordedJson
 import io.github.kauri_off.kiroku.data.network.AUTHORIZATION
@@ -19,6 +21,7 @@ import io.github.kauri_off.kiroku.data.recorder.mangaCaptureFiles
 import io.github.kauri_off.kiroku.data.session.SessionFixture
 import io.github.kauri_off.kiroku.data.session.TokenGrant
 import io.github.kauri_off.kiroku.data.session.granted
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.delay
@@ -445,7 +448,7 @@ class MalMangaListTest {
             network.always(answer(404, ""))
 
             assertEquals(Outcome.Failure(DataError.ListEnded), list.fetch(old))
-            assertEquals(Outcome.Failure(DataError.ListEnded), list.patch(id, MangaListPatch(score = 3), old))
+            assertEquals(Outcome.Failure(DataError.ListEnded), list.patch(id, MangaListEdit(score = 3), old))
             assertEquals(Outcome.Failure(DataError.ListEnded), list.delete(id, old))
             assertEquals(0, network.api.requestCount)
 
@@ -464,7 +467,7 @@ class MalMangaListTest {
 
             assertEquals(
                 Outcome.Failure(DataError.InvalidRequest),
-                list.patch(id, MangaListPatch(score = 0, volumesRead = 0), owner),
+                list.patch(id, MangaListEdit(score = 0, volumesRead = 0), owner),
             )
             val request = network.api.received()
             assertEquals("PATCH", request.method)
@@ -476,25 +479,25 @@ class MalMangaListTest {
 
     @Test
     fun `status, chapter and volume form values use manga codes`() {
-        val codes = MangaListStatus.entries.map { MangaListPatch(status = it, chaptersRead = 7, volumesRead = 2).form() }
+        val codes = MangaListStatus.entries.map { MangaListEdit(status = it, chaptersRead = 7, volumesRead = 2).form() }
         assertEquals(listOf("reading", "completed", "on_hold", "dropped", "plan_to_read"), codes.map { it["status"] })
         for (form in codes) {
             assertEquals(setOf("status", "num_chapters_read", "num_volumes_read"), form.keys)
             assertEquals("7", form["num_chapters_read"])
             assertEquals("2", form["num_volumes_read"])
         }
-        assertThrows(IllegalArgumentException::class.java) { MangaListPatch(score = -1) }
-        assertThrows(IllegalArgumentException::class.java) { MangaListPatch(score = 11) }
-        assertThrows(IllegalArgumentException::class.java) { MangaListPatch(chaptersRead = -1) }
-        assertThrows(IllegalArgumentException::class.java) { MangaListPatch(volumesRead = -1) }
+        assertThrows(IllegalArgumentException::class.java) { MangaListEdit(score = -1) }
+        assertThrows(IllegalArgumentException::class.java) { MangaListEdit(score = 11) }
+        assertThrows(IllegalArgumentException::class.java) { MangaListEdit(chaptersRead = -1) }
+        assertThrows(IllegalArgumentException::class.java) { MangaListEdit(volumesRead = -1) }
     }
 
     @Test
     fun `empty patches and invalid ids send nothing`() =
         runBlocking {
             val owner = signIn("first")
-            assertEquals(Outcome.Failure(DataError.InvalidRequest), list.patch(id, MangaListPatch(), owner))
-            assertEquals(Outcome.Failure(DataError.NotFound), list.patch(MangaId(0), MangaListPatch(score = 1), owner))
+            assertEquals(Outcome.Failure(DataError.InvalidRequest), list.patch(id, MangaListEdit(), owner))
+            assertEquals(Outcome.Failure(DataError.NotFound), list.patch(MangaId(0), MangaListEdit(score = 1), owner))
             assertEquals(Outcome.Failure(DataError.NotFound), list.delete(MangaId(-1), owner))
             assertEquals(0, network.api.requestCount)
         }
@@ -507,7 +510,7 @@ class MalMangaListTest {
             network.api.enqueue(answer(401, ""))
             network.api.enqueue(answer(400, ""))
 
-            assertEquals(Outcome.Failure(DataError.InvalidRequest), list.patch(id, MangaListPatch(chaptersRead = 2), owner))
+            assertEquals(Outcome.Failure(DataError.InvalidRequest), list.patch(id, MangaListEdit(chaptersRead = 2), owner))
             val first = network.api.received()
             val repeated = network.api.received()
             assertEquals("Bearer first", first.headers[AUTHORIZATION])
@@ -517,6 +520,125 @@ class MalMangaListTest {
             assertEquals(first.body, repeated.body)
             assertEquals(owner, session.currentSession()?.owner)
             assertEquals(1, sessions.grants.size)
+        }
+
+    @Test
+    fun `a patch waiting for OkHttp cannot send after replacement sign in`() =
+        assertQueuedWriteStopsAfterReplacement { list.patch(id, MangaListEdit(score = 3), it) }
+
+    @Test
+    fun `a delete waiting for OkHttp cannot send after replacement sign in`() =
+        assertQueuedWriteStopsAfterReplacement { list.delete(id, it) }
+
+    private fun assertQueuedWriteStopsAfterReplacement(mutate: suspend (SignInId) -> Outcome<*>) =
+        runBlocking {
+            val dispatcher = Dispatcher().apply { maxRequests = 1 }
+            network.calls = dispatcher
+            network.repeatReadsAfter = emptyList()
+            val owner = signIn("first")
+            val release = CountDownLatch(1)
+            network.answers {
+                check(release.await(5, TimeUnit.SECONDS))
+                answer(400, "")
+            }
+            val occupying = async(Dispatchers.Default) { network.http.call { network.things.value.read() } }
+            val queued =
+                try {
+                    assertEquals(
+                        "/v2/thing",
+                        network.api
+                            .received()
+                            .url.encodedPath,
+                    )
+                    val write = async(Dispatchers.Default) { mutate(owner) }
+                    withTimeout(5_000) {
+                        while (dispatcher.queuedCallsCount() == 0) delay(1)
+                    }
+                    assertNotEquals(owner, signIn("second"))
+                    write
+                } finally {
+                    release.countDown()
+                }
+            occupying.await()
+            assertEquals(Outcome.Failure(DataError.ListEnded), queued.await())
+            assertEquals(1, network.api.requestCount)
+        }
+
+    @Test
+    fun `PATCH acknowledgement requires valid JSON without assuming a response schema`() =
+        runBlocking {
+            val owner = signIn("first")
+            val edit = MangaListEdit(score = 3)
+            val bodies =
+                listOf(
+                    """{"arbitrary":[true,false,null,0,-0,1.25,-1e+3,"a\n\u0020\""]}""" to MangaWriteResult.Accepted,
+                    """{"arbitrary":[1,[2],{"nested":[]}]}""" to MangaWriteResult.Accepted,
+                    """{"arbitrary":[1]2]}""" to MangaWriteResult.Unknown(DataError.ServerError),
+                    """{"status":broken}""" to MangaWriteResult.Unknown(DataError.ServerError),
+                    """{"status":NaN}""" to MangaWriteResult.Unknown(DataError.ServerError),
+                    """{"n":00,"n":2}""" to MangaWriteResult.Unknown(DataError.ServerError),
+                    """{"a":1,}""" to MangaWriteResult.Unknown(DataError.ServerError),
+                    """{"a":true "b":false}""" to MangaWriteResult.Unknown(DataError.ServerError),
+                    """{"bad":"line${'\n'}break"}""" to MangaWriteResult.Unknown(DataError.ServerError),
+                )
+            for ((body, expected) in bodies) {
+                network.api.enqueue(answer(200, body))
+                assertEquals(expected, source.patch(owner, id, edit))
+            }
+        }
+
+    @Test
+    fun `a queued patch is blocked while sign out is still in local cleanup`() =
+        assertQueuedWriteStopsDuringSignOut { list.patch(id, MangaListEdit(score = 3), it) }
+
+    @Test
+    fun `a queued delete is blocked while sign out is still in local cleanup`() =
+        assertQueuedWriteStopsDuringSignOut { list.delete(id, it) }
+
+    private fun assertQueuedWriteStopsDuringSignOut(mutate: suspend (SignInId) -> Outcome<*>) =
+        runBlocking {
+            val dispatcher = Dispatcher().apply { maxRequests = 1 }
+            network.calls = dispatcher
+            network.repeatReadsAfter = emptyList()
+            val owner = signIn("first")
+            val wireFree = CountDownLatch(1)
+            val cleanup = CompletableDeferred<Unit>()
+            val finishSignOut = CompletableDeferred<Unit>()
+            network.answers {
+                check(wireFree.await(5, TimeUnit.SECONDS))
+                answer(400, "")
+            }
+            val occupying = async(Dispatchers.Default) { network.http.call { network.things.value.read() } }
+            try {
+                assertEquals(
+                    "/v2/thing",
+                    network.api
+                        .received()
+                        .url.encodedPath,
+                )
+                val queued = async(Dispatchers.Default) { mutate(owner) }
+                withTimeout(5_000) {
+                    while (dispatcher.queuedCallsCount() == 0) delay(1)
+                }
+                val leaving =
+                    async {
+                        session.signOutIfCurrent(owner) {
+                            cleanup.complete(Unit)
+                            finishSignOut.await()
+                        }
+                    }
+                withTimeout(5_000) { cleanup.await() }
+                assertEquals(owner, session.currentSession()?.owner)
+                wireFree.countDown()
+                occupying.await()
+                assertEquals(Outcome.Failure(DataError.ListEnded), queued.await())
+                assertEquals(1, network.api.requestCount)
+                finishSignOut.complete(Unit)
+                assertTrue(leaving.await())
+            } finally {
+                wireFree.countDown()
+                finishSignOut.complete(Unit)
+            }
         }
 
     @Test
@@ -560,7 +682,7 @@ class MalMangaListTest {
             val owner = signIn("first")
             network.api.enqueue(answer(500, ""))
             network.api.enqueue(answer(500, ""))
-            assertEquals(Outcome.Failure(DataError.ServerError), list.patch(id, MangaListPatch(score = 5), owner))
+            assertEquals(Outcome.Failure(DataError.ServerError), list.patch(id, MangaListEdit(score = 5), owner))
             assertEquals(Outcome.Failure(DataError.ServerError), list.delete(id, owner))
             assertEquals(2, network.api.requestCount)
 

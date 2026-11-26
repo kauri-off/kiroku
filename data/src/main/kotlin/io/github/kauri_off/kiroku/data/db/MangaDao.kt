@@ -22,6 +22,8 @@ internal data class MangaRow(
     val chapters: Int?,
     @ColumnInfo(name = "mean_score") val meanScore: Double?,
     @ColumnInfo(name = "fetched_at") val fetchedAt: Long,
+    val rank: Int?,
+    val members: Int?,
 )
 
 @Dao

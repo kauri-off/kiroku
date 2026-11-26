@@ -73,7 +73,7 @@ class MangaListViewModelTest {
             },
             sessions,
             flowOf(TitleLanguage.Romaji),
-            failures::add,
+            onRefreshFailed = failures::add,
         )
 
     @Test

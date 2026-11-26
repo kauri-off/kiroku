@@ -331,7 +331,15 @@ class KirokuDatabaseTest {
         assertTrue(list.values.all { it.isNotEmpty() })
         val manga =
             mapOf(
-                "manga" to listOf(mapOf("id" to anime.id.value, "romaji" to "Paper Observatory", "fetched_at" to fetchedAt.toColumn())),
+                "manga" to
+                    listOf(
+                        mapOf(
+                            "id" to anime.id.value,
+                            "romaji" to "Paper Observatory",
+                            "mean_score" to 8.4,
+                            "fetched_at" to fetchedAt.toColumn(),
+                        ),
+                    ),
                 "manga_list_state" to listOf(mapOf("owner" to "owner", "synced_at" to fetchedAt.toColumn())),
                 "manga_list_entry" to
                     listOf(
@@ -367,6 +375,16 @@ class KirokuDatabaseTest {
                 for ((table, rows) in written) {
                     val kept = connection.named(table).map { row -> row.filterKeys { it in rows.first() } }
                     assertEquals("$version: $table", rows, kept)
+                }
+                if (version == 9) {
+                    assertEquals(0L, connection.named("manga_list_state").single()["needs_refresh"])
+                    assertEquals(7L, connection.named("manga_list_entry").single()["unverified_numbers"])
+                }
+                if (version == 10) {
+                    val title = connection.named("manga").single()
+                    assertEquals(8.4, title["mean_score"])
+                    assertEquals(null, title["rank"])
+                    assertEquals(null, title["members"])
                 }
                 if (version < 7) {
                     assertTrue(connection.named("title_details").all { it["recommendations_include_adult"] == 0L })
@@ -641,6 +659,8 @@ class KirokuDatabaseTest {
                 7 to "821cd60397be73230eb12dd46d857650",
                 8 to "1749ab713302e239be8e5228bb07223b",
                 9 to "81a82b9f70d2c5bbe7b24416c50468a9",
+                10 to "26326b4eacb144dad9d1cdf2a8b9bce9",
+                11 to "562cc18b9d5918f02e80e21dd3848f6e",
             )
     }
 }

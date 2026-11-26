@@ -8,6 +8,7 @@ import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.key
 import androidx.compose.ui.Alignment
@@ -22,6 +23,7 @@ import io.github.kauri_off.kiroku.R
 import io.github.kauri_off.kiroku.core.error.DataError
 import io.github.kauri_off.kiroku.core.model.MangaDetails
 import io.github.kauri_off.kiroku.core.model.MangaFormat
+import io.github.kauri_off.kiroku.core.model.MangaListEntry
 import io.github.kauri_off.kiroku.core.model.MangaPublication
 import io.github.kauri_off.kiroku.core.model.malCodeAsText
 import io.github.kauri_off.kiroku.design.component.Poster
@@ -31,15 +33,19 @@ import io.github.kauri_off.kiroku.design.component.SectionHeader
 import io.github.kauri_off.kiroku.design.component.TitleSelection
 import io.github.kauri_off.kiroku.design.component.TitleText
 import io.github.kauri_off.kiroku.design.theme.Spacing
+import io.github.kauri_off.kiroku.title.MalScore
+import io.github.kauri_off.kiroku.title.PublicTitleStats
+import io.github.kauri_off.kiroku.title.TitleStatusButton
 import io.github.kauri_off.kiroku.title.countText
 import io.github.kauri_off.kiroku.title.message
-import io.github.kauri_off.kiroku.title.scoreText
 import io.github.kauri_off.kiroku.titlesub.SubScreen
 import io.github.kauri_off.kiroku.titlesub.SubScreenBody
 
 internal data class MangaTitleState(
     val content: MangaTitleContent = MangaTitleContent.Loading,
     val sessionExpired: Boolean = false,
+    val listEntry: MangaListEntry? = null,
+    val membershipError: DataError? = null,
 )
 
 internal sealed interface MangaTitleContent {
@@ -55,6 +61,7 @@ internal sealed interface MangaTitleContent {
         val refreshing: Boolean = false,
         val coverAttempt: Int = 0,
         val detailsError: DataError? = null,
+        val detailsRead: Boolean = false,
     ) : MangaTitleContent
 }
 
@@ -66,7 +73,7 @@ internal sealed interface MangaTitleProblem {
     ) : MangaTitleProblem
 }
 
-internal enum class MangaTitleEvent { Back, Retry, Refresh, SignIn }
+internal enum class MangaTitleEvent { Back, Retry, Refresh, SignIn, Edit, RetryMembership }
 
 @Composable
 internal fun MangaTitleScreen(
@@ -94,6 +101,23 @@ internal fun MangaTitleScreen(
                 is MangaTitleContent.Shown ->
                     SubScreenBody.List(content.refreshing, onRefresh = { onEvent(MangaTitleEvent.Refresh) }) {
                         item { MangaHeader(content) }
+                        state.listEntry?.let { entry ->
+                            item { MangaOnList(entry) { onEvent(MangaTitleEvent.Edit) } }
+                        }
+                        state.membershipError?.let {
+                            item {
+                                Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
+                                    Text(
+                                        stringResource(R.string.manga_edit_membership_failed),
+                                        modifier = Modifier.padding(horizontal = Spacing.l),
+                                        textAlign = TextAlign.Center,
+                                    )
+                                    TextButton(onClick = { onEvent(MangaTitleEvent.RetryMembership) }) {
+                                        Text(stringResource(R.string.manga_edit_refresh_list))
+                                    }
+                                }
+                            }
+                        }
                         content.detailsError?.let { error ->
                             item {
                                 ScreenState(ScreenState.Error(stringResource(error.message())) { onEvent(MangaTitleEvent.Retry) })
@@ -156,10 +180,28 @@ private fun MangaHeader(content: MangaTitleContent.Shown) {
                 textAlign = TextAlign.Center,
             )
         }
-        details.meanScore?.let {
+        val score = details.meanScore?.let(MalScore::Given) ?: if (content.detailsRead) MalScore.None else MalScore.NotKnownYet
+        PublicTitleStats(score, details.rank, details.members)
+    }
+}
+
+@Composable
+private fun MangaOnList(
+    entry: MangaListEntry,
+    onEdit: () -> Unit,
+) {
+    Column(
+        Modifier.fillMaxWidth().padding(start = Spacing.l, end = Spacing.l, top = Spacing.xl),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(Spacing.m),
+    ) {
+        TitleStatusButton(entry.status.displayName(), onEdit, Modifier.fillMaxWidth())
+        val progress = entry.progressParts()
+        val shown = if (entry.explicitlyUnrated) progress + stringResource(R.string.edit_score_0) else progress
+        if (shown.isNotEmpty()) {
             Text(
-                stringResource(R.string.design_mal_score, scoreText(it)),
-                style = MaterialTheme.typography.labelLarge,
+                shown.joinToString(stringResource(R.string.common_separator)),
+                style = MaterialTheme.typography.bodyMedium,
                 textAlign = TextAlign.Center,
             )
         }

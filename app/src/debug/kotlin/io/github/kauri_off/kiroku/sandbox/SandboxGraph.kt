@@ -10,6 +10,7 @@ import io.github.kauri_off.kiroku.core.model.SignInId
 import io.github.kauri_off.kiroku.core.repository.BrowseList
 import io.github.kauri_off.kiroku.core.repository.BrowseSession
 import io.github.kauri_off.kiroku.core.repository.MangaCatalogue
+import io.github.kauri_off.kiroku.core.repository.MangaListEditor
 import io.github.kauri_off.kiroku.core.repository.MangaListReader
 import io.github.kauri_off.kiroku.core.repository.MangaRepository
 import io.github.kauri_off.kiroku.core.repository.Page
@@ -83,12 +84,15 @@ class SandboxGraph internal constructor(
             poster = { id -> notShown("${FixtureAnime.POSTER_URL}$id.jpg") },
             unexpected = parts.unexpected,
             retired = live::wasRetiredOnDisk,
+            removalsFile = File(parts.context.noBackupFilesDir, notShown("$NAME.mal.manga-removals")),
         )
     }
 
     override val manga: MangaRepository get() = mangaFixtures
 
-    override val mangaList: MangaListReader get() = mangaFixtures.also { live.startMangaCleanup() }
+    override val mangaList: MangaListReader get() = mangaListEditor
+
+    override val mangaListEditor: MangaListEditor get() = mangaFixtures.also { live.startMangaCleanup() }
 
     override val search: SearchRepository by lazy {
         val fixtures = SearchFixtureStates.standIn(Fixtures.at(clock))

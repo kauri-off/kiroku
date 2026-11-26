@@ -1,7 +1,9 @@
 package io.github.kauri_off.kiroku.design.component
 
+import androidx.annotation.StringRes
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
@@ -13,6 +15,7 @@ import androidx.compose.material3.LocalTextStyle
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -81,7 +84,7 @@ internal fun EpisodeStepper(
         if (count != null) onWatchedChange(count)
     }
 
-    EpisodeStepperLayout(
+    ProgressStepperLayout(
         text = draft ?: watched.toString(),
         current = draft?.toIntOrNull() ?: watched,
         total = total,
@@ -105,12 +108,20 @@ internal fun EpisodeStepper(
     )
 }
 
-// The stepper without state of its own. [current] is the count the buttons step from; [onTextChange] hears only text
-// a count field takes, [onFocusChange] only real changes, [onStep] the new count.
+internal enum class ProgressStepperLabels(
+    @param:StringRes val count: Int,
+    @param:StringRes val minus: Int,
+    @param:StringRes val plus: Int,
+) {
+    Episodes(R.string.design_episodes_watched, R.string.design_episode_minus, R.string.design_episode_plus),
+    Chapters(R.string.manga_edit_chapters_read, R.string.manga_edit_chapter_minus, R.string.manga_edit_chapter_plus),
+    Volumes(R.string.manga_edit_volumes_read, R.string.manga_edit_volume_minus, R.string.manga_edit_volume_plus),
+}
+
 @Composable
-internal fun EpisodeStepperLayout(
+internal fun ProgressStepperLayout(
     text: String,
-    current: Int,
+    current: Int?,
     total: Int?,
     onTextChange: (String) -> Unit,
     onDone: () -> Unit,
@@ -119,24 +130,38 @@ internal fun EpisodeStepperLayout(
     modifier: Modifier = Modifier,
     enabled: Boolean = true,
     fieldModifier: Modifier = Modifier,
+    labels: ProgressStepperLabels = ProgressStepperLabels.Episodes,
+    maximum: Int = MAX_COUNT,
+    unknown: String? = null,
+    invalid: Boolean = false,
+    acceptText: (String) -> String? = ::episodeText,
 ) {
-    val minus = stringResource(R.string.design_episode_minus)
-    val plus = stringResource(R.string.design_episode_plus)
-    val fieldLabel = stringResource(R.string.design_episodes_watched)
+    val minus = stringResource(labels.minus)
+    val plus = stringResource(labels.plus)
+    val fieldLabel = stringResource(labels.count)
+    val count = current ?: 0
+    val digits = if (invalid) maximum.toString().length else maxOf(text.length, count.toString().length)
     var focused by remember { mutableStateOf(false) }
     Row(modifier, verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Spacing.xs)) {
-        FilledTonalIconButton(onClick = { onStep(current - 1) }, shapes = IconButtonDefaults.shapes(), enabled = enabled && current > 0) {
+        FilledTonalIconButton(
+            onClick = { onStep(count - 1) },
+            shapes = IconButtonDefaults.shapes(),
+            enabled =
+                enabled && !invalid && count > 0,
+        ) {
             Icon(painterResource(R.drawable.ic_remove), contentDescription = minus)
         }
         OutlinedTextField(
             value = text,
-            onValueChange = { edit -> episodeText(edit)?.let(onTextChange) },
+            onValueChange = { edit -> acceptText(edit)?.let(onTextChange) },
             enabled = enabled,
+            isError = invalid,
             singleLine = true,
+            placeholder = unknown?.let { { Text(it, Modifier.fillMaxWidth(), textAlign = TextAlign.Center) } },
             textStyle = LocalTextStyle.current.copy(textAlign = TextAlign.Center),
             visualTransformation =
                 totalSuffix(
-                    total,
+                    total.takeIf { unknown == null || text.isNotEmpty() },
                     if (enabled) MaterialTheme.colorScheme.onSurfaceVariant else OutlinedTextFieldDefaults.colors().disabledTextColor,
                 ),
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number, imeAction = ImeAction.Done),
@@ -145,7 +170,7 @@ internal fun EpisodeStepperLayout(
                 fieldModifier
                     .withoutAutofill()
                     .weight(1f, fill = false)
-                    .width(fieldWidth(maxOf(text.length, current.toString().length), total))
+                    .width(fieldWidth(digits, total, unknown))
                     .onFocusChanged {
                         if (it.isFocused != focused) {
                             focused = it.isFocused
@@ -154,10 +179,10 @@ internal fun EpisodeStepperLayout(
                     }.semantics { contentDescription = fieldLabel },
         )
         FilledTonalIconButton(
-            onClick = { onStep(current + 1) },
+            onClick = { onStep(count + 1) },
             shapes = IconButtonDefaults.shapes(),
             enabled =
-                enabled && current < MAX_COUNT,
+                enabled && !invalid && count < maximum,
         ) {
             Icon(painterResource(R.drawable.ic_add), contentDescription = plus)
         }
@@ -214,12 +239,15 @@ private class SuffixMapping(
 private fun fieldWidth(
     digits: Int,
     total: Int?,
+    placeholder: String?,
 ): Dp {
     val measurer = rememberTextMeasurer()
     val style = LocalTextStyle.current
     val shown = maxOf(digits, total?.toString()?.length ?: UNKNOWN_TOTAL_DIGITS)
     val widest = AnnotatedString(ZERO.toString().repeat(shown) + (total?.let { stringResource(R.string.design_episode_total, it) } ?: ""))
-    val width = measurer.measure(widest, style, softWrap = false).size.width
+    val numberWidth = measurer.measure(widest, style, softWrap = false).size.width
+    val placeholderWidth = placeholder?.let { measurer.measure(it, style, softWrap = false).size.width } ?: 0
+    val width = maxOf(numberWidth, placeholderWidth)
     return with(LocalDensity.current) { width.toDp() } + FieldPadding * 2 + CursorRoom
 }
 

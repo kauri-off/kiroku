@@ -64,6 +64,7 @@ internal class Sends(
     private val limit: Int,
     val maySendRead: (() -> Boolean)? = null,
     private val firstRead: (() -> ReadAdmission)? = null,
+    val maySendWrite: (() -> Boolean)? = null,
 ) {
     private var readAdmitted = false
     private val reads = ConcurrentHashMap<HttpUrl, AtomicInteger>()
@@ -80,7 +81,7 @@ internal class Sends(
         when (firstRead()) {
             ReadAdmission.Send -> readAdmitted = admit
             ReadAdmission.Defer -> throw ReadDeferred()
-            ReadAdmission.OwnerEnded -> throw ReadOwnerEnded()
+            ReadAdmission.OwnerEnded -> throw RequestOwnerEnded()
         }
     }
 
@@ -111,16 +112,21 @@ internal enum class ReadAdmission { Send, Defer, OwnerEnded }
 
 internal class ReadDeferred : ProtocolException()
 
-internal class ReadOwnerEnded : ProtocolException()
+internal class RequestOwnerEnded : ProtocolException()
 
-private fun Request.checkReadOwner() {
-    if (isRead && tag(Sends::class.java)?.maySendRead?.invoke() == false) throw ReadOwnerEnded()
+private fun Request.checkOwner(wire: Wire? = null) {
+    val sends = tag(Sends::class.java) ?: return
+    val maySend = if (isRead) sends.maySendRead else sends.maySendWrite
+    if (maySend?.invoke() == false) {
+        if (wire != null && wire.written.get()) throw NotSentAgain(wire.status, wire.failure)
+        throw RequestOwnerEnded()
+    }
 }
 
 internal object MarkSends : Interceptor {
     override fun intercept(chain: Interceptor.Chain): Response {
         val request = chain.request()
-        request.checkReadOwner()
+        request.checkOwner()
         val sends = request.tag(Sends::class.java)
         if (request.isRead) sends?.checkFirstRead(admit = false) else sends?.wrote = true
         return chain.proceed(request.newBuilder().tag(Wire::class.java, Wire()).build())
@@ -132,7 +138,7 @@ internal object SendLimits : Interceptor {
     override fun intercept(chain: Interceptor.Chain): Response {
         val request = chain.request()
         val wire = request.tag(Wire::class.java) ?: return chain.proceed(request)
-        request.checkReadOwner()
+        request.checkOwner(wire)
         val sends = request.tag(Sends::class.java)
         if (request.isRead) sends?.checkFirstRead(admit = true)
         val allowed =

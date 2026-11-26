@@ -12,6 +12,8 @@ import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBars
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ColorScheme
 import androidx.compose.material3.LinearProgressIndicator
@@ -26,6 +28,7 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.window.Popup
 import io.github.kauri_off.kiroku.core.fixtures.FixtureTime
 import io.github.kauri_off.kiroku.design.component.COUNTED_WAVY_INDICATOR
 import io.github.kauri_off.kiroku.design.component.RefreshBox
@@ -193,6 +196,31 @@ class ScreenshotHarnessTest {
             val failure = runCatching { Shot.launch(Variant.EnLight, content = content).use { it.image() } }.exceptionOrNull()
             assertTrue(failure.toString(), failure is IllegalStateException && "may loop" in failure.message.orEmpty())
         }
+    }
+
+    @Test
+    fun aFullCaptureMeasuresContentAboveTheOpeningScrollPosition() {
+        fun scrollRangeAt(initial: Int) =
+            Shot
+                .launch(Variant.EnLight) {
+                    Column(Modifier.verticalScroll(rememberScrollState(initial))) {
+                        Box(Modifier.size(1200.dp))
+                    }
+                }.use { it.scrollRangeDp() }
+
+        val fullRange = scrollRangeAt(0)
+        assertTrue(fullRange > 0)
+        assertEquals(fullRange, scrollRangeAt(Int.MAX_VALUE))
+    }
+
+    @Test(timeout = 60_000)
+    fun aPopupCanPollItsPositionAndAdditionalAnimationFails() {
+        Shot.launch(Variant.EnLight) { Popup { Box(Modifier.size(PULSE_DP.dp)) } }.use {
+            it.image()
+            assertEquals(1, LoopingAnimations.running)
+        }
+        val failure = runCatching { Shot.launch(Variant.EnLight) { Popup { Pulse() } }.use { it.image() } }.exceptionOrNull()
+        assertTrue(failure.toString(), failure is IllegalStateException && "may loop" in failure.message.orEmpty())
     }
 
     @Test(timeout = 60_000)
