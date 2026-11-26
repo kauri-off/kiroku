@@ -565,6 +565,8 @@ class MalMangaListTest {
             val bodies =
                 listOf(
                     """{"arbitrary":[true,false,null,0,-0,1.25,-1e+3,"a\n\u0020\""]}""" to MangaPatchResult.Accepted,
+                    """{"arbitrary":[1,[2],{"nested":[]}]}""" to MangaPatchResult.Accepted,
+                    """{"arbitrary":[1]2]}""" to MangaPatchResult.Unknown(DataError.ServerError),
                     """{"status":broken}""" to MangaPatchResult.Unknown(DataError.ServerError),
                     """{"status":NaN}""" to MangaPatchResult.Unknown(DataError.ServerError),
                     """{"n":00,"n":2}""" to MangaPatchResult.Unknown(DataError.ServerError),

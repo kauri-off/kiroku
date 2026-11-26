@@ -144,17 +144,70 @@ private val JsonToken =
             """|(?:true|false|null|$INTEGER(?:\.[0-9]+)?(?:[eE][+-]?[0-9]+)?)(?=$|[ \t\r\n,}\]]))""",
     )
 
+private const val MAX_ACKNOWLEDGMENT_DEPTH = 64
+
+private class JsonStructure(
+    private val payload: String,
+) {
+    private var end = 0
+    private val tokens =
+        JsonToken
+            .findAll(payload)
+            .takeWhile { it.range.first == end }
+            .onEach { end = it.range.last + 1 }
+            .map { it.value }
+            .filterNot { it[0] in " \t\r\n" }
+            .iterator()
+
+    private var token = next()
+
+    fun isObject(): Boolean = token == "{" && value(0) && token == null && end == payload.length
+
+    private fun next(): String? = if (tokens.hasNext()) tokens.next() else null
+
+    private fun take(expected: String): Boolean {
+        if (token != expected) return false
+        token = next()
+        return true
+    }
+
+    private fun value(depth: Int): Boolean {
+        if (depth == MAX_ACKNOWLEDGMENT_DEPTH) return false
+        return when (token) {
+            "{" -> collection("}", ::takeMember, depth + 1)
+            "[" -> collection("]", ::value, depth + 1)
+            null, "}", "]", ":", "," -> false
+            else -> {
+                token = next()
+                true
+            }
+        }
+    }
+
+    private fun takeMember(depth: Int): Boolean {
+        if (token?.first() != '"') return false
+        token = next()
+        return take(":") && value(depth)
+    }
+
+    private fun collection(
+        close: String,
+        element: (Int) -> Boolean,
+        depth: Int,
+    ): Boolean {
+        token = next()
+        if (take(close)) return true
+        do {
+            if (!element(depth)) return false
+        } while (take(","))
+        return take(close)
+    }
+}
+
 private fun MangaListWriteAnswer.acknowledgesPatch(): Boolean {
     if (status != 200 || mediaType?.toMediaTypeOrNull()?.subtype?.equals("json", ignoreCase = true) != true) return false
     val payload = body ?: return false
-    if (JsonToken
-            .findAll(payload)
-            .lastOrNull()
-            ?.range
-            ?.last != payload.lastIndex
-    ) {
-        return false
-    }
+    if (!JsonStructure(payload).isObject()) return false
     return try {
         val document = MalJson.parseToJsonElement(payload) as? JsonObject
         document != null && document.isNotEmpty() && "error" !in document
