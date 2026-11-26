@@ -29,7 +29,10 @@ import io.github.kauri_off.kiroku.design.theme.Spacing
 import io.github.kauri_off.kiroku.sandbox.SandboxGraph
 import io.github.kauri_off.kiroku.wiring.LiveGraph
 import io.github.kauri_off.kiroku.wiring.appGraph
+import io.github.kauri_off.kiroku.wiring.forgetMangaCaptures
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.seconds
@@ -137,7 +140,11 @@ fun restartApp(
     patience: Duration = 2.seconds,
     beforeExit: suspend () -> Unit = {
         when (val graph = context.appGraph) {
-            is LiveGraph -> graph.writeOwed()
+            is LiveGraph ->
+                withContext(Dispatchers.IO) {
+                    forgetMangaCaptures(graph)
+                    graph.writeOwed()
+                }
             is SandboxGraph -> graph.writeOwed()
         }
     },

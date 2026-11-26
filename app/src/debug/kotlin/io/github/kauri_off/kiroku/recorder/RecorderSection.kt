@@ -33,8 +33,14 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import io.github.kauri_off.kiroku.R
 import io.github.kauri_off.kiroku.collectAsScreenState
+import io.github.kauri_off.kiroku.core.error.Outcome
+import io.github.kauri_off.kiroku.core.model.MangaId
+import io.github.kauri_off.kiroku.data.manga.MangaMutationMethod
 import io.github.kauri_off.kiroku.data.recorder.Halt
 import io.github.kauri_off.kiroku.data.recorder.ListAfter
+import io.github.kauri_off.kiroku.data.recorder.MANGA_CAPTURE_MINUTES
+import io.github.kauri_off.kiroku.data.recorder.MangaCaptureState
+import io.github.kauri_off.kiroku.data.recorder.MangaCaptureStop
 import io.github.kauri_off.kiroku.data.recorder.ReadCapture
 import io.github.kauri_off.kiroku.data.recorder.RecordedTitle
 import io.github.kauri_off.kiroku.data.recorder.Recording
@@ -53,12 +59,24 @@ data class RecorderState(
     val recording: Recording?,
     // The title's id as it is typed.
     val typed: String = "",
+    val manga: MangaCaptureState? = null,
+    val mangaId: String = "",
 )
 
 sealed interface RecorderEvent {
     data class Type(
         val text: String,
     ) : RecorderEvent
+
+    data class TypeManga(
+        val text: String,
+    ) : RecorderEvent
+
+    data class ArmManga(
+        val method: MangaMutationMethod,
+    ) : RecorderEvent
+
+    data object DisarmManga : RecorderEvent
 
     data object Check : RecorderEvent
 
@@ -79,12 +97,29 @@ private const val ID_DIGITS = 9
 
 @Composable
 fun RecorderRoute() {
-    val recorder = (LocalContext.current.appGraph as? LiveGraph)?.recorder
+    val graph = LocalContext.current.appGraph as? LiveGraph
+    val recorder = graph?.recorder
     val recording = recorder?.state?.collectAsScreenState()?.value
     var typed by rememberSaveable { mutableStateOf("") }
-    RecorderSection(RecorderState(recording, typed)) { event ->
+    var mangaId by rememberSaveable { mutableStateOf("") }
+    val manga =
+        recorder
+            ?.manga
+            ?.state
+            ?.collectAsScreenState()
+            ?.value
+    RecorderSection(RecorderState(recording, typed, manga, mangaId)) { event ->
         when (event) {
             is RecorderEvent.Type -> typed = event.text.filter(Char::isDigit).take(ID_DIGITS)
+            is RecorderEvent.TypeManga -> mangaId = event.text.filter { it in '0'..'9' }.take(ID_DIGITS)
+            is RecorderEvent.ArmManga ->
+                mangaId.toLongOrNull()?.let { value ->
+                    recorder?.armManga(MangaId(value), event.method) { owner, id ->
+                        val stored = graph.mangaList.stored(owner)
+                        stored is Outcome.Success && stored.value?.entries?.any { it.id == id } == true
+                    }
+                }
+            RecorderEvent.DisarmManga -> recorder?.manga?.disarm()
             RecorderEvent.Check -> typed.toLongOrNull()?.let { recorder?.check(it) }
             is RecorderEvent.Record -> recorder?.record(event.title)
             is RecorderEvent.RecordReads -> recorder?.recordReads(event.capture)
@@ -105,21 +140,19 @@ fun RecorderSection(
         SectionDetail(R.string.recorder_unavailable)
         return
     }
-    val free = !recording.busy && !recording.left
+    val mangaActive = state.manga is MangaCaptureState.Armed || state.manga is MangaCaptureState.Capturing
+    val free = !recording.busy && !recording.left && !mangaActive
     SectionDetail(R.string.recorder_read_detail)
     ReadButton(R.string.recorder_suggestions, ReadCapture.Suggestions, free, onEvent)
     ReadButton(R.string.recorder_manga_list, ReadCapture.MangaList, free, onEvent)
+    state.manga?.let { MangaCaptureSection(it, state.mangaId, free && recording !is Recording.Checked, onEvent) }
     SectionDetail(R.string.recorder_detail)
-    OutlinedTextField(
-        value = state.typed,
-        onValueChange = { onEvent(RecorderEvent.Type(it)) },
-        modifier = Modifier.withoutAutofill().fillMaxWidth().padding(horizontal = Spacing.l, vertical = Spacing.s),
-        enabled = free,
-        label = { Text(stringResource(R.string.recorder_title_id)) },
-        supportingText = { Text(stringResource(R.string.recorder_title_id_detail)) },
-        singleLine = true,
-        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number, imeAction = ImeAction.Done),
-    )
+    RecorderIdField(
+        state.typed,
+        free,
+        R.string.recorder_title_id,
+        supporting = { Text(stringResource(R.string.recorder_title_id_detail)) },
+    ) { onEvent(RecorderEvent.Type(it)) }
     OutlinedButton(
         onClick = { onEvent(RecorderEvent.Check) },
         enabled = free && state.typed.isNotEmpty(),
@@ -141,6 +174,106 @@ fun RecorderSection(
         else -> Report(report(recording), recording.left, onEvent)
     }
 }
+
+@Composable
+private fun MangaCaptureSection(
+    state: MangaCaptureState,
+    id: String,
+    enabled: Boolean,
+    onEvent: (RecorderEvent) -> Unit,
+) {
+    SectionHeader(stringResource(R.string.recorder_manga_mutations))
+    SectionDetail(R.string.recorder_manga_mutation_detail)
+    when (state) {
+        is MangaCaptureState.Armed -> {
+            val label =
+                if (state.target.method ==
+                    MangaMutationMethod.Patch
+                ) {
+                    R.string.recorder_manga_armed_patch
+                } else {
+                    R.string.recorder_manga_armed_delete
+                }
+            MangaCaptureLine(stringResource(label, state.target.id.value))
+            MangaCaptureLine(pluralStringResource(R.plurals.recorder_manga_window, MANGA_CAPTURE_MINUTES, MANGA_CAPTURE_MINUTES))
+        }
+        is MangaCaptureState.Capturing -> Progress(null, stringResource(R.string.recorder_manga_capturing, state.target.id.value))
+        is MangaCaptureState.Complete -> {
+            val label =
+                if (state.target.method ==
+                    MangaMutationMethod.Patch
+                ) {
+                    R.string.recorder_manga_patch_complete
+                } else {
+                    R.string.recorder_manga_delete_complete
+                }
+            MangaCaptureLine(stringResource(label, state.target.id.value))
+            SelectionContainer { MangaCaptureLine(stringResource(R.string.recorder_folder, state.folder.path)) }
+        }
+        is MangaCaptureState.Stopped -> MangaCaptureLine(stringResource(state.reason.label()))
+        MangaCaptureState.Ready -> Unit
+    }
+    if (state is MangaCaptureState.Armed || state is MangaCaptureState.Capturing) {
+        OutlinedButton(
+            onClick = { onEvent(RecorderEvent.DisarmManga) },
+            modifier = Modifier.padding(horizontal = Spacing.l),
+        ) {
+            Text(stringResource(R.string.recorder_manga_disarm))
+        }
+    } else {
+        RecorderIdField(id, enabled, R.string.recorder_manga_id) { onEvent(RecorderEvent.TypeManga(it)) }
+        val canArm = enabled && (id.toLongOrNull() ?: 0) > 0
+        for (method in MangaMutationMethod.entries) {
+            val label = if (method == MangaMutationMethod.Patch) R.string.recorder_manga_arm_patch else R.string.recorder_manga_arm_delete
+            OutlinedButton(
+                onClick = { onEvent(RecorderEvent.ArmManga(method)) },
+                enabled = canArm,
+                modifier = Modifier.padding(horizontal = Spacing.l),
+            ) {
+                Text(stringResource(label))
+            }
+        }
+    }
+}
+
+@Composable
+private fun RecorderIdField(
+    id: String,
+    enabled: Boolean,
+    @StringRes label: Int,
+    supporting: (@Composable () -> Unit)? = null,
+    onValueChange: (String) -> Unit,
+) {
+    OutlinedTextField(
+        value = id,
+        onValueChange = onValueChange,
+        modifier = Modifier.withoutAutofill().fillMaxWidth().padding(horizontal = Spacing.l, vertical = Spacing.s),
+        enabled = enabled,
+        label = { Text(stringResource(label)) },
+        supportingText = supporting,
+        singleLine = true,
+        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number, imeAction = ImeAction.Done),
+    )
+}
+
+@Composable
+private fun MangaCaptureLine(line: String) {
+    Text(
+        line,
+        Modifier.padding(horizontal = Spacing.l, vertical = Spacing.s).semantics { liveRegion = LiveRegionMode.Polite },
+        style = MaterialTheme.typography.bodyMedium,
+    )
+}
+
+@StringRes
+private fun MangaCaptureStop.label(): Int =
+    when (this) {
+        MangaCaptureStop.Unavailable -> R.string.recorder_halt_not_signed_in
+        MangaCaptureStop.MissingEntry -> R.string.recorder_manga_missing
+        MangaCaptureStop.Ended -> R.string.recorder_manga_ended
+        MangaCaptureStop.Unconfirmed -> R.string.recorder_manga_unconfirmed
+        MangaCaptureStop.Storage -> R.string.recorder_halt_storage
+    }
 
 private val Recording.busy: Boolean
     get() = this is Recording.Checking || this is Recording.Running || this is Recording.Removing || this == Recording.Reading

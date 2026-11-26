@@ -43,5 +43,6 @@ class RecorderGuardTest {
         val release = File(projectDir, "app/src/release/kotlin/io/github/kauri_off/kiroku/wiring/LiveRecorder.kt").readText()
 
         assertTrue(release, release.trimEnd().endsWith("): Nothing? = null"))
+        assertTrue(release, release.contains("fun liveMangaObserver(graph: LiveGraph): Nothing? = null"))
     }
 }

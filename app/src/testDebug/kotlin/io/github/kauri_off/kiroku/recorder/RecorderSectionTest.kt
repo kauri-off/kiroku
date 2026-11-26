@@ -6,8 +6,12 @@ import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTextInput
+import io.github.kauri_off.kiroku.core.model.MangaId
+import io.github.kauri_off.kiroku.data.manga.MangaMutationMethod
 import io.github.kauri_off.kiroku.data.recorder.Halt
 import io.github.kauri_off.kiroku.data.recorder.ListAfter
+import io.github.kauri_off.kiroku.data.recorder.MangaCaptureState
+import io.github.kauri_off.kiroku.data.recorder.MangaCaptureTarget
 import io.github.kauri_off.kiroku.data.recorder.ReadCapture
 import io.github.kauri_off.kiroku.data.recorder.RecordedTitle
 import io.github.kauri_off.kiroku.data.recorder.Recording
@@ -45,6 +49,34 @@ class RecorderSectionTest {
     ) = compose.setContent { Column { RecorderSection(RecorderState(recording, typed)) { events += it } } }
 
     private fun startsOn(source: DataSource) = check(SourceChoice(RuntimeEnvironment.getApplication()).choose(source))
+
+    @Test
+    fun `manga capture selects the editor action`() {
+        compose.setContent {
+            Column {
+                RecorderSection(RecorderState(Recording.Idle, manga = MangaCaptureState.Ready, mangaId = "17")) { events += it }
+            }
+        }
+        compose.onNodeWithText("Arm capture for Save").performClick()
+        compose.onNodeWithText("Arm capture for Remove").performClick()
+        assertEquals(
+            listOf(RecorderEvent.ArmManga(MangaMutationMethod.Patch), RecorderEvent.ArmManga(MangaMutationMethod.Delete)),
+            events,
+        )
+    }
+
+    @Test
+    fun `armed manga capture shows the selected action and can be disarmed`() {
+        val target = MangaCaptureTarget(MangaId(17), MangaMutationMethod.Delete)
+        compose.setContent {
+            Column { RecorderSection(RecorderState(Recording.Idle, manga = MangaCaptureState.Armed(target))) { events += it } }
+        }
+        compose.onNodeWithText("DELETE capture armed for manga ID\u00A017", substring = true).assertExists()
+        compose.onNodeWithText("Arm capture for Save").assertDoesNotExist()
+        compose.onNodeWithText("Record my manga list").assertIsNotEnabled()
+        compose.onNodeWithText("Disarm capture").performClick()
+        assertEquals(listOf(RecorderEvent.DisarmManga), events)
+    }
 
     @Test
     fun `nothing is recorded before the dialog that names the title and what will be written is confirmed`() {

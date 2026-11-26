@@ -14,6 +14,7 @@ import io.github.kauri_off.kiroku.data.network.MalJson
 import io.github.kauri_off.kiroku.data.network.ReadAdmission
 import io.github.kauri_off.kiroku.data.session.MalSession
 import io.github.kauri_off.kiroku.data.session.authorised
+import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
@@ -70,7 +71,11 @@ internal class MalMangaList(
         if (id.value <= 0) return Outcome.Failure(DataError.NotFound)
         val form = patch.form()
         if (form.isEmpty()) return Outcome.Failure(DataError.InvalidRequest)
-        return request(expectedOwner, write = true, onHttpFailure = onHttpFailure) { api.patch(id.value, form, it).writeAnswer() }
+        return request(expectedOwner, write = true, onHttpFailure = onHttpFailure) { authorization ->
+            api.patch(id.value, form, authorization).writeAnswer().also {
+                currentCoroutineContext()[MangaMutationExchange]?.write(id, it, authorization, http.clientId)
+            }
+        }
     }
 
     suspend fun delete(
@@ -79,7 +84,11 @@ internal class MalMangaList(
         onHttpFailure: (DataError) -> Unit = {},
     ): Outcome<MangaListWriteAnswer> {
         if (id.value <= 0) return Outcome.Failure(DataError.NotFound)
-        return request(expectedOwner, write = true, onHttpFailure = onHttpFailure) { api.delete(id.value, it).writeAnswer() }
+        return request(expectedOwner, write = true, onHttpFailure = onHttpFailure) { authorization ->
+            api.delete(id.value, authorization).writeAnswer().also {
+                currentCoroutineContext()[MangaMutationExchange]?.write(id, it, authorization, http.clientId)
+            }
+        }
     }
 
     private suspend fun page(
@@ -90,11 +99,12 @@ internal class MalMangaList(
         request(expectedOwner, firstRead) { authorization ->
             val response = api.page(Asked + ("offset" to offset.toString()), authorization)
             response.checkUnredirectedSuccess()
-            val json =
+            val payload =
                 checkNotNull(response.body()).use {
                     check(response.code() == 200) { "The manga list page did not return OK" }
-                    MalJson.parseToJsonElement(it.string()).jsonObject
+                    it.string()
                 }
+            val json = MalJson.parseToJsonElement(payload).jsonObject
             val data = json.getValue("data") as JsonArray
             check(data.size <= MAX_ENTRIES - offset) { "The manga list exceeds its bound" }
             val end = offset + data.size
@@ -102,7 +112,9 @@ internal class MalMangaList(
             check(next == null || (data.isNotEmpty() && next == end && next < MAX_ENTRIES)) {
                 "The next manga list page does not follow this one"
             }
-            Page(data.map { it.jsonObject.membership() }, next)
+            Page(data.map { it.jsonObject.membership() }, next).also {
+                currentCoroutineContext()[MangaMutationExchange]?.page(payload, it.entries, next == null, authorization, http.clientId)
+            }
         }
 
     private suspend fun <T> request(

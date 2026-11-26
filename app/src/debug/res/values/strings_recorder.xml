@@ -49,4 +49,22 @@
     <string name="recorder_halt_still_on_the_list">MyAnimeList answered the removal and still shows the title on your list</string>
     <string name="recorder_halt_refused">MyAnimeList is refusing requests (answer\u00A0%1$d), try again later</string>
     <string name="recorder_halt_unexpected">MyAnimeList answered\u00A0%1$d, which the recorder did not expect</string>
+    <string name="recorder_manga_mutations">Capture a manga list change</string>
+    <string name="recorder_manga_mutation_detail">Enter the MyAnimeList ID of an entry already in My list, then arm capture for the action you plan to take</string>
+    <string name="recorder_manga_id">Manga ID on MyAnimeList</string>
+    <string name="recorder_manga_arm_patch">Arm capture for Save</string>
+    <string name="recorder_manga_arm_delete">Arm capture for Remove</string>
+    <string name="recorder_manga_disarm">Disarm capture</string>
+    <string name="recorder_manga_armed_patch">PATCH capture armed for manga ID\u00A0%1$d. Open the entry and tap Save after making your changes</string>
+    <string name="recorder_manga_armed_delete">DELETE capture armed for manga ID\u00A0%1$d. Open the entry and confirm Remove from list</string>
+    <string name="recorder_manga_capturing">Waiting for manga ID\u00A0%1$d\u00A0to be verified on MyAnimeList</string>
+    <string name="recorder_manga_patch_complete">PATCH and read-back captured for manga ID\u00A0%1$d</string>
+    <string name="recorder_manga_delete_complete">DELETE and read-back captured for manga ID\u00A0%1$d</string>
+    <string name="recorder_manga_missing">This manga ID is missing from the saved list. Open My list and refresh before arming</string>
+    <string name="recorder_manga_ended">The manga capture ended before saving a recording</string>
+    <string name="recorder_manga_unconfirmed">The server replies did not confirm the manga change. No recording was saved</string>
+    <plurals name="recorder_manga_window">
+        <item quantity="one">Capture expires after\u00A0%d\u00A0minute</item>
+        <item quantity="other">Capture expires after\u00A0%d\u00A0minutes</item>
+    </plurals>
 </resources>

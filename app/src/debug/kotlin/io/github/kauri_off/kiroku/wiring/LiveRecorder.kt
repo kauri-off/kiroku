@@ -27,4 +27,11 @@ internal fun liveRecorder(
         },
         privateReads = { parts.file(PRIVATE_READS) },
         scope = parts.scope,
+        privateMutations = if (parts.source === LiveSource.Account) ({ parts.file(notShown("private-manga-mutations")) }) else null,
     )
+
+internal fun liveMangaObserver(graph: LiveGraph) = graph.recorder.manga
+
+internal fun forgetMangaCaptures(graph: LiveGraph) {
+    graph.recorder.manga?.forget()
+}

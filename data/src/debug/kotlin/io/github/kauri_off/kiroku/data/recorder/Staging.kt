@@ -65,3 +65,17 @@ internal fun keep(
     }
     run.delete()
 }
+
+internal fun storePrivateAnswer(
+    pending: File,
+    kept: Kept,
+    write: (File, String) -> Unit,
+) {
+    val temp = Files.createTempFile(pending.toPath().parent, "answer-", ".tmp").toFile()
+    try {
+        write(temp, kept.text)
+        Files.move(temp.toPath(), File(pending, kept.file).toPath(), StandardCopyOption.ATOMIC_MOVE)
+    } finally {
+        temp.delete()
+    }
+}

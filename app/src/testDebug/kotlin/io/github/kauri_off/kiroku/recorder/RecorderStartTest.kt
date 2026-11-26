@@ -11,6 +11,7 @@ import io.github.kauri_off.kiroku.wiring.LiveGraph
 import io.github.kauri_off.kiroku.wiring.LiveParts
 import io.github.kauri_off.kiroku.wiring.LiveSource
 import io.github.kauri_off.kiroku.wiring.ServedMal
+import io.github.kauri_off.kiroku.wiring.liveMangaObserver
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
@@ -28,6 +29,8 @@ import org.json.JSONObject
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
@@ -68,6 +71,12 @@ class RecorderStartTest {
     fun close() {
         scope.cancel()
         KeysInMemory.uninstall()
+    }
+
+    @Test
+    fun `only the real data source installs the mutation observer`() {
+        assertNotNull(liveMangaObserver(LiveGraph(parts())))
+        assertNull(liveMangaObserver(LiveGraph(parts(LiveSource("test-manga", mal.hosts)))))
     }
 
     @Test

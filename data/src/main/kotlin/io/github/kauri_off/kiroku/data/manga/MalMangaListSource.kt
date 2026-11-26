@@ -233,12 +233,16 @@ private class JsonStructure(
 
 private fun MangaListWriteAnswer.acknowledgesPatch(): Boolean {
     if (status != 200 || mediaType?.toMediaTypeOrNull()?.subtype?.equals("json", ignoreCase = true) != true) return false
-    val payload = body ?: return false
-    if (!JsonStructure(payload).isObject()) return false
+    return body?.strictMangaObject()?.let { it.isNotEmpty() && "error" !in it } == true
+}
+
+internal fun String.strictMangaObject(): JsonObject? {
+    if (!isStrictMangaObject()) return null
     return try {
-        val document = MalJson.parseToJsonElement(payload) as? JsonObject
-        document != null && document.isNotEmpty() && "error" !in document
+        MalJson.parseToJsonElement(this) as? JsonObject
     } catch (_: SerializationException) {
-        false
+        null
     }
 }
+
+internal fun String.isStrictMangaObject(): Boolean = JsonStructure(this).isObject()

@@ -13,14 +13,19 @@ import io.github.kauri_off.kiroku.core.airing.airingAt
 import io.github.kauri_off.kiroku.core.fixtures.FixtureAnime
 import io.github.kauri_off.kiroku.core.fixtures.Fixtures
 import io.github.kauri_off.kiroku.core.model.Anime
+import io.github.kauri_off.kiroku.core.model.MangaId
 import io.github.kauri_off.kiroku.core.model.Session
 import io.github.kauri_off.kiroku.core.model.SignInId
 import io.github.kauri_off.kiroku.core.model.TitleLanguage
 import io.github.kauri_off.kiroku.core.notify.Recheck
 import io.github.kauri_off.kiroku.core.notify.RunEnd
 import io.github.kauri_off.kiroku.core.notify.RunTrigger
+import io.github.kauri_off.kiroku.data.manga.MangaMutationMethod
 import io.github.kauri_off.kiroku.data.recorder.Halt
 import io.github.kauri_off.kiroku.data.recorder.ListAfter
+import io.github.kauri_off.kiroku.data.recorder.MangaCaptureState
+import io.github.kauri_off.kiroku.data.recorder.MangaCaptureStop
+import io.github.kauri_off.kiroku.data.recorder.MangaCaptureTarget
 import io.github.kauri_off.kiroku.data.recorder.RecordedTitle
 import io.github.kauri_off.kiroku.data.recorder.Recording
 import io.github.kauri_off.kiroku.data.sandbox.Planted
@@ -98,6 +103,30 @@ class DebugMenuScreenshots : ScreenshotRegistry() {
                 )
             },
             case("recorder-confirm") { Menu(ScenarioState.Unavailable, recorder = RecorderState(Recording.Checked(TITLE), "1")) },
+            case("recorder-manga-ready") {
+                Menu(ScenarioState.Unavailable, recorder = RecorderState(Recording.Idle, manga = MangaCaptureState.Ready, mangaId = "17"))
+            },
+            case("recorder-manga-armed") {
+                val target = MangaCaptureTarget(MangaId(17), MangaMutationMethod.Delete)
+                Menu(ScenarioState.Unavailable, recorder = RecorderState(Recording.Idle, manga = MangaCaptureState.Armed(target)))
+            },
+            case("recorder-manga-capturing") {
+                val target = MangaCaptureTarget(MangaId(17), MangaMutationMethod.Patch)
+                Menu(ScenarioState.Unavailable, recorder = RecorderState(Recording.Idle, manga = MangaCaptureState.Capturing(target)))
+            },
+            case("recorder-manga-complete") {
+                val target = MangaCaptureTarget(MangaId(17), MangaMutationMethod.Patch)
+                val directory =
+                    File("/data/user/0/io.github.kauri_off.kiroku.debug/no_backup/account.private-manga-mutations/capture-example")
+                Menu(
+                    ScenarioState.Unavailable,
+                    recorder = RecorderState(Recording.Idle, manga = MangaCaptureState.Complete(target, directory)),
+                )
+            },
+            case("recorder-manga-stopped") {
+                val stopped = MangaCaptureState.Stopped(MangaCaptureStop.Unconfirmed)
+                Menu(ScenarioState.Unavailable, recorder = RecorderState(Recording.Idle, manga = stopped, mangaId = "17"))
+            },
             case("recorder-read-running") {
                 Menu(ScenarioState.Unavailable, recorder = RecorderState(Recording.Reading))
             },

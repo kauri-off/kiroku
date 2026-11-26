@@ -155,6 +155,7 @@ internal class LiveGraph(
             runLog,
             forgetManga = {
                 withContext(Dispatchers.IO) {
+                    forgetMangaCaptures(this@LiveGraph)
                     !hasDatabase() || mangaList.forgetBeforeSignOut() is Outcome.Success
                 }
             },
@@ -169,7 +170,8 @@ internal class LiveGraph(
     override val list by lazy { liveList(parts, account, listStore) { preferences.forgetUsersChoices() } }
     override val anime by lazy { liveTitles(parts, preferences = { preferences }) }
     override val mangaCatalogue by lazy { MalMangaCatalogue(parts.http) }
-    private val mangaReader = lazy { RoomMangaList({ parts.database }, account, parts.http, clock, ::wasRetiredOnDisk) }
+    private val mangaReader =
+        lazy { RoomMangaList({ parts.database }, account, parts.http, clock, liveMangaObserver(this), ::wasRetiredOnDisk) }
     override val mangaList: RoomMangaList
         get() {
             startMangaCleanup()
