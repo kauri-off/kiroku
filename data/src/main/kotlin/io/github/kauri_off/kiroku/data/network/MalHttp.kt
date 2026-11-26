@@ -191,7 +191,7 @@ class MalHttp(
         anotherUsersList: Boolean,
     ): Tried<Nothing> {
         // A 403 MAL did not write is the device's network (a portal, a proxy, a block page), not MAL refusing the app.
-        val notMals = status == 403 && body?.let(::errorCode) == null
+        val notMals = status == 403 && !malRefusal(status, body)
         val ofAnotherUsersList = if (anotherUsersList && body != null) anotherUsersListError(status, body) else null
         val error =
             when {
@@ -204,9 +204,24 @@ class MalHttp(
                 status >= 400 -> DataError.InvalidRequest
                 else -> DataError.ServerError
             }
-        if (error == DataError.Refused) backOff.refused(headers?.let { retryAfter(it, clock) }?.toJavaDuration())
+        if (error == DataError.Refused) recordRefusal(status, headers, body)
         return Tried(MalAnswer.Failed(error), again = status >= 500 || notMals)
     }
+
+    internal fun recordRefusal(
+        status: Int,
+        headers: Headers?,
+        body: String?,
+    ): Boolean {
+        if (!malRefusal(status, body)) return false
+        backOff.refused(headers?.let { retryAfter(it, clock) }?.toJavaDuration())
+        return true
+    }
+
+    private fun malRefusal(
+        status: Int,
+        body: String?,
+    ): Boolean = status == 429 || (status == 403 && body?.let(::errorCode) != null)
 
     // Not asked again after a timeout, which the user has waited out, or offline.
     private fun unanswered(e: IOException?): Tried<Nothing> {

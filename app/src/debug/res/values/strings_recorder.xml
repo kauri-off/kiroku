@@ -58,4 +58,10 @@
     <string name="recorder_confirm_manga_writes">Kiroku will add this manga to your list on MyAnimeList, change its status, chapters read, volumes read and score, then remove it. It checks your list after each change</string>
     <string name="recorder_manga_unconfirmed">MyAnimeList’s replies did not confirm the manga change</string>
     <string name="recorder_halt_interrupted">The recording was interrupted</string>
+    <string name="recorder_manga_rechecking">Checking your manga list on MyAnimeList</string>
+    <string name="recorder_manga_recheck">Check again</string>
+    <string name="recorder_manga_unresolved">The recorder could not verify that “%1$s” is its temporary entry. Check the title on the website and check again here. On the website: %2$s</string>
+    <string name="recorder_manga_absent">“%1$s” is absent from your list</string>
+    <string name="recorder_halt_journal">The recovery file could not be read. Recording is paused until the file can be read</string>
+    <string name="recorder_halt_backing_off">MyAnimeList is refusing requests. Try again later</string>
 </resources>

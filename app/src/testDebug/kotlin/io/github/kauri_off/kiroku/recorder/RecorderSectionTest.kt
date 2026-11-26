@@ -85,6 +85,19 @@ class RecorderSectionTest {
     }
 
     @Test
+    fun `an unproven manga row offers a recheck while holding new recordings`() {
+        val manga = title.copy(episodes = 0, media = RecorderMedia.Manga)
+        showManga(Recording.Leftover(manga, ListAfter.Unresolved, null))
+
+        compose.onNodeWithText("could not verify", substring = true).assertExists()
+        compose.onNodeWithText("Remove now").assertDoesNotExist()
+        compose.onNodeWithText("Check manga title").assertIsNotEnabled()
+        compose.onNodeWithText("Record anime suggestions").assertIsNotEnabled()
+        compose.onNodeWithText("Check again").performClick()
+        assertEquals(listOf(RecorderEvent.Remove), events)
+    }
+
+    @Test
     fun `signed out manga cannot be checked`() {
         showManga(Recording.Idle, signedIn = false)
         compose.onNodeWithText("Check manga title").assertIsNotEnabled()

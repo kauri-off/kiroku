@@ -120,6 +120,9 @@ class DebugMenuScreenshots : ScreenshotRegistry() {
             case("recorder-manga-stopped") {
                 MangaRecorder(Recording.Stopped(MANGA, "manga_edit", Halt.NotSignedIn, 3, null, ListAfter.Left))
             },
+            case("recorder-manga-unresolved") {
+                MangaRecorder(Recording.Leftover(MANGA, ListAfter.Unresolved, null))
+            },
             case("recorder-read-running") {
                 Menu(ScenarioState.Unavailable, recorder = RecorderState(Recording.Reading))
             },

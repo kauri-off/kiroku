@@ -22,6 +22,7 @@ internal class MangaRecordingFiles(
     private var resident: SessionOwner? = null
     private var retiring = false
     private var retrying = false
+    private val discarding = mutableSetOf<File>()
 
     @Synchronized
     fun start(owner: SessionOwner): File {
@@ -34,8 +35,18 @@ internal class MangaRecordingFiles(
     @Synchronized
     fun complete(pending: File): File {
         val destination = File(root, pending.name.replaceFirst("run-", "capture-"))
-        Files.move(pending.toPath(), destination.toPath(), StandardCopyOption.ATOMIC_MOVE)
-        Files.createFile(destination.toPath().resolve(MANGA_CAPTURE_COMPLETE))
+        val marker = Files.createFile(pending.toPath().resolve(MANGA_CAPTURE_COMPLETE))
+        try {
+            syncedDirectory(pending)
+            Files.move(pending.toPath(), destination.toPath(), StandardCopyOption.ATOMIC_MOVE)
+        } catch (failure: IOException) {
+            try {
+                Files.deleteIfExists(marker)
+            } catch (cleanup: IOException) {
+                failure.addSuppressed(cleanup)
+            }
+            throw failure
+        }
         syncedDirectory(root)
         return destination
     }
@@ -54,7 +65,25 @@ internal class MangaRecordingFiles(
         directory: File?,
         show: (File?) -> Unit,
     ) {
-        show(directory?.takeIf { resident === owner && it.isDirectory })
+        show(directory?.takeIf { resident === owner && it !in discarding && it.isDirectory })
+    }
+
+    @Synchronized
+    fun discardPartial() {
+        root.listFiles { directory -> directory.name.startsWith("run-") }?.forEach(::discard)
+    }
+
+    @Synchronized
+    fun discard(directory: File) {
+        if (directory in discarding || erase(directory)) return
+        discarding += directory
+        scope.launch {
+            var attempt = 0
+            do {
+                delay(fileRetry(attempt++).toKotlinDuration())
+            } while (!erase(directory))
+            synchronized(this@MangaRecordingFiles) { discarding -= directory }
+        }
     }
 
     @Synchronized
@@ -79,9 +108,9 @@ internal class MangaRecordingFiles(
         return !retiring
     }
 
-    private fun erase(): Boolean =
+    private fun erase(directory: File = root): Boolean =
         try {
-            root.deleteRecursively()
+            directory.deleteRecursively()
         } catch (_: SecurityException) {
             false
         }

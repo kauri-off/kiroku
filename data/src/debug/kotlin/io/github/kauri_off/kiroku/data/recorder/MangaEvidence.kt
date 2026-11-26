@@ -2,6 +2,7 @@ package io.github.kauri_off.kiroku.data.recorder
 
 import io.github.kauri_off.kiroku.core.repository.MangaListStatus
 import io.github.kauri_off.kiroku.core.repository.readingStatus
+import io.github.kauri_off.kiroku.data.list.updatedAtOf
 import io.github.kauri_off.kiroku.data.manga.isStrictMangaObject
 import io.github.kauri_off.kiroku.data.network.MalJson
 import kotlinx.serialization.SerializationException
@@ -69,3 +70,11 @@ internal fun mangaReply(
     status: Int,
     values: JsonElement?,
 ): Kept = Sanitiser(emptyMap()).privateAnswer(name, status, values)
+
+internal fun JsonObject.mangaText(key: String): String? =
+    (get(key) as? JsonPrimitive)?.takeIf { it.isString }?.content?.takeIf { it.isNotBlank() }
+
+internal fun JsonObject.mangaProof(values: JsonObject): JsonObject? {
+    val updated = mangaText("updated_at")?.let(::updatedAtOf) ?: return null
+    return JsonObject(values + ("updated_at" to JsonPrimitive(updated.toString())))
+}

@@ -318,9 +318,8 @@ class SignedInRecorderTest {
         mal.asked.clear()
         journal.parentFile!!.deleteRecursively()
         journal.parentFile!!.writeText("no folder can be made here")
-        val end = recorder(session).recorded() as Recording.Stopped
-
-        assertEquals(listOf("journal", Halt.Storage, ListAfter.Untouched), listOf(end.at, end.halt, end.list))
+        assertEquals(Recording.NotStarted(Halt.JournalUnreadable), recorder(session).checked())
+        assertEquals(emptyList<String>(), mal.asked)
         assertEquals(emptyList<String>(), mal.writes)
     }
 

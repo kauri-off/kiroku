@@ -57,8 +57,18 @@ class MangaMutationCaptureTest {
         }
     }
 
+    @Test
+    fun `a staging directory is never a completed capture even with its marker`() {
+        val folder = example()
+        folder.resolve("$MANGA_REMOVED.204.txt").writeText("204\n")
+        val staging = temporary.root.resolve("run-fixture")
+        check(folder.renameTo(staging))
+        assertThrows(IllegalStateException::class.java) { validateMangaMutationCapture(staging) }
+    }
+
     private fun example(): File =
-        temporary.newFolder().apply {
+        temporary.root.resolve("capture-${java.util.UUID.randomUUID()}").apply {
+            check(mkdir())
             resolve(MANGA_CAPTURE_COMPLETE).createNewFile()
             for ((name, body) in mapOf(
                 MANGA_ABSENT to ABSENT,
@@ -80,6 +90,7 @@ class MangaMutationCaptureTest {
 }
 
 internal fun validateMangaMutationCapture(folder: File) {
+    check(folder.name.startsWith("capture-"))
     val files = checkNotNull(folder.listFiles()).associateBy { it.name }.toMutableMap()
     val marker = checkNotNull(files.remove(MANGA_CAPTURE_COMPLETE))
     check(Files.isRegularFile(marker.toPath(), NOFOLLOW_LINKS) && marker.length() == 0L)

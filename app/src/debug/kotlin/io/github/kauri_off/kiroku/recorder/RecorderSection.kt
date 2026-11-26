@@ -126,7 +126,7 @@ fun RecorderSection(
         SectionDetail(R.string.recorder_unavailable)
         return
     }
-    val free = !recording.busy && !recording.left
+    val free = !recording.busy && recording.listAfter?.needsRecovery != true
     SectionDetail(R.string.recorder_read_detail)
     ReadButton(R.string.recorder_suggestions, ReadCapture.Suggestions, free, onEvent)
     ReadButton(R.string.recorder_manga_list, ReadCapture.MangaList, free, onEvent)
@@ -160,9 +160,17 @@ fun RecorderSection(
                 recording.answers.toFloat() / recording.of,
                 stringResource(R.string.recorder_running, recording.answers, recording.of),
             )
-        is Recording.Removing -> Progress(null, stringResource(R.string.recorder_removing, recording.title.name))
+        is Recording.Removing -> {
+            val message =
+                if (recording.checking) {
+                    stringResource(R.string.recorder_manga_rechecking)
+                } else {
+                    stringResource(R.string.recorder_removing, recording.title.name)
+                }
+            Progress(null, message)
+        }
         Recording.Reading -> Progress(null, stringResource(R.string.recorder_reading))
-        else -> Report(report(recording), recording.left, onEvent)
+        else -> Report(report(recording), recording.listAfter, onEvent)
     }
 }
 
@@ -215,13 +223,13 @@ private fun ReadButton(
 }
 
 // The recorder's title may still be on the list: nothing new starts until it is off.
-private val Recording.left: Boolean
+private val Recording.listAfter: ListAfter?
     get() =
         when (this) {
-            is Recording.Stopped -> list == ListAfter.Left
-            is Recording.Leftover -> list == ListAfter.Left
-            is Recording.Recorded -> list == ListAfter.Left
-            else -> false
+            is Recording.Stopped -> list
+            is Recording.Leftover -> list
+            is Recording.Recorded -> list
+            else -> null
         }
 
 @Composable
@@ -285,7 +293,7 @@ private class Line(
 @Composable
 private fun Report(
     lines: List<Line>,
-    left: Boolean,
+    list: ListAfter?,
     onEvent: (RecorderEvent) -> Unit,
 ) {
     // Selectable, so the folder and the address can be copied.
@@ -304,10 +312,16 @@ private fun Report(
         }
     }
     OutlinedButton(
-        onClick = { onEvent(if (left) RecorderEvent.Remove else RecorderEvent.Dismiss) },
+        onClick = { onEvent(if (list?.needsRecovery == true) RecorderEvent.Remove else RecorderEvent.Dismiss) },
         modifier = Modifier.padding(horizontal = Spacing.l),
     ) {
-        Text(stringResource(if (left) R.string.recorder_remove_now else R.string.recorder_done))
+        val label =
+            when (list) {
+                ListAfter.Left -> R.string.recorder_remove_now
+                ListAfter.Unresolved -> R.string.recorder_manga_recheck
+                else -> R.string.recorder_done
+            }
+        Text(stringResource(label))
     }
 }
 
@@ -336,12 +350,17 @@ private fun report(recording: Recording): List<Line> =
             listOfNotNull(
                 Line(stringResource(R.string.recorder_stopped, recording.at), alarming = true),
                 Line(recording.halt.text(), alarming = true),
-                Line(stringResource(R.string.recorder_stopped_answers, recording.answers)),
+                if (recording.title.media == RecorderMedia.Anime || recording.folder != null) {
+                    Line(stringResource(R.string.recorder_stopped_answers, recording.answers))
+                } else {
+                    null
+                },
+                recording.cleanupHalt?.takeUnless { it == recording.halt }?.let { Line(it.text(), alarming = true) },
                 recording.folder?.let { Line(stringResource(R.string.recorder_folder, it.path)) },
             ) + list(recording.title, recording.list)
         is Recording.Leftover ->
             listOfNotNull(recording.halt?.let { Line(it.text(), alarming = true) }) +
-                if (recording.list == ListAfter.Left) {
+                if (recording.list != ListAfter.Removed) {
                     list(recording.title, recording.list)
                 } else {
                     listOf(Line(stringResource(R.string.recorder_leftover_removed, recording.title.name)), website(recording.title))
@@ -361,6 +380,9 @@ private fun list(
         ListAfter.Removed -> listOf(Line(stringResource(R.string.recorder_list_removed, title.name)), website(title))
         ListAfter.Differs -> listOf(Line(stringResource(R.string.recorder_list_differs, title.name), alarming = true), website(title))
         ListAfter.Left -> listOf(Line(stringResource(R.string.recorder_list_left, title.name, websiteAddress(title)), alarming = true))
+        ListAfter.Unresolved ->
+            listOf(Line(stringResource(R.string.recorder_manga_unresolved, title.name, websiteAddress(title)), alarming = true))
+        ListAfter.Absent -> listOf(Line(stringResource(R.string.recorder_manga_absent, title.name)), website(title))
     }
 
 @Composable
@@ -384,6 +406,8 @@ private fun Halt.text(): String =
         Halt.NoAnswer -> stringResource(R.string.recorder_halt_no_answer)
         Halt.Interrupted -> stringResource(R.string.recorder_halt_interrupted)
         Halt.Unconfirmed -> stringResource(R.string.recorder_manga_unconfirmed)
+        Halt.JournalUnreadable -> stringResource(R.string.recorder_halt_journal)
+        Halt.BackingOff -> stringResource(R.string.recorder_halt_backing_off)
         Halt.Storage -> stringResource(R.string.recorder_halt_storage)
         Halt.AnotherAccount -> stringResource(R.string.recorder_halt_another_account)
         Halt.StillOnTheList -> stringResource(R.string.recorder_halt_still_on_the_list)

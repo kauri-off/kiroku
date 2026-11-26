@@ -4,6 +4,7 @@ import io.github.kauri_off.kiroku.data.network.AUTHORIZATION
 import io.github.kauri_off.kiroku.data.network.NetworkFixture
 import io.github.kauri_off.kiroku.data.session.SessionFixture
 import io.github.kauri_off.kiroku.data.session.TokenGrant
+import io.github.kauri_off.kiroku.data.session.TokenReply
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -24,6 +25,7 @@ import mockwebserver3.RecordedRequest
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertThrows
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Rule
@@ -33,6 +35,7 @@ import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import java.io.File
 import java.io.IOException
+import java.time.Duration
 import java.util.concurrent.CopyOnWriteArrayList
 
 @RunWith(RobolectricTestRunner::class)
@@ -49,6 +52,7 @@ class MangaRecordingTest {
     private val root by lazy { File(folder.root, "no_backup/private-manga-mutations") }
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     private val writes = CopyOnWriteArrayList<RecordedRequest>()
+    private val requests = CopyOnWriteArrayList<RecordedRequest>()
 
     @Volatile private var values: JsonObject? = null
 
@@ -59,6 +63,7 @@ class MangaRecordingTest {
     @Before
     fun serve() {
         network.answers { request ->
+            requests += request
             if (request.method != "GET") writes += request
             override(request) ?: answer(request)
         }
@@ -222,6 +227,7 @@ class MangaRecordingTest {
 
             val stopped = recorder.state.value as Recording.Stopped
             assertEquals(Halt.Unconfirmed, stopped.halt)
+            assertEquals("manga_edit_read", stopped.at)
             assertEquals(ListAfter.Removed, stopped.list)
             assertEquals(null, values)
             assertFalse(journal.exists())
@@ -261,7 +267,7 @@ class MangaRecordingTest {
             val stay = CompletableDeferred<Unit>()
             val recorder =
                 recorder(pause = {
-                    if (writes.any { it.method == "PATCH" }) {
+                    if (writes.size == 1 && journal.readText().contains("manga_row")) {
                         afterPatch.complete(Unit)
                         stay.await()
                     }
@@ -273,6 +279,9 @@ class MangaRecordingTest {
 
             val stopped = recorder.state.value as Recording.Stopped
             assertEquals(Halt.Interrupted, stopped.halt)
+            assertEquals(null, stopped.folder)
+            assertEquals(0, stopped.answers)
+            assertTrue(root.listFiles().orEmpty().isEmpty())
             assertEquals(ListAfter.Left, stopped.list)
             assertEquals(RecorderMedia.Manga, Journal(journal).read()?.title?.media)
             assertTrue(journal.exists())
@@ -301,7 +310,7 @@ class MangaRecordingTest {
             val continueRun = CompletableDeferred<Unit>()
             val recorder =
                 recorder(pause = {
-                    if (writes.any { it.method == "PATCH" }) {
+                    if (writes.size == 1 && journal.readText().contains("manga_row")) {
                         afterPatch.complete(Unit)
                         continueRun.await()
                     }
@@ -341,8 +350,312 @@ class MangaRecordingTest {
 
             override = { null }
             recorder.remove().join()
-            assertEquals(Recording.Leftover(title, ListAfter.Removed, null), recorder.state.value)
+            val recovered = recorder.state.value as Recording.Stopped
+            assertEquals(ListAfter.Removed, recovered.list)
+            assertEquals(stopped.folder, recovered.folder)
+            assertEquals(stopped.answers, recovered.answers)
+            assertTrue(checkNotNull(recovered.folder).isDirectory)
             assertFalse(journal.exists())
+        }
+
+    @Test
+    fun `cancelling before first dispatch never deletes a row the user later adds`() =
+        runBlocking {
+            val intentWritten = CompletableDeferred<Unit>()
+            val stay = CompletableDeferred<Unit>()
+            val recorder =
+                recorder(pause = {
+                    if (journal.exists() && writes.isEmpty()) {
+                        intentWritten.complete(Unit)
+                        stay.await()
+                    }
+                })
+            val job = recorder.record(checked(recorder))
+            withTimeout(10_000) { intentWritten.await() }
+            job.cancelAndJoin()
+            values = planned
+
+            recorder()
+            assertEquals(emptyList<RecordedRequest>(), writes)
+            assertFalse(journal.exists())
+            assertEquals(planned, values)
+        }
+
+    @Test
+    fun `a definitive refusal of the first patch never deletes a subsequently added row`() =
+        runBlocking {
+            val recorder = recorder()
+            val title = checked(recorder)
+            override = { request -> if (request.method == "PATCH") MockResponse(code = 429) else null }
+            recorder.record(title).join()
+            val stopped = recorder.state.value as Recording.Stopped
+            values = planned
+            network.clock.now = network.clock.now.plusSeconds(901)
+
+            recorder()
+            assertEquals(listOf("PATCH"), writes.map { it.method })
+            assertEquals(ListAfter.Untouched, stopped.list)
+            assertFalse(journal.exists())
+            assertEquals(planned, values)
+        }
+
+    @Test
+    fun `replacement before the first dispatch retires the unspent intent`() =
+        runBlocking {
+            val intentWritten = CompletableDeferred<Unit>()
+            val continueRun = CompletableDeferred<Unit>()
+            val recorder =
+                recorder(pause = {
+                    if (journal.exists() && writes.isEmpty()) {
+                        intentWritten.complete(Unit)
+                        continueRun.await()
+                    }
+                })
+            val job = recorder.record(checked(recorder))
+            withTimeout(10_000) { intentWritten.await() }
+            session.signIn(TokenGrant(OTHER, "other-test-refresh"))
+            continueRun.complete(Unit)
+            job.join()
+            assertEquals(emptyList<RecordedRequest>(), writes)
+            assertFalse(journal.exists())
+        }
+
+    @Test
+    fun `a legacy or ambiguous intent never authorizes deleting an existing row`() =
+        runBlocking {
+            val recorder = recorder()
+            val title = checked(recorder)
+            override = { request ->
+                if (request.method == "PATCH") {
+                    values = planned
+                    response(500, """{"error":"server_error"}""")
+                } else {
+                    null
+                }
+            }
+            recorder.record(title).join()
+            val reopened = recorder()
+            assertEquals("Unresolved", (reopened.state.value as Recording.Leftover).list.name)
+            reopened.remove().join()
+            assertEquals(listOf("PATCH"), writes.map { it.method })
+            assertTrue(journal.exists())
+            assertEquals(planned, values)
+
+            values = null
+            reopened.remove().join()
+            assertEquals("Absent", (reopened.state.value as Recording.Leftover).list.name)
+            assertFalse(journal.exists())
+        }
+
+    @Test
+    fun `invalid row provenance after a successful add keeps recovery verify only`() =
+        runBlocking {
+            val recorder = recorder()
+            val title = checked(recorder)
+            override = { request ->
+                if (request.url.encodedPath.endsWith("/mangalist") && writes.size == 1) {
+                    values = JsonObject(planned + ("updated_at" to JsonPrimitive("invalid timestamp")))
+                }
+                null
+            }
+            recorder.record(title).join()
+
+            val stopped = recorder.state.value as Recording.Stopped
+            assertEquals("manga_add_read", stopped.at)
+            assertEquals(ListAfter.Unresolved, stopped.list)
+            recorder.remove().join()
+            assertEquals(listOf("PATCH"), writes.map { it.method })
+            assertTrue(journal.exists())
+        }
+
+    @Test
+    fun `a replacement row on the original account cannot inherit the recorder row proof`() =
+        runBlocking {
+            val recorder = recorder()
+            val title = checked(recorder)
+            override = { request -> if (request.method == "DELETE") MockResponse(code = 204) else null }
+            recorder.record(title).join()
+            val replacement = JsonObject(checkNotNull(values) + ("updated_at" to JsonPrimitive("2026-11-25T10:02:00Z")))
+            values = replacement
+            override = { null }
+
+            recorder.remove().join()
+            val stopped = recorder.state.value as Recording.Stopped
+            assertEquals("Unresolved", stopped.list.name)
+            assertEquals(listOf("PATCH", "PATCH", "DELETE"), writes.map { it.method })
+            assertTrue(journal.exists())
+            assertEquals(replacement, values)
+        }
+
+    @Test
+    fun `an invalid journal blocks both scenarios and is never replaced after confirmation`() =
+        runBlocking {
+            val recorder = recorder()
+            val title = checked(recorder)
+            val invalid = """{"id":478,"episodes":0,"name":"Fixture title","user":"unknown","media":"unknown"}"""
+            journal.writeText(invalid)
+
+            recorder.record(title).join()
+            assertTrue(recorder.state.value is Recording.NotStarted)
+            assertEquals(invalid, journal.readText())
+            val requestCount = requests.size
+            recorder.check(ID, RecorderMedia.Manga).join()
+            recorder.check(ID).join()
+            recorder.recordReads(ReadCapture.MangaList).join()
+            assertEquals(requestCount, requests.size)
+            assertEquals(emptyList<RecordedRequest>(), writes)
+            assertEquals(invalid, journal.readText())
+
+            check(journal.delete())
+            check(journal.mkdir())
+            recorder.check(ID, RecorderMedia.Manga).join()
+            assertTrue(recorder.state.value is Recording.NotStarted)
+            assertTrue(journal.isDirectory)
+        }
+
+    @Test
+    fun `contradictory membership or invalid media type cannot authorize a patch`() =
+        runBlocking {
+            val recorder = recorder()
+            for (invalid in listOf(json(CONTRADICTORY), response(200, EMPTY_LIST, "text/html"))) {
+                override = { null }
+                val title = checked(recorder)
+                override = { request -> invalid.takeIf { request.url.encodedPath.endsWith("/mangalist") } }
+
+                recorder.record(title).join()
+
+                assertEquals(Halt.Unexpected(200), (recorder.state.value as Recording.Stopped).halt)
+                assertEquals(emptyList<RecordedRequest>(), writes)
+                assertFalse(journal.exists())
+            }
+        }
+
+    @Test
+    fun `an error envelope after delete cannot clear recovery or publish a marker`() =
+        runBlocking {
+            val recorder = recorder()
+            val title = checked(recorder)
+            override = { request ->
+                if (request.url.encodedPath.endsWith("/mangalist") && writes.any { it.method == "DELETE" }) json(CONTRADICTORY) else null
+            }
+
+            recorder.record(title).join()
+
+            val stopped = recorder.state.value as Recording.Stopped
+            assertEquals(MANGA_REMOVED_READ, stopped.at)
+            assertEquals(ListAfter.Left, stopped.list)
+            assertTrue(journal.exists())
+            assertFalse(checkNotNull(stopped.folder).resolve(MANGA_CAPTURE_COMPLETE).exists())
+            recorder.remove().join()
+            assertTrue(journal.exists())
+            assertEquals(listOf("PATCH", "PATCH", "DELETE"), writes.map { it.method })
+        }
+
+    @Test
+    fun `expiry discards the affected staging directory and preserves the proved recovery and older completed run`() =
+        runBlocking {
+            val recorder = recorder()
+            recorder.record(checked(recorder)).join()
+            val earlier = (recorder.state.value as Recording.Recorded).folder
+            val title = checked(recorder)
+            fixture.answer = { TokenReply.Answer(400, "") }
+            override = { request ->
+                if (request.method == "PATCH" && form(request)["status"] == "reading") MockResponse(code = 401) else null
+            }
+
+            recorder.record(title).join()
+
+            val stopped = recorder.state.value as Recording.Stopped
+            assertEquals(Halt.NotSignedIn, stopped.halt)
+            assertEquals(ListAfter.Left, stopped.list)
+            assertEquals(null, stopped.folder)
+            assertEquals(listOf(earlier), root.listFiles().orEmpty().toList())
+            assertTrue(journal.exists())
+            validateMangaMutationCapture(earlier)
+        }
+
+    @Test
+    fun `a refusal takes precedence when saving the reply fails and suppresses further requests until retry after`() =
+        runBlocking {
+            val recorder =
+                recorder { file, contents ->
+                    if (contents == "429\n") throw IOException("fixture failure saving refusal")
+                    file.writeText(contents)
+                }
+            val title = checked(recorder)
+            override = { request ->
+                if (request.method == "PATCH" && form(request)["status"] == "reading") {
+                    MockResponse
+                        .Builder()
+                        .code(429)
+                        .addHeader("Retry-After", "1800")
+                        .build()
+                } else {
+                    null
+                }
+            }
+
+            recorder.record(title).join()
+
+            val stopped = recorder.state.value as Recording.Stopped
+            assertEquals(Halt.Refused(429), stopped.halt)
+            assertEquals(ListAfter.Left, stopped.list)
+            assertTrue(journal.exists())
+            assertEquals(Duration.ofMinutes(30), network.http.refusedFor())
+            val requestCount = requests.size
+            assertEquals("PATCH", requests.last().method)
+            recorder.remove().join()
+            assertEquals(requestCount, requests.size)
+            val backingOff = recorder.state.value as Recording.Stopped
+            assertEquals(Halt.BackingOff, backingOff.cleanupHalt)
+            assertEquals(stopped.folder, backingOff.folder)
+
+            network.clock.now = network.clock.now.plusSeconds(1801)
+            override = { null }
+            recorder.remove().join()
+            val recovered = recorder.state.value as Recording.Stopped
+            assertEquals(ListAfter.Removed, recovered.list)
+            assertEquals(stopped.folder, recovered.folder)
+            assertEquals(stopped.answers, recovered.answers)
+            assertFalse(journal.exists())
+        }
+
+    @Test
+    fun `a portal forbidden response does not start shared back off`() =
+        runBlocking {
+            val recorder = recorder()
+            val title = checked(recorder)
+            override = { request -> if (request.method == "PATCH") response(403, "<html>Portal</html>", "text/html") else null }
+
+            recorder.record(title).join()
+
+            val stopped = recorder.state.value as Recording.Stopped
+            assertEquals(Halt.Unexpected(403), stopped.halt)
+            assertEquals(Duration.ZERO, network.http.refusedFor())
+            assertEquals("Unresolved", stopped.list.name)
+            assertEquals(listOf("PATCH"), writes.map { it.method })
+        }
+
+    @Test
+    fun `marker creation failure keeps a usable partial path and publishes nothing`(): Unit =
+        runBlocking {
+            val recorder =
+                recorder { file, contents ->
+                    if (writes.lastOrNull()?.method == "DELETE" && contents.contains("present")) {
+                        check(file.parentFile!!.resolve(MANGA_CAPTURE_COMPLETE).mkdir())
+                    }
+                    file.writeText(contents)
+                }
+            recorder.record(checked(recorder)).join()
+
+            val stopped = recorder.state.value as Recording.Stopped
+            assertEquals(Halt.Storage, stopped.halt)
+            assertEquals(ListAfter.Removed, stopped.list)
+            assertEquals(MangaRecordingAnswers, stopped.answers)
+            val partial = checkNotNull(stopped.folder)
+            assertTrue(partial.isDirectory)
+            assertFalse(root.listFiles().orEmpty().any { it.name.startsWith("capture-") })
+            assertThrows(IllegalStateException::class.java) { validateMangaMutationCapture(partial) }
         }
 
     private suspend fun recorder(
@@ -380,7 +693,7 @@ class MangaRecordingTest {
                         JsonObject(
                             mapOf(
                                 "node" to JsonObject(mapOf("id" to JsonPrimitive(ID), "title" to JsonPrimitive("private-fixture"))),
-                                "list_status" to row,
+                                "list_status" to JsonObject(row + ("updated_at" to (row["updated_at"] ?: JsonPrimitive(UPDATED)))),
                             ),
                         )
                     }
@@ -409,11 +722,17 @@ class MangaRecordingTest {
         }
     }
 
-    private fun json(body: String): MockResponse =
+    private fun json(body: String): MockResponse = response(200, body)
+
+    private fun response(
+        code: Int,
+        body: String,
+        mediaType: String = "application/json",
+    ): MockResponse =
         MockResponse
             .Builder()
-            .code(200)
-            .addHeader("Content-Type", "application/json")
+            .code(code)
+            .addHeader("Content-Type", mediaType)
             .body(body)
             .build()
 
@@ -426,6 +745,9 @@ class MangaRecordingTest {
 
     private companion object {
         const val ID = 478L
+        const val UPDATED = "2026-11-25T10:01:00Z"
+        const val CONTRADICTORY = """{"error":"server_error","data":[],"paging":{}}"""
+        const val EMPTY_LIST = """{"data":[],"paging":{}}"""
         const val ACCESS = "manga-test-access"
         const val OTHER = "manga-replacement-test-access"
     }

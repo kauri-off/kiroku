@@ -62,4 +62,10 @@
     <string name="recorder_confirm_manga_writes">Kiroku добавит эту мангу в ваш список на MyAnimeList, изменит её статус, число прочитанных глав и томов и оценку, затем удалит тайтл. Список проверяется после каждого изменения</string>
     <string name="recorder_manga_unconfirmed">Ответы MyAnimeList не подтвердили изменение в списке манги</string>
     <string name="recorder_halt_interrupted">Запись прервана</string>
+    <string name="recorder_manga_rechecking">Проверяем ваш список манги на MyAnimeList</string>
+    <string name="recorder_manga_recheck">Проверить снова</string>
+    <string name="recorder_manga_unresolved">Не удалось подтвердить, что «%1$s» — временная запись. Проверьте тайтл на сайте, затем повторите проверку здесь. На сайте: %2$s</string>
+    <string name="recorder_manga_absent">Тайтла «%1$s» нет в вашем списке</string>
+    <string name="recorder_halt_journal">Не удалось прочитать файл восстановления. Запись приостановлена, пока файл недоступен</string>
+    <string name="recorder_halt_backing_off">MyAnimeList отклоняет запросы. Попробуйте позже</string>
 </resources>
