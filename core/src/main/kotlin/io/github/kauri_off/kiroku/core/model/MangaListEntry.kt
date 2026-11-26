@@ -32,5 +32,5 @@ data class MangaListEntry(
 data class MangaListSnapshot(
     val owner: SignInId,
     val entries: List<MangaListEntry>,
-    val syncedAt: Instant,
+    val syncedAt: Instant?,
 )

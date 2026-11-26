@@ -3,13 +3,16 @@ package io.github.kauri_off.kiroku.data.manga
 import io.github.kauri_off.kiroku.core.error.DataError
 import io.github.kauri_off.kiroku.core.error.DataException
 import io.github.kauri_off.kiroku.core.error.Outcome
+import io.github.kauri_off.kiroku.core.model.MangaId
 import io.github.kauri_off.kiroku.core.model.MangaListEntry
 import io.github.kauri_off.kiroku.core.model.MangaListSnapshot
 import io.github.kauri_off.kiroku.core.model.Session
 import io.github.kauri_off.kiroku.core.model.SessionOwner
 import io.github.kauri_off.kiroku.core.model.SignInId
 import io.github.kauri_off.kiroku.core.model.owner
-import io.github.kauri_off.kiroku.core.repository.MangaListReader
+import io.github.kauri_off.kiroku.core.repository.MangaListEdit
+import io.github.kauri_off.kiroku.core.repository.MangaListEditResult
+import io.github.kauri_off.kiroku.core.repository.MangaListEditor
 import io.github.kauri_off.kiroku.data.db.KirokuDatabase
 import io.github.kauri_off.kiroku.data.db.MangaListStateRow
 import io.github.kauri_off.kiroku.data.db.UnreadableRow
@@ -23,8 +26,16 @@ import io.github.kauri_off.kiroku.data.session.MalSession
 import io.github.kauri_off.kiroku.data.session.fileRetry
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.catch
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.emitAll
+import kotlinx.coroutines.flow.flowOn
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.onStart
+import kotlinx.coroutines.flow.transformLatest
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import java.time.Clock
@@ -37,6 +48,14 @@ internal fun interface MangaListSource {
     ): Outcome<List<MangaListEntry>>?
 }
 
+internal fun interface MangaListWriter {
+    suspend fun patch(
+        owner: SignInId,
+        id: MangaId,
+        changes: MangaListEdit,
+    ): Outcome<Unit>
+}
+
 class RoomMangaList internal constructor(
     database: () -> KirokuDatabase,
     private val session: MalSession,
@@ -44,7 +63,17 @@ class RoomMangaList internal constructor(
     private val clock: Clock,
     private val unexpected: (Throwable) -> Unit,
     private val retired: (SignInId) -> Boolean = { false },
-) : MangaListReader {
+    private val writer: MangaListWriter? = null,
+) : MangaListEditor {
+    private constructor(
+        database: () -> KirokuDatabase,
+        session: MalSession,
+        source: MalMangaListSource,
+        clock: Clock,
+        unexpected: (Throwable) -> Unit,
+        retired: (SignInId) -> Boolean,
+    ) : this(database, session, source, clock, unexpected, retired, source)
+
     constructor(
         database: () -> KirokuDatabase,
         session: MalSession,
@@ -56,72 +85,177 @@ class RoomMangaList internal constructor(
     private val database by lazy(database)
     private val dao get() = database.mangaList()
 
-    private data class RefreshQueue(
-        val owner: SignInId,
-        val lock: Mutex = Mutex(),
-    )
+    private class OwnerQueue {
+        val queue = MangaListQueue()
+        var users = 0
+    }
 
-    private var syncing: RefreshQueue? = null
+    private val queues = mutableMapOf<SignInId, OwnerQueue>()
 
     override suspend fun stored(owner: SignInId): Outcome<MangaListSnapshot?> =
         whileOwner(owner) {
             val snapshot =
                 database.transaction {
                     dao.state(owner.value)?.let { state ->
-                        MangaListSnapshot(owner, dao.entries(owner.value).map { it.toEntry() }, instantOf(state.syncedAt))
+                        val at = instantOf(state.syncedAt).takeUnless { state.needsRefresh }
+                        MangaListSnapshot(owner, dao.entries(owner.value).map { it.toEntry() }, at)
                     }
                 }
             Outcome.Success(snapshot)
         }
 
+    @OptIn(ExperimentalCoroutinesApi::class)
+    override fun observe(owner: SignInId): Flow<Outcome<MangaListSnapshot?>> =
+        session
+            .observeOwner()
+            .transformLatest { current ->
+                if (current.id != owner || retired(owner)) {
+                    emit(Outcome.Failure(DataError.ListEnded))
+                } else {
+                    val changes = database.invalidationTracker.createFlow("manga_list_state", "manga_list_entry")
+                    emitAll(changes.map { stored(owner) })
+                }
+            }.onStart {
+                if (session.currentSession() == null) emit(Outcome.Failure(DataError.StorageError))
+            }.catch {
+                if (it !is Exception || it is CancellationException) throw it
+                unexpected(UnreadableRow(it))
+                emit(Outcome.Failure(DataError.StorageError))
+            }.distinctUntilChanged()
+            .flowOn(Dispatchers.IO)
+
     override suspend fun refresh(
         owner: SignInId,
         canDispatch: () -> Boolean,
     ): Outcome<MangaListSnapshot>? =
-        withContext(Dispatchers.IO) {
-            val queue =
-                whileOwner(owner) {
-                    val current = syncing?.takeIf { it.owner == owner } ?: RefreshQueue(owner).also { syncing = it }
-                    Outcome.Success(current)
-                }
-            val lock =
-                when (queue) {
-                    is Outcome.Failure -> return@withContext queue
-                    is Outcome.Success -> queue.value.lock
-                }
-            lock.withLock {
-                val current = session.currentSession() ?: return@withLock Outcome.Failure(DataError.StorageError)
-                if (current.owner != owner) return@withLock Outcome.Failure(DataError.ListEnded)
-                if (current is Session.Expired) return@withLock Outcome.Failure(DataError.SessionExpired)
-                if (!canDispatch()) return@withLock null
-                val entries =
-                    when (val answer = fetch(owner, canDispatch)) {
-                        null -> return@withLock whileOwner(owner) { Outcome.Success(null) }.let { it as? Outcome.Failure }
-                        is Outcome.Failure ->
-                            return@withLock whileOwner(owner) {
-                                if (answer.error == DataError.ListEnded && session.currentSession() is Session.Expired) {
-                                    Outcome.Failure(DataError.SessionExpired)
-                                } else {
-                                    answer
-                                }
-                            }
-                        is Outcome.Success -> answer.value.sortedBy { it.id.value }
-                    }
-                val duplicate = (1 until entries.size).any { entries[it - 1].id == entries[it].id }
-                if (duplicate) return@withLock whileOwner(owner) { Outcome.Failure(DataError.ServerError) }
+        queued(owner) { queue ->
+            queue.lock.withLock { withContext(Dispatchers.IO) { download(owner, canDispatch) } }
+        }
 
+    override suspend fun edit(
+        owner: SignInId,
+        id: MangaId,
+        changes: MangaListEdit,
+        retryFrom: MangaListEntry?,
+    ): MangaListEditResult {
+        if (id.value <= 0) return MangaListEditResult.Failed(DataError.NotFound)
+        if (changes.isEmpty || writer == null || (retryFrom != null && retryFrom.id != id)) {
+            return MangaListEditResult.Failed(DataError.InvalidRequest)
+        }
+        return queued(owner) { queue ->
+            queue.edit(id) { withContext(Dispatchers.IO) { save(owner, id, changes, retryFrom, writer) } }
+        }
+    }
+
+    private suspend fun <T> queued(
+        owner: SignInId,
+        run: suspend (MangaListQueue) -> T,
+    ): T {
+        val active = synchronized(queues) { queues.getOrPut(owner, ::OwnerQueue).also { it.users++ } }
+        try {
+            return run(active.queue)
+        } finally {
+            synchronized(queues) {
+                if (--active.users == 0) queues.remove(owner)
+            }
+        }
+    }
+
+    private suspend fun save(
+        owner: SignInId,
+        id: MangaId,
+        changes: MangaListEdit,
+        retryFrom: MangaListEntry?,
+        writer: MangaListWriter,
+    ): MangaListEditResult {
+        val prepared =
+            whileOwner<MangaListEdit?>(owner) {
+                if (!session.isSignedInAs(owner)) return@whileOwner Outcome.Failure(DataError.SessionExpired)
+                database.transaction {
+                    val state = dao.state(owner.value) ?: return@transaction Outcome.Failure(DataError.NotFound)
+                    if (state.needsRefresh) return@transaction Outcome.Success(null)
+                    val entry = dao.entry(owner.value, id.value) ?: return@transaction Outcome.Failure(DataError.NotFound)
+                    val patch = if (retryFrom == null) changes else changes.remainingAfter(retryFrom, entry.toEntry())
+                    if (!patch.isEmpty) dao.requireRefresh(owner.value, true)
+                    Outcome.Success(patch)
+                }
+            }
+        val patch =
+            when (prepared) {
+                is Outcome.Failure -> return MangaListEditResult.Failed(prepared.error)
+                is Outcome.Success -> prepared.value ?: return MangaListEditResult.RefreshRequired
+            }
+        if (patch.isEmpty) return MangaListEditResult.Discarded
+
+        val sent = checkNotNull(remote { writer.patch(owner, id, patch) })
+        val error = (sent as? Outcome.Failure)?.error
+        if (error != null && !error.mayHaveSaved()) {
+            val cleared =
                 whileOwner(owner) {
-                    val at = clock.instant()
-                    database.transaction {
-                        dao.deleteAllBut(owner.value)
-                        dao.saveState(MangaListStateRow(owner.value, at.toColumn()))
-                        dao.deleteEntries(owner.value)
-                        dao.insertEntries(entries.map { it.toRow(owner) })
-                    }
-                    Outcome.Success(MangaListSnapshot(owner, entries, at))
+                    dao.requireRefresh(owner.value, false)
+                    Outcome.Success(Unit)
+                }
+            return when ((cleared as? Outcome.Failure)?.error) {
+                DataError.ListEnded -> MangaListEditResult.Failed(DataError.ListEnded)
+                DataError.StorageError -> MangaListEditResult.Uncertain(error, needsRefresh = true)
+                else -> MangaListEditResult.Failed(error)
+            }
+        }
+
+        return when (val readBack = checkNotNull(download(owner) { true })) {
+            is Outcome.Failure ->
+                if (readBack.error == DataError.ListEnded) {
+                    MangaListEditResult.Failed(readBack.error)
+                } else {
+                    MangaListEditResult.Uncertain(error ?: readBack.error, needsRefresh = true)
+                }
+            is Outcome.Success -> {
+                val entry = readBack.value.entries.firstOrNull { it.id == id }
+                when {
+                    error != null -> MangaListEditResult.Uncertain(error, needsRefresh = false)
+                    entry == null -> MangaListEditResult.Failed(DataError.NotFound)
+                    else -> MangaListEditResult.Confirmed(entry)
                 }
             }
         }
+    }
+
+    private suspend fun download(
+        owner: SignInId,
+        canDispatch: () -> Boolean,
+    ): Outcome<MangaListSnapshot>? {
+        val current = session.currentSession() ?: return Outcome.Failure(DataError.StorageError)
+        if (current.owner != owner || retired(owner)) return Outcome.Failure(DataError.ListEnded)
+        if (current is Session.Expired) return Outcome.Failure(DataError.SessionExpired)
+        if (!canDispatch()) return null
+        val answer = remote { source.fetch(owner, canDispatch) }
+        val entries =
+            when (answer) {
+                null -> return whileOwner(owner) { Outcome.Success(null) } as? Outcome.Failure
+                is Outcome.Failure ->
+                    return whileOwner(owner) {
+                        if (answer.error == DataError.ListEnded && session.currentSession() is Session.Expired) {
+                            Outcome.Failure(DataError.SessionExpired)
+                        } else {
+                            answer
+                        }
+                    }
+                is Outcome.Success -> answer.value.sortedBy { it.id.value }
+            }
+        val duplicate = (1 until entries.size).any { entries[it - 1].id == entries[it].id }
+        if (duplicate) return whileOwner(owner) { Outcome.Failure(DataError.ServerError) }
+
+        return whileOwner(owner) {
+            val at = clock.instant()
+            database.transaction {
+                dao.deleteAllBut(owner.value)
+                dao.saveState(MangaListStateRow(owner.value, at.toColumn()))
+                dao.deleteEntries(owner.value)
+                dao.insertEntries(entries.map { it.toRow(owner) })
+            }
+            Outcome.Success(MangaListSnapshot(owner, entries, at))
+        }
+    }
 
     suspend fun sweepRetired(owner: SessionOwner) {
         var attempt = 0
@@ -147,12 +281,9 @@ class RoomMangaList internal constructor(
 
     private suspend fun forget(owner: SignInId?) = database.transaction { dao.deleteAllBut(owner?.value) }
 
-    private suspend fun fetch(
-        owner: SignInId,
-        canDispatch: () -> Boolean,
-    ): Outcome<List<MangaListEntry>>? =
+    private suspend fun <T> remote(operation: suspend () -> Outcome<T>?): Outcome<T>? =
         try {
-            source.fetch(owner, canDispatch)
+            operation()
         } catch (e: CancellationException) {
             throw e
         } catch (e: DataException) {
@@ -188,3 +319,6 @@ class RoomMangaList internal constructor(
             }
         }
 }
+
+private fun DataError.mayHaveSaved(): Boolean =
+    this == DataError.ServerError || this == DataError.NoConnection || this == DataError.StorageError

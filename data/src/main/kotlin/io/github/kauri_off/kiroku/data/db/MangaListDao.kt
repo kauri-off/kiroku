@@ -18,6 +18,7 @@ import io.github.kauri_off.kiroku.core.model.Titles
 internal data class MangaListStateRow(
     @PrimaryKey val owner: String,
     @ColumnInfo(name = "synced_at") val syncedAt: Long,
+    @ColumnInfo(name = "needs_refresh", defaultValue = "0") val needsRefresh: Boolean = false,
 )
 
 @Entity(
@@ -82,6 +83,18 @@ internal interface MangaListDao {
 
     @Query("SELECT * FROM manga_list_entry WHERE owner = :owner ORDER BY manga_id")
     suspend fun entries(owner: String): List<MangaListEntryRow>
+
+    @Query("SELECT * FROM manga_list_entry WHERE owner = :owner AND manga_id = :id")
+    suspend fun entry(
+        owner: String,
+        id: Long,
+    ): MangaListEntryRow?
+
+    @Query("UPDATE manga_list_state SET needs_refresh = :needed WHERE owner = :owner")
+    suspend fun requireRefresh(
+        owner: String,
+        needed: Boolean,
+    )
 
     @Query("DELETE FROM manga_list_entry WHERE owner = :owner")
     suspend fun deleteEntries(owner: String)

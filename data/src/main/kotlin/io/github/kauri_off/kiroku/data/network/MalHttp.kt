@@ -117,9 +117,10 @@ class MalHttp(
         anotherUsersList: Boolean = false,
         maySendRead: (() -> Boolean)? = null,
         firstRead: (() -> ReadAdmission)? = null,
+        maySendWrite: (() -> Boolean)? = null,
         request: suspend () -> T,
     ): MalAnswer<T> {
-        val sends = Sends(limit = 1 + repeatReadsAfter.size, maySendRead = maySendRead, firstRead = firstRead)
+        val sends = Sends(limit = 1 + repeatReadsAfter.size, maySendRead = maySendRead, firstRead = firstRead, maySendWrite = maySendWrite)
         return withContext(io + calling.asContextElement(sends)) { asked(sends, anotherUsersList, request) }
     }
 
@@ -159,7 +160,7 @@ class MalHttp(
             answered(e.code(), e.response()?.headers(), body, anotherUsersList)
         } catch (e: ReadDeferred) {
             throw e
-        } catch (_: ReadOwnerEnded) {
+        } catch (_: RequestOwnerEnded) {
             Tried(MalAnswer.Failed(DataError.ListEnded))
         } catch (e: NotSentAgain) {
             e.status?.let { answered(it, null, body = null, anotherUsersList = false) } ?: unanswered(e.failure)

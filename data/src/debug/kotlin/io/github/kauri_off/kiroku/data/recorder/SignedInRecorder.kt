@@ -7,7 +7,7 @@ import io.github.kauri_off.kiroku.data.network.AUTHORIZATION
 import io.github.kauri_off.kiroku.data.network.MalFields
 import io.github.kauri_off.kiroku.data.network.MalHttp
 import io.github.kauri_off.kiroku.data.network.NotSentAgain
-import io.github.kauri_off.kiroku.data.network.ReadOwnerEnded
+import io.github.kauri_off.kiroku.data.network.RequestOwnerEnded
 import io.github.kauri_off.kiroku.data.network.Sends
 import io.github.kauri_off.kiroku.data.network.bearer
 import io.github.kauri_off.kiroku.data.session.Attempt
@@ -625,7 +625,7 @@ class SignedInRecorder internal constructor(
                             }
                         Attempt.Answered(Outcome.Success(answer))
                     }
-                } catch (_: ReadOwnerEnded) {
+                } catch (_: RequestOwnerEnded) {
                     Attempt.Answered(Outcome.Failure(DataError.ListEnded))
                 } catch (limited: NotSentAgain) {
                     val status = limited.status

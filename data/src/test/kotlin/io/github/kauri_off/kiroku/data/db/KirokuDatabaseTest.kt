@@ -368,6 +368,9 @@ class KirokuDatabaseTest {
                     val kept = connection.named(table).map { row -> row.filterKeys { it in rows.first() } }
                     assertEquals("$version: $table", rows, kept)
                 }
+                if (version == 9) {
+                    assertEquals(0L, connection.named("manga_list_state").single()["needs_refresh"])
+                }
                 if (version < 7) {
                     assertTrue(connection.named("title_details").all { it["recommendations_include_adult"] == 0L })
                 }
@@ -641,6 +644,7 @@ class KirokuDatabaseTest {
                 7 to "821cd60397be73230eb12dd46d857650",
                 8 to "1749ab713302e239be8e5228bb07223b",
                 9 to "81a82b9f70d2c5bbe7b24416c50468a9",
+                10 to "5d758a3800fabcb043fd9a48686c97c8",
             )
     }
 }

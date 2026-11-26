@@ -1,9 +1,13 @@
 package io.github.kauri_off.kiroku.data.manga
 
 import io.github.kauri_off.kiroku.core.error.Outcome
+import io.github.kauri_off.kiroku.core.model.MangaId
 import io.github.kauri_off.kiroku.core.model.MangaListEntry
 import io.github.kauri_off.kiroku.core.model.MangaReadingStatus
 import io.github.kauri_off.kiroku.core.model.SignInId
+import io.github.kauri_off.kiroku.core.repository.MangaListEdit
+import io.github.kauri_off.kiroku.core.repository.MangaListStatus
+import io.github.kauri_off.kiroku.core.repository.readingStatus
 import io.github.kauri_off.kiroku.data.list.updatedAtOf
 import io.github.kauri_off.kiroku.data.network.MalHttp
 import io.github.kauri_off.kiroku.data.network.ReadAdmission
@@ -23,8 +27,19 @@ import kotlinx.serialization.json.jsonObject
 internal class MalMangaListSource(
     private val http: MalHttp,
     private val session: MalSession,
-) : MangaListSource {
+) : MangaListSource,
+    MangaListWriter {
     private val list = MalMangaList(http, session)
+
+    override suspend fun patch(
+        owner: SignInId,
+        id: MangaId,
+        changes: MangaListEdit,
+    ): Outcome<Unit> =
+        when (val answer = list.patch(id, changes, owner)) {
+            is Outcome.Failure -> answer
+            is Outcome.Success -> Outcome.Success(Unit)
+        }
 
     override suspend fun fetch(
         owner: SignInId,
@@ -72,7 +87,7 @@ private fun MangaListRow.toEntry(repairs: MutableSet<String>): MangaListEntry {
         val value = values[key]?.takeUnless { it is JsonNull } ?: return null
         return parse(value).also { if (it == null) repairs += "list_status.$key" }
     }
-    if (MangaListStatus.entries.none { it.code == statusCode }) repairs += "list_status.status"
+    if (MangaListStatus.entries.none { it.readingStatus.code == statusCode }) repairs += "list_status.status"
     return MangaListEntry(
         id = id,
         titles = manga.titles.copy(synonyms = synonyms),

@@ -49,7 +49,7 @@ abstract class KirokuDatabase : RoomDatabase() {
 
     companion object {
         const val NAME = "kiroku.db"
-        const val VERSION = 9
+        const val VERSION = 10
 
         val migrations: List<Migration> =
             listOf(
@@ -126,6 +126,9 @@ abstract class KirokuDatabase : RoomDatabase() {
                             "`updated_at` INTEGER, PRIMARY KEY(`owner`, `manga_id`), FOREIGN KEY(`owner`) " +
                             "REFERENCES `manga_list_state`(`owner`) ON UPDATE NO ACTION ON DELETE CASCADE )",
                     )
+                },
+                migration(9, 10) {
+                    execSQL("ALTER TABLE `manga_list_state` ADD COLUMN `needs_refresh` INTEGER NOT NULL DEFAULT 0")
                 },
             )
 

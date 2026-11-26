@@ -332,6 +332,7 @@ Not to forget:
 - [x] Standalone manga entry edit sheet.
 - [x] Switch between Anime and Manga in My list.
 - [ ] Edit status, chapter and volume progress, and score on the personal manga list.
+  - [x] Owner-bound edits and read-back reconciliation.
 - [ ] Remove entries from the personal manga list.
 - [x] Delete individual recent searches.
 - [x] Open anime from MyAnimeList links pasted in Search.
