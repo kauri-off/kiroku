@@ -105,6 +105,8 @@ internal sealed interface MangaListEvent {
 
     data object Refresh : MangaListEvent
 
+    data object Retry : MangaListEvent
+
     data object StartFilter : MangaListEvent
 
     data object EndFilter : MangaListEvent
@@ -187,7 +189,7 @@ internal fun MangaListBody(
                 if (state.sessionExpired) {
                     ScreenState.Empty(stringResource(content.error.message()))
                 } else {
-                    errorState(content.error, refresh)
+                    errorState(content.error) { onEvent(MangaListEvent.Retry) }
                 },
                 body,
             )

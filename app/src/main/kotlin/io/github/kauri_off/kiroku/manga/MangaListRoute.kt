@@ -58,6 +58,7 @@ internal fun mangaListPane(
         when (it) {
             MangaListEvent.SignIn -> onSignIn()
             MangaListEvent.Refresh -> list.refresh()
+            MangaListEvent.Retry -> list.retry()
             is MangaListEvent.Edit ->
                 loaded.owner?.let { owner ->
                     if (ready != null) editor?.open(owner, it.entry.id, it.entry.titles.preferred(ready.language), origin)

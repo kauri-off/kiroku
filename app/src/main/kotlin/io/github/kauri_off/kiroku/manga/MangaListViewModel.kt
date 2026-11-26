@@ -148,7 +148,14 @@ internal class MangaListViewModel(
     fun forDisplay(state: MangaListState): MangaListState =
         if (state.owner == controls.value.owner) state.copy(typed = controls.value.filter) else state
 
-    fun refresh() = read(force = true)
+    fun refresh() {
+        if (loads.isShowing && session.value is Session.SignedIn) {
+            page.value = page.value.copy(refreshing = true)
+        }
+        read(force = true)
+    }
+
+    fun retry() = read(force = true)
 
     fun control(
         owner: SignInId,
@@ -254,10 +261,11 @@ internal class MangaListViewModel(
                     page.value = Page(error = stored.error)
                     return@launch
                 }
-                page.value = page.value.copy(snapshot = snapshot, error = null, refreshing = false)
+                page.value = page.value.copy(snapshot = snapshot, error = null)
                 if (!loads.isShowing) return@launch
                 if (session.value is Session.Expired) {
-                    if (snapshot == null) page.value = Page(error = DataError.SessionExpired)
+                    page.value =
+                        if (snapshot == null) Page(error = DataError.SessionExpired) else page.value.copy(refreshing = false)
                     return@launch
                 }
                 val forced = refreshPending
@@ -265,7 +273,6 @@ internal class MangaListViewModel(
                 if (!forced && !recovering && !listStale(snapshot?.syncedAt, clock.instant())) return@launch
                 refreshPending = false
                 recoveryPending = false
-                page.value = page.value.copy(snapshot = snapshot, refreshing = true)
                 coveredDuringRefresh = false
                 val result = lists.refresh(owner) { loads.isShowing }
                 ensureActive()
@@ -274,7 +281,6 @@ internal class MangaListViewModel(
                 if (result == null) {
                     refreshPending = refreshPending || forced
                     recoveryPending = recoveryPending || recovering
-                    page.value = page.value.copy(snapshot = snapshot, error = null, refreshing = false)
                     read()
                     return@launch
                 }
