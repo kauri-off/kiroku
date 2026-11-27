@@ -1,5 +1,7 @@
 package io.github.kauri_off.kiroku.title
 
+import android.graphics.Color
+import android.os.Build
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
@@ -27,6 +29,7 @@ import coil3.request.ImageRequest
 import coil3.request.SuccessResult
 import io.github.kauri_off.kiroku.core.error.Outcome
 import io.github.kauri_off.kiroku.core.fixtures.FixtureAnime
+import io.github.kauri_off.kiroku.core.link.Link
 import io.github.kauri_off.kiroku.core.model.MangaId
 import io.github.kauri_off.kiroku.core.model.SessionOwner
 import io.github.kauri_off.kiroku.core.model.TitleLanguage
@@ -43,7 +46,12 @@ import io.github.kauri_off.kiroku.manga.MangaTitleRoute
 import io.github.kauri_off.kiroku.manga.MangaTitleSummary
 import io.github.kauri_off.kiroku.manga.mangaFixture
 import io.github.kauri_off.kiroku.screenshots.RemoteImages
+import io.github.kauri_off.kiroku.shell.AppRoute
 import io.github.kauri_off.kiroku.shell.ShellMessages
+import io.github.kauri_off.kiroku.shell.ShellNavigator
+import io.github.kauri_off.kiroku.shell.linkedPage
+import io.github.kauri_off.kiroku.shell.openLink
+import io.github.kauri_off.kiroku.shell.rememberShellNavigator
 import io.github.kauri_off.kiroku.wiring.AppGraph
 import io.github.kauri_off.kiroku.wiring.TestGraph
 import kotlinx.coroutines.CompletableDeferred
@@ -199,7 +207,8 @@ class TitleCoverTest {
     }
 
     @Test
-    @Config(sdk = [35])
+    @Config(sdk = [30, 35])
+    @Suppress("DEPRECATION")
     fun theDialogSystemBarIconsFollowTheAppTheme() {
         val dark = mutableStateOf(false)
         show {
@@ -215,11 +224,42 @@ class TitleCoverTest {
                 val controller = WindowCompat.getInsetsController(window, window.decorView)
                 assertEquals(expected, controller.isAppearanceLightStatusBars)
                 assertEquals(expected, controller.isAppearanceLightNavigationBars)
+                if (Build.VERSION.SDK_INT == 30) {
+                    assertEquals(Color.TRANSPARENT, window.navigationBarColor)
+                    assertTrue(window.isNavigationBarContrastEnforced)
+                }
             }
         }
         assertLightAppearance(true)
         compose.runOnIdle { dark.value = true }
         assertLightAppearance(false)
+    }
+
+    @Test
+    fun replacingATitleAtTheSameDepthDismissesItsCoverDuringTheTransition() {
+        val graph = TestGraph.over(scope)
+        val first = Link.Title(FixtureAnime.exactToWatch.id)
+        val second = Link.Title(FixtureAnime.prequel.id)
+        lateinit var navigator: ShellNavigator
+        show {
+            navigator = rememberShellNavigator(linkedPage(first))
+            AppRoute(graph, navigator)
+        }
+        val cover = hasContentDescription("Enlarge cover")
+        compose.waitUntil { compose.onAllNodes(cover).fetchSemanticsNodes().isNotEmpty() }
+        compose.onNode(cover).performClick()
+        compose.onNode(isDialog()).assertExists()
+        compose.mainClock.autoAdvance = false
+        try {
+            compose.runOnUiThread { navigator.openLink(second) }
+            repeat(6) {
+                compose.mainClock.advanceTimeByFrame()
+                compose.waitForIdle()
+            }
+            compose.onNode(isDialog()).assertDoesNotExist()
+        } finally {
+            compose.mainClock.autoAdvance = true
+        }
     }
 
     @Test

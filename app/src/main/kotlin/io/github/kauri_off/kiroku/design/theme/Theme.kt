@@ -105,12 +105,24 @@ fun ComponentActivity.setKirokuContent(
     }
 }
 
+@Suppress("DEPRECATION")
 @Composable
 internal fun DialogSystemBarAppearance() {
     val view = LocalView.current
     val window = (view.parent as? DialogWindowProvider)?.window ?: return
     val dark = LocalDarkTheme.current
+    val scrim =
+        MaterialTheme.colorScheme.surfaceContainer
+            .copy(alpha = NAVIGATION_SCRIM_ALPHA)
+            .toArgb()
     SideEffect {
+        window.statusBarColor = Color.TRANSPARENT
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            window.navigationBarColor = Color.TRANSPARENT
+            window.isNavigationBarContrastEnforced = true
+        } else {
+            window.navigationBarColor = scrim
+        }
         WindowCompat.getInsetsController(window, view).apply {
             isAppearanceLightStatusBars = !dark
             isAppearanceLightNavigationBars = !dark
