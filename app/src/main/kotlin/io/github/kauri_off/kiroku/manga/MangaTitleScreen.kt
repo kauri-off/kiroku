@@ -26,8 +26,6 @@ import io.github.kauri_off.kiroku.core.model.MangaFormat
 import io.github.kauri_off.kiroku.core.model.MangaListEntry
 import io.github.kauri_off.kiroku.core.model.MangaPublication
 import io.github.kauri_off.kiroku.core.model.malCodeAsText
-import io.github.kauri_off.kiroku.design.component.Poster
-import io.github.kauri_off.kiroku.design.component.PosterSize
 import io.github.kauri_off.kiroku.design.component.ScreenState
 import io.github.kauri_off.kiroku.design.component.SectionHeader
 import io.github.kauri_off.kiroku.design.component.TitleSelection
@@ -36,8 +34,11 @@ import io.github.kauri_off.kiroku.design.theme.Spacing
 import io.github.kauri_off.kiroku.title.MalScore
 import io.github.kauri_off.kiroku.title.PublicTitleStats
 import io.github.kauri_off.kiroku.title.TitleAddButton
+import io.github.kauri_off.kiroku.title.TitleCover
+import io.github.kauri_off.kiroku.title.TitleCoverDialog
 import io.github.kauri_off.kiroku.title.TitleStatusButton
 import io.github.kauri_off.kiroku.title.countText
+import io.github.kauri_off.kiroku.title.hasTitleCover
 import io.github.kauri_off.kiroku.title.message
 import io.github.kauri_off.kiroku.titlesub.SubScreen
 import io.github.kauri_off.kiroku.titlesub.SubScreenBody
@@ -50,6 +51,7 @@ internal data class MangaTitleState(
     val addAction: MangaAddAction? = null,
     val reconcilingAdd: Boolean = false,
     val checkingMembership: Boolean = false,
+    val coverOpen: Boolean = false,
 )
 
 internal enum class MangaAddAction { Available, Saving }
@@ -79,7 +81,7 @@ internal sealed interface MangaTitleProblem {
     ) : MangaTitleProblem
 }
 
-internal enum class MangaTitleEvent { Back, Retry, Refresh, SignIn, Edit, AddToList, RetryMembership }
+internal enum class MangaTitleEvent { Back, Retry, Refresh, SignIn, Edit, AddToList, RetryMembership, OpenCover, CloseCover }
 
 @Composable
 internal fun MangaTitleScreen(
@@ -87,6 +89,7 @@ internal fun MangaTitleScreen(
     onEvent: (MangaTitleEvent) -> Unit,
     snackbars: SnackbarHostState,
 ) {
+    val content = state.content
     SubScreen(
         title = null,
         sessionExpired = state.sessionExpired,
@@ -94,7 +97,7 @@ internal fun MangaTitleScreen(
         onSignIn = { onEvent(MangaTitleEvent.SignIn) },
         snackbars = snackbars,
         body =
-            when (val content = state.content) {
+            when (content) {
                 MangaTitleContent.Loading -> SubScreenBody.State(ScreenState.Loading)
                 is MangaTitleContent.Failed ->
                     SubScreenBody.State(
@@ -106,7 +109,7 @@ internal fun MangaTitleScreen(
                     )
                 is MangaTitleContent.Shown ->
                     SubScreenBody.List(content.refreshing, onRefresh = { onEvent(MangaTitleEvent.Refresh) }) {
-                        item { MangaHeader(content) }
+                        item { MangaHeader(content) { onEvent(MangaTitleEvent.OpenCover) } }
                         state.listEntry?.let { entry ->
                             item { MangaOnList(entry) { onEvent(MangaTitleEvent.Edit) } }
                         }
@@ -164,18 +167,25 @@ internal fun MangaTitleScreen(
                     }
             },
     )
+    if (content is MangaTitleContent.Shown && state.coverOpen) {
+        val details = content.details
+        TitleCoverDialog(content.title, details.posterUrl, details.largePosterUrl) { onEvent(MangaTitleEvent.CloseCover) }
+    }
 }
 
 @Composable
-private fun MangaHeader(content: MangaTitleContent.Shown) {
+private fun MangaHeader(
+    content: MangaTitleContent.Shown,
+    onOpenCover: () -> Unit,
+) {
     val details = content.details
     Column(
         Modifier.fillMaxWidth().padding(horizontal = Spacing.l),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(Spacing.s),
     ) {
-        if (details.posterUrl != null || details.largePosterUrl != null) {
-            key(content.coverAttempt) { Poster(details.posterUrl, PosterSize.Hero, large = details.largePosterUrl) }
+        if (hasTitleCover(details.posterUrl, details.largePosterUrl)) {
+            key(content.coverAttempt) { TitleCover(details.posterUrl, details.largePosterUrl, onOpenCover) }
         }
         TitleSelection {
             TitleText(
