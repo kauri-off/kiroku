@@ -36,9 +36,11 @@ import io.github.kauri_off.kiroku.core.demo.Demo
 import io.github.kauri_off.kiroku.core.error.DataError
 import io.github.kauri_off.kiroku.core.error.Outcome
 import io.github.kauri_off.kiroku.core.fixtures.Fixtures
+import io.github.kauri_off.kiroku.core.list.InMemoryLocalList
 import io.github.kauri_off.kiroku.core.model.MangaId
 import io.github.kauri_off.kiroku.core.model.MangaListEntry
 import io.github.kauri_off.kiroku.core.model.MangaReadingStatus
+import io.github.kauri_off.kiroku.core.model.Session
 import io.github.kauri_off.kiroku.core.model.Titles
 import io.github.kauri_off.kiroku.core.user.MangaListKeeper
 import io.github.kauri_off.kiroku.core.user.RemoteMangaLists
@@ -52,23 +54,32 @@ import io.github.kauri_off.kiroku.shell.Destination
 import io.github.kauri_off.kiroku.shell.ShellNavigator
 import io.github.kauri_off.kiroku.shell.rememberShellNavigator
 import io.github.kauri_off.kiroku.wiring.AppGraph
+import io.github.kauri_off.kiroku.wiring.LiveGraph
+import io.github.kauri_off.kiroku.wiring.LiveParts
+import io.github.kauri_off.kiroku.wiring.LiveSource
+import io.github.kauri_off.kiroku.wiring.ServedMal
 import io.github.kauri_off.kiroku.wiring.TestGraph
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withTimeout
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertNull
 import org.junit.Rule
 import org.junit.Test
+import org.junit.rules.RuleChain
 import org.junit.rules.TestRule
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
+import org.robolectric.RuntimeEnvironment
 import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
+import java.time.Clock
 
 @RunWith(RobolectricTestRunner::class)
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
@@ -77,8 +88,10 @@ class PublicMangaListRouteTest {
     private val compose = composeRule()
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
 
+    private val mal = ServedMal()
+
     @get:Rule
-    val rule: TestRule = registered(compose) { scope.cancel() }
+    val rule: TestRule = RuleChain.outerRule(mal).around(registered(compose) { scope.cancel() })
 
     private val fixtures = Fixtures.reference
     private val demo = Demo(fixtures, scope)
@@ -176,11 +189,24 @@ class PublicMangaListRouteTest {
     }
 
     @Test
-    fun `signed out profile can read public Manga`() {
-        runBlocking { demo.session.signOut() }
-        profile(fixtures.privateUserName)
+    fun `signed out profile can read public Manga through the default live graph`() {
+        val name = fixtures.privateUserName
+        mal.publicAnime = ServedMal.answer(403, ServedMal.recorded("list_private.403.json"))
+        mal.publicManga = { ServedMal.answer(200, """{"data":[],"paging":{}}""") }
+        val source = LiveSource("public-manga-route", mal.hosts, aniList = ServedMal.NO_ANILIST, tenrai = ServedMal.NO_TENRAI)
+        val process = CoroutineScope(scope.coroutineContext + Dispatchers.Default)
+        val parts = LiveParts(RuntimeEnvironment.getApplication(), source, "0123abcd", Clock.systemUTC(), process, { throw it })
+        val live = LiveGraph(parts, listStore = { InMemoryLocalList() })
+
+        assertEquals(Session.SignedOut, runBlocking { withTimeout(5_000) { live.session.observeSession().first() } })
+        profile(name, live)
+        compose.waitUntil(5_000) { compose.onAllNodesWithText("This list is private").fetchSemanticsNodes().isNotEmpty() }
         viewManga()
-        row(mangaEntry.titles.romaji).assertIsDisplayed()
+        val empty = compose.onAllNodesWithText("This manga list is empty")
+        compose.waitUntil(5_000) { empty.fetchSemanticsNodes().isNotEmpty() }
+        assertEquals(PublicMangaListKey(name), compose.runOnIdle { navigator.stack.last() })
+        assertEquals(1, mal.asked.count { it.startsWith("GET /v2/users/$name/mangalist?") })
+        assertEquals(Session.SignedOut, runBlocking { withTimeout(5_000) { live.session.observeSession().first() } })
     }
 
     @Test

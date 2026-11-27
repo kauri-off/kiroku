@@ -55,6 +55,7 @@ import okhttp3.ResponseBody.Companion.toResponseBody
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotEquals
+import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNotSame
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertSame
@@ -117,7 +118,7 @@ class LiveGraphTest {
             val graph = LiveGraph(parts(backgroundScope), listStore = { store() })
 
             assertEquals(Session.SignedOut, graph.session.observeSession().first())
-            assertNull(graph.publicMangaLists)
+            assertNotNull(graph.publicMangaLists)
             assertEquals(0, device.clientBuilds.get())
             assertEquals(0, stores.get())
 

@@ -96,8 +96,14 @@ private fun publicMangaListError(
     body: String,
     headers: Headers?,
 ): DataError? {
-    if (status != 404 || headers?.isMangaJson() != true) return null
-    return DataError.UnknownUser.takeIf { body.uniqueMangaObject()?.get("error") == JsonPrimitive("not_found") }
+    if ((status != 403 && status != 404) || headers?.isMangaJson() != true) return null
+    val values = body.uniqueMangaObject() ?: return null
+    return when {
+        status == 403 && values["error"] == JsonPrimitive("not_permitted") && (values["message"] as? JsonPrimitive)?.isString == true ->
+            DataError.PrivateList
+        status == 404 && values["error"] == JsonPrimitive("not_found") -> DataError.UnknownUser
+        else -> null
+    }
 }
 
 private fun Headers.isMangaJson(): Boolean {

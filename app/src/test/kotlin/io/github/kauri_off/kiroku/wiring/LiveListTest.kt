@@ -69,6 +69,7 @@ import java.io.File
 import java.io.IOException
 import java.time.Clock
 import java.util.concurrent.CopyOnWriteArrayList
+import java.util.concurrent.atomic.AtomicReference
 import kotlin.time.Duration.Companion.seconds
 
 // The live graph's list over its own database and MAL's client, MAL being recorded answers behind a local server.
@@ -111,7 +112,6 @@ class LiveListTest {
 
     private fun parts(
         scope: CoroutineScope,
-        publicMangaEnabled: Boolean = false,
         sourceName: String = "served",
     ) = LiveParts(
         context,
@@ -120,7 +120,6 @@ class LiveListTest {
             mal.hosts,
             aniList = ServedMal.NO_ANILIST,
             tenrai = ServedMal.NO_TENRAI,
-            publicMangaEnabled = publicMangaEnabled,
         ),
         "0123abcd",
         Clock.systemUTC(),
@@ -178,21 +177,26 @@ class LiveListTest {
     private fun TestScope.store(parts: LiveParts) = RoomLocalList(parts.database, backgroundScope, Dispatchers.IO) {}
 
     @Test
-    fun `opted-in public manga uses only the client id across sessions and keeps a separate cache cleared by sign-out`() =
+    fun `default live public manga uses only the client id across sessions and keeps a separate cache cleared by sign-out`() =
         runBlocking {
             val named = CopyOnWriteArrayList<RecordedRequest>()
+            val namedPage = AtomicReference(mangaPage)
             mal.publicManga = {
                 named += it
-                ServedMal.answer(200, """{"data":[],"paging":{}}""")
+                ServedMal.answer(200, namedPage.get())
             }
-            val parts = parts(process(), publicMangaEnabled = true)
+            val parts = parts(process())
             val graph = LiveGraph(parts, listStore = { InMemoryLocalList() })
-            val lists = checkNotNull(graph.publicMangaLists)
+            val lists = graph.publicMangaLists
             val name = "test-user"
 
             assertEquals(Session.SignedOut, graph.session.observeSession().first())
             assertEquals(Outcome.Success(Unit), lists.refreshList(name))
-            assertTrue(lists.observeList(name.uppercase()).first() is NamedListState.Whole)
+            val whole =
+                lists
+                    .observeList(name.uppercase())
+                    .first() as NamedListState.Whole
+            assertEquals(listOf("Test Manga"), whole.entries.map { it.titles.romaji })
             assertEquals(UserListState.None(DataError.UnknownUser), graph.user.observeList(name).first { it is UserListState.None })
             assertEquals(1, named.size)
             assertTrue(mangaRequests().isEmpty())
@@ -206,17 +210,20 @@ class LiveListTest {
             assertEquals(Outcome.Success(Unit), lists.refreshList(name))
             assertEquals(personal, graph.mangaList.stored(signedIn.signIn))
 
+            namedPage.set("""{"data":[],"paging":{}}""")
             graph.signOut(signedIn)
             assertEquals(Session.SignedOut, graph.session.observeSession().first())
-            lists.observeList(name).first { it is NamedListState.Whole }
+            assertEquals(Outcome.Failure(DataError.ListEnded), graph.mangaList.stored(signedIn.signIn))
+            val afterSignOut = lists.observeList(name).first { it is NamedListState.Whole } as NamedListState.Whole
+            assertTrue(afterSignOut.entries.isEmpty())
             assertEquals(3, named.size)
 
             val expired = SignInId("0f8fad5b-d9cb-469f-a165-70867728950e")
-            val expiredParts = parts(process(), publicMangaEnabled = true, sourceName = "served-expired")
+            val expiredParts = parts(process(), sourceName = "served-expired")
             expiredParts.tokenFile.writeBytes(byteArrayOf(0) + expired.value.encodeToByteArray())
             val expiredGraph = LiveGraph(expiredParts, listStore = { InMemoryLocalList() })
             assertEquals(Session.Expired(expired), expiredGraph.session.observeSession().first())
-            assertEquals(Outcome.Success(Unit), checkNotNull(expiredGraph.publicMangaLists).refreshList(name))
+            assertEquals(Outcome.Success(Unit), expiredGraph.publicMangaLists.refreshList(name))
             assertEquals(4, named.size)
             assertTrue(named.all { it.method == "GET" && it.url.encodedPath == "/v2/users/test-user/mangalist" })
             assertTrue(named.all { it.headers["X-MAL-CLIENT-ID"] == "0123abcd" })

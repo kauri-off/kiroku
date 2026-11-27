@@ -44,7 +44,7 @@ without affecting its page (section 2.3).
 |---|---|---|
 | Titles, search, rankings, seasons, related titles, status statistics, recommendations | MAL API v2 | No (client id only) |
 | The signed-in user's list (read and write), own profile, personalised suggestions | MAL API v2 | Yes |
-| Another user's public list | MAL API v2 | No (client id only) |
+| Another user's public anime or manga list | MAL API v2 | No (client id only) |
 | Airing times of episodes | AniList GraphQL, keyed by MAL id | No |
 | A title's score distribution (MAL's votes per score) | Tenrai, keyed by MAL id | No |
 | Characters, videos, reviews, other users' avatar and "about" | None chosen (section 13); not in 1.0 | |
@@ -102,7 +102,7 @@ Tenrai (from its documentation and recorded answers):
 | Source | Failure | What the user gets |
 |---|---|---|
 | MAL | Network or server error | Cached data stays, with a one-line snackbar: "No connection" when the device is offline, otherwise "Could not refresh". With nothing cached: the error state with Retry. A write is rolled back (section 7.3). |
-| MAL | Answered as a private list when reading another user's list | "This list is private". Not treated as rate limiting. |
+| MAL | Answered as a private list when reading another user's list | "This list is private". Discards cached rows for that list without starting back-off. |
 | MAL | Refused otherwise: a 429, or a 403 whose body is MAL's JSON error (any other 403 counts as a server error) | Treated as rate limiting: background work backs off, and a read in the foreground says "MyAnimeList is refusing requests, try again later". A refused write is a failed write (section 7.3). |
 | MAL | A value the app cannot read | The answer is used without that value, or with it filled in from what the answer has, and is reported. A report never stops the app. |
 | AniList | Any failure or rate limit | Stored airing data stays in use, so planned notifications still fire. A title with no stored data shows the estimate (section 4). No message is shown. A person's pull asks AniList again at once; AniList's own refusal holds it too. |
@@ -439,7 +439,7 @@ was chosen against, and why:
 
 - A screen has four states: content, loading (no content yet), empty, and error (no content and the load failed);
   one shared component draws the last three.
-  **With cached content, a failed refresh is a snackbar, never a replaced screen.**
+  **With usable cached content, a failed refresh is shown in a snackbar.**
 - Offline, the list, visited title pages, the airing counts and the statistics work from the database. Search shows
   the error state with "No connection" and Retry. A title page whose details were never loaded shows that error
   state where they would be, and a snackbar.

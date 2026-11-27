@@ -33,6 +33,9 @@ class ServedMal : ExternalResource() {
     var manga = answer(404, "")
 
     @Volatile
+    var publicAnime = answer(404, recorded("title_unknown.404.json"))
+
+    @Volatile
     var publicManga: (RecordedRequest) -> MockResponse = { answer(404, "") }
 
     val hosts: MalHosts get() = MalHosts(server.url("/v2/").toString(), server.url("/v1/oauth2/").toString())
@@ -53,6 +56,7 @@ class ServedMal : ExternalResource() {
                             val offset = request.url.queryParameter("offset")?.toInt() ?: 0
                             pages.getOrNull(offset / PAGE)?.let { answer(200, it) } ?: answer(404, recorded("title_unknown.404.json"))
                         }
+                        path.startsWith("/v2/users/") && path.endsWith("/animelist") -> publicAnime
                         path == "/v2/users/@me/mangalist" -> manga
                         path.startsWith("/v2/users/") && path.endsWith("/mangalist") -> publicManga(request)
                         path.endsWith("/my_list_status") -> write(request)

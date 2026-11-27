@@ -82,12 +82,18 @@ class MalPublicMangaListsTest {
     @Test
     fun `unverified privacy and unknown signatures retain their general MAL error handling`() =
         runBlocking {
-            val animePrivacy = RecordedAnswers.named("list_private").body
             val cases =
                 listOf(
-                    answer(403, animePrivacy) to DataError.Refused,
+                    answer(403, PRIVATE, type = "text/plain") to DataError.Refused,
+                    answer(403, PRIVATE).newBuilder().addHeader("Content-Type", "text/html").build() to DataError.Refused,
+                    answer(403, PRIVATE.replace("not_permitted", "forbidden")) to DataError.Refused,
+                    answer(403, """{"error":"not_permitted"}""") to DataError.Refused,
+                    answer(403, """{"error":"not_permitted","message":false}""") to DataError.Refused,
+                    answer(403, """{"error":"forbidden","err\u006fr":"not_permitted","message":"test"}""") to DataError.Refused,
+                    answer(403, """{"error":"not_permitted","message":"test","message":"other"}""") to DataError.Refused,
+                    answer(403, PRIVATE + " trailing") to DataError.ServerError,
                     answer(403, "Blocked", type = "text/plain") to DataError.ServerError,
-                    answer(429, "") to DataError.Refused,
+                    answer(429, PRIVATE) to DataError.Refused,
                     answer(404, "") to DataError.NotFound,
                     answer(404, """{"error":"not_found"} trailing""") to DataError.NotFound,
                     answer(404, """{"error":not_found}""") to DataError.NotFound,
@@ -100,6 +106,32 @@ class MalPublicMangaListsTest {
                 assertEquals(error == DataError.Refused, !network.http.refusedFor().isZero)
                 network.http.backOff.answered(network.http.backOff.mark())
             }
+        }
+
+    @Test
+    fun `only verified privacy removes a cached whole list and leaves shared back-off alone`() =
+        runBlocking {
+            val keeper = MangaListKeeper(lists, this) { error("Unexpected keeper failure") }
+            val page = recordedPage(3)
+            network.always(answer(200, JsonObject(page + ("paging" to JsonObject(emptyMap()))).toString()))
+            assertEquals(Outcome.Success(Unit), keeper.refreshList("sample"))
+            val whole = keeper.observeList("sample").first() as NamedListState.Whole
+            assertFalse(whole.entries.isEmpty())
+
+            for (reply in listOf(answer(403, PRIVATE, type = "text/plain"), answer(429, PRIVATE))) {
+                network.always(reply)
+                assertEquals(Outcome.Failure(DataError.Refused), keeper.refreshList("sample"))
+                assertEquals(whole, keeper.observeList("sample").first())
+                assertFalse(network.http.refusedFor().isZero)
+                network.http.backOff.answered(network.http.backOff.mark())
+            }
+
+            network.always(answer(403, PRIVATE, type = "application/json; charset=utf-8"))
+            val before = network.api.requestCount
+            assertEquals(Outcome.Failure(DataError.PrivateList), keeper.refreshList("sample"))
+            assertEquals(NamedListState.None(DataError.PrivateList), keeper.observeList("sample").first())
+            assertEquals(before + 1, network.api.requestCount)
+            assertEquals(Duration.ZERO, network.http.refusedFor())
         }
 
     @Test
@@ -254,19 +286,25 @@ class MalPublicMangaListsTest {
                             )
                         }
                     }
-                val unknown = captures.single { it.singleOrNull()?.status == 404 }.single()
-                network.always(answer(unknown.status, unknown.body))
-                val replied = lists.read("sample") { error("Unexpected page") }
-                check(replied == Outcome.Failure(DataError.UnknownUser) && network.http.refusedFor().isZero)
-                network.api.received()
+                val errors = mapOf(403 to DataError.PrivateList, 404 to DataError.UnknownUser)
+                for ((status, expected) in errors) {
+                    val capture = captures.single { it.singleOrNull()?.status == status }.single()
+                    network.always(answer(status, capture.body))
+                    val before = network.api.requestCount
+                    val replied = lists.read("sample") { error("Unexpected page") }
+                    check(replied == Outcome.Failure(expected) && network.http.refusedFor().isZero)
+                    check(network.api.requestCount == before + 1)
+                    network.api.received()
+                }
 
-                val downloads = captures.filterNot { it.singleOrNull()?.status == 404 }.map(::orderedPages)
+                val downloads = captures.filterNot { it.singleOrNull()?.status in errors.keys }.map(::orderedPages)
                 check(downloads.any { it.size > 1 })
                 val empty =
                     downloads.single { pages ->
                         val envelope = pages.singleOrNull()?.second?.json ?: return@single false
                         envelope.getValue("data").jsonArray.isEmpty() && envelope.getValue("paging").jsonObject.isEmpty()
                     }
+                check(downloads.any { it.size == 1 && it !== empty })
                 for (pages in downloads) {
                     val offsets = pages.map { it.first }
                     val bodies = pages.toMap()
@@ -281,7 +319,7 @@ class MalPublicMangaListsTest {
                             check(network.api.requestCount == before + parts.size)
                         }
                     check(result == Outcome.Success(Unit) && parts.size == pages.size)
-                    if (pages === empty) check(parts.single().isEmpty())
+                    if (pages === empty) check(parts.single().isEmpty()) else check(parts.all { it.isNotEmpty() })
                     for ((index, page) in pages.withIndex()) {
                         val request = network.api.received()
                         check(request.url.pathSegments == listOf("v2", "users", "sample", "mangalist"))
@@ -405,6 +443,7 @@ class MalPublicMangaListsTest {
     }
 
     private companion object {
+        val PRIVATE = RecordedAnswers.named("list_private").body
         const val EMPTY = """{"data":[],"paging":{}}"""
     }
 }
