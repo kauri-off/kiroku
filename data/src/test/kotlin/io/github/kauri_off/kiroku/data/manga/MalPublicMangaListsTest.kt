@@ -123,6 +123,26 @@ class MalPublicMangaListsTest {
         }
 
     @Test
+    fun `an ambiguous content type cannot replace a cached whole list with an empty list`() =
+        runBlocking {
+            val keeper = MangaListKeeper(lists, this) { error("Unexpected keeper failure") }
+            val page = recordedPage(3)
+            network.always(answer(200, JsonObject(page + ("paging" to JsonObject(emptyMap()))).toString()))
+            assertEquals(Outcome.Success(Unit), keeper.refreshList("sample"))
+            val whole = keeper.observeList("sample").first() as NamedListState.Whole
+            assertFalse(whole.entries.isEmpty())
+
+            network.always(answer(200, EMPTY, type = "text/html").newBuilder().addHeader("Content-Type", "application/json").build())
+            assertEquals(Outcome.Failure(DataError.ServerError), keeper.refreshList("sample"))
+            assertEquals(whole, keeper.observeList("sample").first())
+
+            network.always(answer(200, EMPTY, type = "application/json; charset=utf-8"))
+            assertEquals(Outcome.Success(Unit), keeper.refreshList("sample"))
+            val empty = keeper.observeList("sample").first() as NamedListState.Whole
+            assertTrue(empty.entries.isEmpty())
+        }
+
+    @Test
     fun `redirects are never followed even to the original API origin`() =
         runBlocking {
             network.always(

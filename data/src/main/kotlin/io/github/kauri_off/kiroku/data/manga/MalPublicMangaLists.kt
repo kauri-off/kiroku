@@ -72,7 +72,7 @@ class MalPublicMangaLists(
                 val response = api.page(name, MangaListQuery + ("offset" to offset.toString()))
                 if (!response.isSuccessful) throw HttpException(response)
                 checkNotNull(response.body()).use { body ->
-                    if (response.code() != 200 || body.contentType()?.subtype?.equals("json", ignoreCase = true) != true) {
+                    if (response.code() != 200 || !response.headers().isMangaJson()) {
                         throw NotAnAnswer()
                     }
                     val envelope = body.string().uniqueMangaObject() ?: throw NotAnAnswer()
@@ -96,10 +96,13 @@ private fun publicMangaListError(
     body: String,
     headers: Headers?,
 ): DataError? {
-    if (status != 404) return null
-    val mediaType = headers?.values("Content-Type")?.singleOrNull()?.toMediaTypeOrNull()
-    if (mediaType?.type != "application" || mediaType.subtype != "json") return null
+    if (status != 404 || headers?.isMangaJson() != true) return null
     return DataError.UnknownUser.takeIf { body.uniqueMangaObject()?.get("error") == JsonPrimitive("not_found") }
+}
+
+private fun Headers.isMangaJson(): Boolean {
+    val mediaType = values("Content-Type").singleOrNull()?.toMediaTypeOrNull()
+    return mediaType?.type == "application" && mediaType.subtype == "json"
 }
 
 private interface PublicMangaListApi {
