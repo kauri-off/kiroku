@@ -158,14 +158,13 @@ internal class NamedListKeeper<E, Id>(
         read: Read,
         failed: Boolean,
     ) {
-        user.during(read) { before ->
+        user.finish(read) { before ->
             when {
                 before is NamedListState.Whole -> before.copy(again = null)
                 failed -> NamedListState.None(DataError.ServerError, before.user)
                 else -> NamedListState.Reading(emptyList(), null, before.user)
             }
         }
-        user.read = null
     }
 
     // One part at a time; a title the source gives twice is on the list once.
@@ -200,7 +199,7 @@ internal class NamedListKeeper<E, Id>(
         val error = (end as? Outcome.Failure)?.error
         // A whole list and the user's own answer replace what was held; any other failure leaves a list that was held.
         synchronized(lock) {
-            user.during(read) { before ->
+            user.finish(read) { before ->
                 when {
                     error == null -> NamedListState.Whole(entries, described ?: before.user)
                     error == DataError.UnknownUser -> NamedListState.None(error)
@@ -208,10 +207,18 @@ internal class NamedListKeeper<E, Id>(
                     else -> NamedListState.None(error, described ?: before.user)
                 }
             } ?: return
-            user.read = null
         }
         read.end.complete(end)
         thrown?.let(unexpected)
+    }
+
+    private fun User<E>.finish(
+        read: Read,
+        change: (NamedListState<E>) -> NamedListState<E>,
+    ): NamedListState<E>? {
+        val before = state.value?.takeIf { this.read === read } ?: return null
+        this.read = null
+        return change(before).also { state.value = it }
     }
 
     // Changes the state for the read that is the user's own; none for one that was stopped or whose user was forgotten.

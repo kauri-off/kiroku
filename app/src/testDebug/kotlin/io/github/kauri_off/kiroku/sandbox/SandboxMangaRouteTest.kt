@@ -30,8 +30,11 @@ import io.github.kauri_off.kiroku.core.link.Link
 import io.github.kauri_off.kiroku.core.model.MangaId
 import io.github.kauri_off.kiroku.core.model.Session
 import io.github.kauri_off.kiroku.core.model.owner
+import io.github.kauri_off.kiroku.core.repository.MangaListEditResult
 import io.github.kauri_off.kiroku.core.repository.MangaListReader
+import io.github.kauri_off.kiroku.core.repository.MangaListStatus
 import io.github.kauri_off.kiroku.core.repository.SignInStep
+import io.github.kauri_off.kiroku.core.repository.readingStatus
 import io.github.kauri_off.kiroku.data.sandbox.SandboxUsers
 import io.github.kauri_off.kiroku.link.appLinks
 import io.github.kauri_off.kiroku.scenario.Scenario
@@ -128,6 +131,18 @@ class SandboxMangaRouteTest {
         compose.onNodeWithText("The Library Below").performClick()
         shows("Manga\u00A0· Finished")
         assertEquals(emptyList<Any>(), connections.asked)
+    }
+
+    @Test
+    fun `a public Sandbox title can be added to the signed in personal list`() {
+        val account = signIn()
+        val id = MangaId(101)
+        val result = waited { graph.mangaListEditor.addPlanned(account.signIn, id) } as MangaListEditResult.Confirmed
+        val entry = result.entry
+        assertEquals(id, entry.id)
+        assertEquals("The Library Below", entry.titles.romaji)
+        assertEquals(MangaListStatus.PlanToRead.readingStatus, entry.status)
+        assertEquals(0, entry.chaptersRead)
     }
 
     @Test

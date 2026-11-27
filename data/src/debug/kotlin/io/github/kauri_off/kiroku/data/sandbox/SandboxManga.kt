@@ -106,7 +106,7 @@ class SandboxManga(
                         SandboxWrites.Work -> {
                             val current = currentEntries.firstOrNull { it.id == id }
                             val entry =
-                                current ?: entries.firstOrNull { create && it.id == id }?.let {
+                                current ?: details[id]?.takeIf { create }?.let {
                                     MangaListEntry(
                                         id,
                                         it.titles,

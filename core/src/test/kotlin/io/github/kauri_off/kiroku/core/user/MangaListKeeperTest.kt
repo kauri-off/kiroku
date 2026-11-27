@@ -8,6 +8,9 @@ import io.github.kauri_off.kiroku.core.model.MangaReadingStatus
 import io.github.kauri_off.kiroku.core.model.Titles
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
@@ -119,6 +122,66 @@ class MangaListKeeperTest {
             }
             assertEquals(Outcome.Success(Unit), lists.refreshList("sample"))
             assertEquals(Outcome.Success(Unit), joined.await().getOrThrow())
+            assertEquals(2, calls)
+            assertEquals(NamedListState.Whole(listOf(row(2)), null), lists.observeList("sample").first())
+        }
+
+    @Test
+    fun `a refresh started inline at completion begins a new read`() =
+        runTest {
+            var calls = 0
+            val lists =
+                MangaListKeeper(
+                    source { _, emit ->
+                        calls++
+                        emit(listOf(row(calls.toLong())))
+                        Outcome.Success(Unit)
+                    },
+                    backgroundScope,
+                    { throw it },
+                )
+            assertEquals(Outcome.Success(Unit), lists.refreshList("sample"))
+            val refreshed = CompletableDeferred<Outcome<Unit>>()
+            backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) {
+                lists.observeList("sample").collect {
+                    if (it is NamedListState.Whole && it.again == null && it.entries == listOf(row(2))) {
+                        refreshed.complete(lists.refreshList("sample"))
+                    }
+                }
+            }
+            assertEquals(Outcome.Success(Unit), lists.refreshList("sample"))
+            assertEquals(Outcome.Success(Unit), refreshed.await())
+            assertEquals(3, calls)
+            assertEquals(NamedListState.Whole(listOf(row(3)), null), lists.observeList("sample").first())
+        }
+
+    @Test
+    fun `a retry started inline after cancellation begins a new read`() =
+        runTest {
+            var calls = 0
+            val lists =
+                MangaListKeeper(
+                    source { _, emit ->
+                        if (++calls == 1) {
+                            currentCoroutineContext().cancel()
+                            currentCoroutineContext().ensureActive()
+                        }
+                        emit(listOf(row(2)))
+                        Outcome.Success(Unit)
+                    },
+                    backgroundScope,
+                    { throw it },
+                )
+            val retried = CompletableDeferred<Outcome<Unit>>()
+            backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) {
+                lists.observeList("sample").collect {
+                    if (it is NamedListState.None && it.error == DataError.ServerError) {
+                        retried.complete(lists.refreshList("sample"))
+                    }
+                }
+            }
+            runCurrent()
+            assertEquals(Outcome.Success(Unit), retried.await())
             assertEquals(2, calls)
             assertEquals(NamedListState.Whole(listOf(row(2)), null), lists.observeList("sample").first())
         }
