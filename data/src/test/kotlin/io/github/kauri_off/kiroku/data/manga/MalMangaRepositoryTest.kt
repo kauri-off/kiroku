@@ -7,6 +7,7 @@ import io.github.kauri_off.kiroku.core.model.MangaFormat
 import io.github.kauri_off.kiroku.core.model.MangaId
 import io.github.kauri_off.kiroku.core.model.MangaPublication
 import io.github.kauri_off.kiroku.core.model.SignInId
+import io.github.kauri_off.kiroku.core.model.TitlePicture
 import io.github.kauri_off.kiroku.core.model.owner
 import io.github.kauri_off.kiroku.core.repository.MangaRepository
 import io.github.kauri_off.kiroku.core.repository.StoredManga
@@ -34,6 +35,7 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
 import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import okhttp3.Dispatcher
@@ -165,6 +167,36 @@ class MalMangaRepositoryTest {
             }
         }
         assertTrue(network.unexpected.isEmpty())
+    }
+
+    @Test
+    fun `manga keeps its complete gallery on a pictures repair and clears it on a clean empty answer`() {
+        val id = MangaId(1)
+        val page = recordedJson("manga_pictures")
+        val complete = page.toManga(id, mutableSetOf()).pictures
+        val first = (page.getValue("pictures") as JsonArray)[1]
+        val partial = page.edited(listOf("pictures"), JsonArray(listOf(first, JsonNull)))
+
+        KirokuDatabase.builder(context, null).build().withDatabase { db ->
+            runBlocking {
+                val repository = repository(db)
+
+                suspend fun refresh(page: JsonObject): List<TitlePicture> {
+                    network.api.enqueue(answer(200, page.toString()))
+                    val stored = (repository.refresh(id) as Outcome.Success).value
+                    assertEquals(Outcome.Success(stored), repository.stored(id))
+                    return stored.details.pictures
+                }
+
+                assertEquals(complete.take(1), refresh(partial))
+                assertEquals(complete, refresh(page))
+                val warm = refresh(partial)
+                val empty = refresh(page.edited(listOf("pictures"), JsonArray(emptyList())))
+                assertEquals(List(2) { setOf("pictures") }, network.unexpected.map { (it as RepairedAnswer).fields })
+                assertTrue(empty.isEmpty())
+                assertEquals(complete, warm)
+            }
+        }
     }
 
     @Test

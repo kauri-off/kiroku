@@ -101,8 +101,8 @@ class MalMangaRepository(
         return storage {
             inSettledOwner(owner) { db ->
                 val dao = db.manga()
-                val storedPictures = if (PICTURES in repaired && row.pictures == null) dao.read(id.value)?.pictures else null
-                dao.save(row.copy(pictures = row.pictures ?: storedPictures))
+                val pictures = if (PICTURES in repaired) dao.read(id.value)?.pictures ?: row.pictures else row.pictures
+                dao.save(row.copy(pictures = pictures))
                 checkNotNull(dao.read(id.value)).toStored(http.unexpected)
             }
         }

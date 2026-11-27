@@ -169,7 +169,7 @@ private fun GalleryFrame(
     advancing: Boolean = false,
 ) {
     val anime = FixtureAnime.exactToWatch
-    val pages = listOf(TitlePicture(anime.posterUrl, anime.largePosterUrl)).plus(galleryPictures).map(TitlePicture::sources)
+    val pages = listOf(TitlePicture(anime.posterUrl, anime.largePosterUrl)) + galleryPictures
     val pager = rememberPagerState(initialPage) { pages.size }
     val motion = MaterialTheme.motionScheme
     LaunchedEffect(advancing) {

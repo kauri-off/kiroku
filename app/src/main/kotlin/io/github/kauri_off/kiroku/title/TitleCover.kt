@@ -91,17 +91,19 @@ internal fun TitleCoverDialog(
     pictures: List<TitlePicture> = emptyList(),
     onClose: () -> Unit,
 ) {
-    val sources = remember(url, large) { TitlePicture(url, large).sources() }
+    val cover = remember(url, large) { TitlePicture(url, large) }
+    val sources = remember(cover) { cover.sources() }
     if (sources.isEmpty() || !LocalOnTop.current) {
         LaunchedEffect(Unit) { onClose() }
         return
     }
     val pages =
-        remember(sources, pictures) {
+        remember(cover, pictures) {
             val seen = sources.toMutableSet()
-            listOf(sources) +
+            listOf(cover) +
                 pictures.mapNotNull { picture ->
-                    picture.sources().takeIf { it.isNotEmpty() && it.none(seen::contains) }?.also { seen.addAll(it) }
+                    val candidates = picture.sources()
+                    picture.takeIf { candidates.isNotEmpty() && candidates.none(seen::contains) }?.also { seen.addAll(candidates) }
                 }
         }
     TitleCoverWindow(title, pages.size > 1, onClose) {
@@ -150,15 +152,33 @@ internal fun TitleCoverWindow(
 
 @Composable
 internal fun CoverGallery(
-    pages: List<List<String>>,
+    pages: List<TitlePicture>,
     title: String,
     pager: PagerState,
 ) {
     val scope = rememberCoroutineScope()
     val motion = MaterialTheme.motionScheme
     val position = pager.targetPage.coerceIn(pages.indices)
+
+    fun moveTo(page: Int) {
+        scope.launch {
+            if (pager.currentPage == page && pager.currentPageOffsetFraction == 0f) {
+                pager.scrollToPage(page)
+            } else {
+                pager.animateScrollToPage(page, animationSpec = motion.defaultEffectsSpec())
+            }
+        }
+    }
+
     Column(Modifier.fillMaxSize(), horizontalAlignment = Alignment.CenterHorizontally) {
-        HorizontalPager(state = pager, modifier = Modifier.fillMaxWidth().weight(1f), key = { pages[it].first() }) { index ->
+        HorizontalPager(
+            state = pager,
+            modifier = Modifier.fillMaxWidth().weight(1f),
+            key = { index ->
+                val picture = pages[index]
+                picture.medium?.takeIf(String::isNotBlank) ?: checkNotNull(picture.large)
+            },
+        ) { index ->
             val description =
                 if (index == 0) {
                     stringResource(R.string.title_cover_image, title)
@@ -166,12 +186,12 @@ internal fun CoverGallery(
                     stringResource(R.string.title_gallery_image, index + 1, pages.size, title)
                 }
             Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                CoverImage(pages[index], R.string.title_gallery_failed, description)
+                CoverImage(pages[index].sources(), R.string.title_gallery_failed, description)
             }
         }
         Row(verticalAlignment = Alignment.CenterVertically) {
             TextButton(
-                onClick = { scope.launch { pager.animateScrollToPage(position - 1, animationSpec = motion.defaultEffectsSpec()) } },
+                onClick = { moveTo(position - 1) },
                 enabled = position > 0,
             ) { Text(stringResource(R.string.title_gallery_previous)) }
             Text(
@@ -180,7 +200,7 @@ internal fun CoverGallery(
                 style = MaterialTheme.typography.labelLarge,
             )
             TextButton(
-                onClick = { scope.launch { pager.animateScrollToPage(position + 1, animationSpec = motion.defaultEffectsSpec()) } },
+                onClick = { moveTo(position + 1) },
                 enabled = position < pages.lastIndex,
             ) { Text(stringResource(R.string.title_gallery_next)) }
         }

@@ -187,6 +187,39 @@ class TitleCoverTest {
     }
 
     @Test
+    fun anExtraStaysSelectedWhenItMovesAndGainsALargeSource() {
+        val pictures = mutableStateOf(listOf(TitlePicture(EXTRA, null), TitlePicture(LAST, null)))
+        val releaseLarge = CompletableDeferred<Unit>()
+        val requested = CopyOnWriteArrayList<Any>()
+        val loader =
+            ImageLoader
+                .Builder(compose.activity)
+                .components {
+                    add(
+                        Interceptor { chain ->
+                            requested += chain.request.data
+                            if (chain.request.data == EXTRA_LARGE) releaseLarge.await()
+                            coverResult(chain.request)
+                        },
+                    )
+                }.build()
+        show(loader) { TitleCoverDialog("Sample", REGULAR, LARGE, pictures.value) {} }
+        compose.onNodeWithText("Next").performClick()
+        val before = hasContentDescription("Image\u00A02\u00A0of\u00A03\u00A0for Sample")
+        compose.waitUntil { compose.onAllNodes(before).fetchSemanticsNodes().isNotEmpty() }
+
+        compose.runOnIdle { pictures.value = listOf(TitlePicture(LAST, null), TitlePicture(EXTRA, EXTRA_LARGE)) }
+        compose.onNodeWithText("3\u00A0/\u00A03").assertIsDisplayed()
+        compose.waitUntil { EXTRA_LARGE in requested }
+        val after = hasContentDescription("Image\u00A03\u00A0of\u00A03\u00A0for Sample")
+        compose.onNode(after).assertDoesNotExist()
+        releaseLarge.complete(Unit)
+        compose.waitUntil { compose.onAllNodes(after).fetchSemanticsNodes().isNotEmpty() }
+        compose.onNode(after).assertIsDisplayed()
+        assertTrue(EXTRA in requested)
+    }
+
+    @Test
     fun theLargeImageLoadsFirstAndFallsBackToTheRegularImage() {
         val releaseLarge = CompletableDeferred<Unit>()
         val requested = CopyOnWriteArrayList<Any>()

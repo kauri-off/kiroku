@@ -152,7 +152,7 @@ internal data class TitleDetailsRow(
         unread: Set<Unread> = emptySet(),
     ): TitleDetailsRow =
         newer.copy(
-            pictures = if (Unread.Pictures in unread && newer.pictures == null) pictures else newer.pictures,
+            pictures = if (Unread.Pictures in unread) pictures ?: newer.pictures else newer.pictures,
             studios = if (Unread.Studios in unread) studios else newer.studios,
             synopsis = newer.synopsis ?: synopsis,
             endDate = newer.endDate ?: endDate,

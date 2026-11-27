@@ -5,14 +5,18 @@ import androidx.compose.foundation.pager.PagerState
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.MotionDurationScale
+import androidx.compose.ui.semantics.SemanticsActions
+import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performSemanticsAction
 import coil3.ColorImage
 import coil3.ImageLoader
 import coil3.decode.DataSource
 import coil3.intercept.Interceptor
 import coil3.request.SuccessResult
+import io.github.kauri_off.kiroku.core.model.TitlePicture
 import io.github.kauri_off.kiroku.design.MotionBounds
 import io.github.kauri_off.kiroku.design.component.LocalRouteImages
 import io.github.kauri_off.kiroku.design.registered
@@ -63,6 +67,24 @@ class TitleGalleryMotionTest {
     }
 
     @Test
+    fun previousCancelsNextWhileThePagerIsStillAtZeroOffset() {
+        val pager = gallery()
+        clock.autoAdvance = false
+        compose.onNodeWithText("Next").performClick()
+        clock.advanceTimeByFrame()
+        compose.onNodeWithText("Previous").assertIsEnabled().performSemanticsAction(SemanticsActions.OnClick) { click ->
+            assertEquals(1, pager.targetPage)
+            assertEquals(0f, pager.currentPageOffsetFraction, 0f)
+            assertTrue(click())
+        }
+        clock.advanceTimeBy(MotionBounds.ENTER)
+        compose.runOnIdle {
+            assertEquals(0, pager.settledPage)
+            assertFalse(pager.isScrollInProgress)
+        }
+    }
+
+    @Test
     fun withAnimationsOffNextSelectsThePageImmediately() {
         durationScale = 0f
         val pager = gallery()
@@ -83,7 +105,7 @@ class TitleGalleryMotionTest {
                 .components { add(Interceptor { chain -> SuccessResult(image, chain.request, DataSource.MEMORY) }) }
                 .build()
         lateinit var pager: PagerState
-        val pages = listOf(listOf("cover"), listOf("extra"))
+        val pages = listOf(TitlePicture("cover", null), TitlePicture("extra", null))
         compose.setContent {
             KirokuTheme(dark = false, dynamicColor = false) {
                 CompositionLocalProvider(LocalRouteImages provides loader) {

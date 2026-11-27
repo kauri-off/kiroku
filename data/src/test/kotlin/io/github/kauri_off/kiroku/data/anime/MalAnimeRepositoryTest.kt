@@ -6,6 +6,7 @@ import io.github.kauri_off.kiroku.core.error.Outcome
 import io.github.kauri_off.kiroku.core.model.AiringStatus
 import io.github.kauri_off.kiroku.core.model.AnimeId
 import io.github.kauri_off.kiroku.core.model.SignInId
+import io.github.kauri_off.kiroku.core.model.TitlePicture
 import io.github.kauri_off.kiroku.core.model.chainWalk
 import io.github.kauri_off.kiroku.core.model.sequelChain
 import io.github.kauri_off.kiroku.core.repository.detailsStale
@@ -34,6 +35,7 @@ import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import org.junit.Assert.assertEquals
@@ -147,6 +149,34 @@ class MalAnimeRepositoryTest {
             assertEquals(extras.map { ((it as JsonObject)["large"] as JsonPrimitive).content }, pictures.map { it.large })
             assertEquals(setOf("status"), (network.unexpected.single() as RepairedAnswer).fields)
             assertTrue(airing.details.pictures.isEmpty())
+        }
+
+    @Test
+    fun `anime keeps its complete gallery on a pictures repair and clears it on a clean empty answer`() =
+        runTest {
+            val repository = subject().titles
+            val id = AnimeId(1)
+            val page = recordedJson("title_pictures")
+            val complete = page.toTitle(Repairs()).details.pictures
+            val first = (page.getValue("pictures") as JsonArray).first()
+            val partial = page.edited(listOf("pictures"), JsonArray(listOf(first, JsonNull)))
+
+            suspend fun refresh(answer: JsonObject): List<TitlePicture> {
+                serve(answer)
+                assertEquals(Outcome.Success(Unit), repository.refresh(id))
+                return checkNotNull(repository.observeDetails(id).first()).pictures
+            }
+
+            assertEquals(complete.take(1), refresh(partial))
+            assertEquals(complete, refresh(page))
+            val warm = refresh(partial)
+            val empty = refresh(page.edited(listOf("pictures"), JsonArray(emptyList())))
+            assertEquals(
+                listOf(setOf("pictures", "status"), setOf("status"), setOf("pictures", "status"), setOf("status")),
+                network.unexpected.map { (it as RepairedAnswer).fields },
+            )
+            assertTrue(empty.isEmpty())
+            assertEquals(complete, warm)
         }
 
     // The recorded relations of two pages: an airing third season between its prequel and its sequel, and a second
