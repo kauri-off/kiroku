@@ -27,6 +27,7 @@ import kotlinx.serialization.json.int
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
+import okhttp3.Headers.Companion.headersOf
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -251,6 +252,26 @@ class MalPublicMangaListsTest {
             assertEquals(Outcome.Success(Unit), lists.read("sample") { parts++ })
             assertEquals(3, parts)
             assertEquals(13, network.api.requestCount)
+        }
+
+    @Test
+    fun `a rejected continuation does not clear a refusal recorded between pages`() =
+        runBlocking {
+            val first = recordedPage(1)
+            val duplicate = JsonObject(first + ("paging" to JsonObject(emptyMap())))
+            network.api.enqueue(answer(200, first.toString()))
+            network.api.enqueue(answer(200, duplicate.toString()))
+
+            var parts = 0
+            val result =
+                lists.read("sample") {
+                    parts++
+                    assertTrue(network.http.recordRefusal(429, headersOf("Retry-After", "1800"), null))
+                }
+            assertEquals(Outcome.Failure(DataError.ServerError), result)
+            assertEquals(1, parts)
+            assertEquals(2, network.api.requestCount)
+            assertEquals(Duration.ofMinutes(30), network.http.refusedFor())
         }
 
     @Test

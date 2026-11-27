@@ -41,11 +41,11 @@ class MalPublicMangaLists(
         while (true) {
             currentCoroutineContext().ensureActive()
             val page =
-                when (val answer = page(name, offset, previousOffset, repairs)) {
+                when (val answer = page(name, offset, previousOffset, ids, repairs)) {
                     is Outcome.Failure -> return answer
                     is Outcome.Success -> answer.value
                 }
-            if (page.entries.any { !ids.add(it.id) }) return Outcome.Failure(DataError.ServerError)
+            page.entries.forEach { ids.add(it.id) }
             currentCoroutineContext().ensureActive()
             part(page.entries)
             currentCoroutineContext().ensureActive()
@@ -65,6 +65,7 @@ class MalPublicMangaLists(
         name: String,
         offset: Int,
         previousOffset: Int?,
+        seen: Set<MangaId>,
         repairs: MutableSet<String>,
     ): Outcome<PublicMangaPage> =
         http
@@ -81,7 +82,10 @@ class MalPublicMangaLists(
                     check("previous" !in paging || (previousOffset != null && paging.mangaOffset("previous") == previousOffset))
                     val page = envelope.mangaListPage(offset)
                     check(offset == 0 || page.entries.isNotEmpty())
-                    PublicMangaPage(page.entries.map { it.toEntry(repairs) }, page.next)
+                    val entries = page.entries.map { it.toEntry(repairs) }
+                    val pageIds = mutableSetOf<MangaId>()
+                    check(entries.all { it.id !in seen && pageIds.add(it.id) })
+                    PublicMangaPage(entries, page.next)
                 }
             }.clientIdOutcome()
 }
