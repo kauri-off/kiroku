@@ -35,6 +35,15 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+        <provider
+            android:name=".title.CoverShareProvider"
+            android:authorities="${applicationId}.cover-shares"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/cover_share_paths" />
+        </provider>
         <!-- Nothing of the network or a database runs when the process starts: OkHttp finds its platform at the first request, emoji are drawn with the system's font, not one Google Play services downloads, and scheduled work is set up at its first use. -->
         <provider
             android:name="androidx.startup.InitializationProvider"

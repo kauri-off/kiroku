@@ -1,10 +1,8 @@
 package io.github.kauri_off.kiroku.title
 
 import androidx.compose.foundation.pager.rememberPagerState
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
 import coil3.SingletonImageLoader
 import coil3.asImage
@@ -136,7 +134,6 @@ class TitleScreenshots : ScreenshotRegistry() {
     // The header's large picture fades in over the row's on the fast effects spring, which does most of its way early.
     override val transitions =
         listOf(
-            galleryTransition(),
             // The film the walk found joins the watch order between the seasons, and the indicator leaves.
             Transition(
                 "chain-of-four-tall",
@@ -164,32 +161,11 @@ internal val galleryPictures =
     )
 
 @Composable
-private fun GalleryFrame(
-    initialPage: Int,
-    advancing: Boolean = false,
-) {
+private fun GalleryFrame(initialPage: Int) {
     val anime = FixtureAnime.exactToWatch
     val pages = listOf(TitlePicture(anime.posterUrl, anime.largePosterUrl)) + galleryPictures
-    val pager = rememberPagerState(initialPage) { pages.size }
-    val motion = MaterialTheme.motionScheme
-    LaunchedEffect(advancing) {
-        if (advancing) pager.animateScrollToPage(1, animationSpec = motion.defaultEffectsSpec())
-    }
-    TitleCoverWindow(anime.titles.romaji, gallery = true, onClose = {}) {
-        CoverGallery(pages, anime.titles.romaji, pager)
-    }
+    CoverViewer(anime.titles.romaji, pages, rememberPagerState(initialPage) { pages.size }, onClose = {})
 }
-
-private fun galleryTransition() =
-    Transition(
-        "gallery-extra",
-        start = "gallery-cover",
-        name = "gallery-page-turn",
-        millis = MotionBounds.ENTER,
-        at = listOf(FRAME, 3 * FRAME, 6 * FRAME, MotionBounds.ENTER),
-    ) { advancing ->
-        GalleryFrame(initialPage = 0, advancing = advancing)
-    }
 
 // The header with the row's picture in memory and the large one on its way, there at once, or arriving now.
 @Composable
