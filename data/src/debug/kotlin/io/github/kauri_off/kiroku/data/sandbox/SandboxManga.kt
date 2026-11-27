@@ -208,7 +208,7 @@ class SandboxManga(
     }
 
     private val details =
-        entries.associate { entry ->
+        (entries + SandboxPublicManga.pages.flatten()).associate { entry ->
             entry.id to
                 MangaDetails(
                     entry.id,

@@ -94,6 +94,35 @@ class MangaListKeeperTest {
             assertEquals(NamedListState.Whole(listOf(row(3)), null), states.last())
         }
 
+    @Test
+    fun `a refresh started inline by a cached observer joins the published read`() =
+        runTest {
+            var calls = 0
+            val lists =
+                MangaListKeeper(
+                    source { _, emit ->
+                        calls++
+                        emit(listOf(row(calls.toLong())))
+                        Outcome.Success(Unit)
+                    },
+                    backgroundScope,
+                    { throw it },
+                )
+            assertEquals(Outcome.Success(Unit), lists.refreshList("sample"))
+            val joined = CompletableDeferred<Result<Outcome<Unit>>>()
+            backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) {
+                lists.observeList("sample").collect {
+                    if (it is NamedListState.Whole && it.again != null && !joined.isCompleted) {
+                        joined.complete(runCatching { lists.refreshList("SAMPLE") })
+                    }
+                }
+            }
+            assertEquals(Outcome.Success(Unit), lists.refreshList("sample"))
+            assertEquals(Outcome.Success(Unit), joined.await().getOrThrow())
+            assertEquals(2, calls)
+            assertEquals(NamedListState.Whole(listOf(row(2)), null), lists.observeList("sample").first())
+        }
+
     private fun source(read: suspend (String, suspend (List<MangaListEntry>) -> Unit) -> Outcome<Unit>): RemoteMangaLists =
         object : RemoteMangaLists {
             override suspend fun read(

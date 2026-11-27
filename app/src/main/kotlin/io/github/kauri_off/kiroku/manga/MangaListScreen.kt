@@ -17,6 +17,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.key
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
@@ -212,14 +213,19 @@ internal fun MangaListBody(
                     val rows = content.pages[status].orEmpty()
                     val choice = state.sortFor(status)
                     key(status.code, choice.sort.name, choice.direction?.name, content.language.name) {
-                        rememberMangaScroll(rows)
+                        rememberMangaScroll(rows, content.streaming, forgetWhenEmpty = publicList && !content.streaming)
                     }
                 }
             val pages: @Composable () -> Unit = {
                 if (motion == null) {
                     val matches = state.matches.takeIf { state.filter.session == state.activeFilterSession }
                     key(state.activeFilterSession, state.filter.text, content.language.name) {
-                        val scroll = rememberMangaScroll(matches.orEmpty())
+                        val scroll =
+                            rememberMangaScroll(
+                                matches.orEmpty(),
+                                content.streaming,
+                                forgetWhenEmpty = publicList && matches != null && !content.streaming,
+                            )
                         FilterResults(matches?.isNotEmpty()?.takeUnless { !it && content.streaming }, pagePadding) { bottom ->
                             val rows = checkNotNull(matches)
                             MangaRows(
@@ -263,9 +269,20 @@ private val mangaViewportSaver =
     listSaver<MangaViewport, Long>(save = { it.anchor() }, restore = ::MangaViewport)
 
 @Composable
-private fun rememberMangaScroll(rows: List<MangaListEntry>): LazyListState? {
+private fun rememberMangaScroll(
+    rows: List<MangaListEntry>,
+    streaming: Boolean,
+    forgetWhenEmpty: Boolean,
+): LazyListState? {
     val viewport = rememberSaveable(saver = mangaViewportSaver) { MangaViewport() }
-    if (rows.isEmpty()) return null
+    if (rows.isEmpty()) {
+        if (forgetWhenEmpty) SideEffect { viewport.saved = emptyList() }
+        return null
+    }
+    val anchorId = viewport.saved.getOrNull(2)
+    if (streaming && viewport.visible == null && anchorId != null && rows.none { it.id.value == anchorId }) {
+        return remember(viewport) { LazyListState() }
+    }
     val scroll =
         remember(viewport) {
             viewport.saved.takeIf { it.isNotEmpty() }?.let { anchor ->

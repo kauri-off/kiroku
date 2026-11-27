@@ -136,6 +136,7 @@ internal class NamedListKeeper<E, Id>(
     // The list held stays while it is read again; else the read alone shows. Started by its caller, outside the lock.
     private fun read(user: User<E>): Read {
         val read = Read()
+        read.job = scope.launch(start = CoroutineStart.LAZY) { run(user, read) }
         user.read = read
         user.state.update { before ->
             when (before) {
@@ -143,7 +144,6 @@ internal class NamedListKeeper<E, Id>(
                 else -> NamedListState.Reading(emptyList(), null, before?.user)
             }
         }
-        read.job = scope.launch(start = CoroutineStart.LAZY) { run(user, read) }
         // A job that ended while the read was still its user's own ended by no doing of the keeper: the read failed.
         read.job.invokeOnCompletion {
             val lost = synchronized(lock) { (user.read === read).also { if (it) release(user, read, failed = true) } }

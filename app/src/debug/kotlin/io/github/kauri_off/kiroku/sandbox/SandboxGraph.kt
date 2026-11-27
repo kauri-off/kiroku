@@ -18,6 +18,7 @@ import io.github.kauri_off.kiroku.core.repository.Ranked
 import io.github.kauri_off.kiroku.core.repository.SearchRepository
 import io.github.kauri_off.kiroku.core.repository.SignIn
 import io.github.kauri_off.kiroku.core.repository.SignInBrowser
+import io.github.kauri_off.kiroku.core.user.MangaListKeeper
 import io.github.kauri_off.kiroku.data.network.AndroidDevice
 import io.github.kauri_off.kiroku.data.network.Device
 import io.github.kauri_off.kiroku.data.sandbox.Planted
@@ -26,6 +27,7 @@ import io.github.kauri_off.kiroku.data.sandbox.SandboxAiring
 import io.github.kauri_off.kiroku.data.sandbox.SandboxAniListFault
 import io.github.kauri_off.kiroku.data.sandbox.SandboxMal
 import io.github.kauri_off.kiroku.data.sandbox.SandboxManga
+import io.github.kauri_off.kiroku.data.sandbox.SandboxPublicManga
 import io.github.kauri_off.kiroku.data.sandbox.SandboxWrites
 import io.github.kauri_off.kiroku.notShown
 import io.github.kauri_off.kiroku.notificationlog.RunLog
@@ -57,12 +59,13 @@ import kotlin.time.DurationUnit
 import kotlin.time.TimeSource
 
 // The live graph whole over MAL on the device, which keeps a made-up list in the source's own files.
-class SandboxGraph internal constructor(
+class SandboxGraph private constructor(
     private val parts: LiveParts,
     val sandbox: Sandbox,
     private val device: SandboxDevice,
     private val aniListTime: SandboxAniListTime,
-    private val live: LiveGraph = LiveGraph(parts),
+    publicManga: Lazy<MangaListKeeper>,
+    private val live: LiveGraph,
 ) : AppGraph by live,
     SignInOwner,
     ScenariosOwner {
@@ -73,6 +76,8 @@ class SandboxGraph internal constructor(
     override val madeUp = true
 
     override val mangaCatalogue: MangaCatalogue? get() = null
+
+    override val publicMangaLists by publicManga
 
     private val mangaFixtures by lazy {
         SandboxManga(
@@ -187,7 +192,16 @@ class SandboxGraph internal constructor(
             val sandboxDevice = SandboxDevice(device)
             val time = SandboxAniListTime(aniListTime)
             val source = LiveSource(NAME, SandboxMal.Hosts, sandbox.mal, aniListTime = time)
-            return SandboxGraph(parts(source, sandboxDevice, clock), sandbox, sandboxDevice, time)
+            val liveParts = parts(source, sandboxDevice, clock)
+            val publicManga =
+                lazy {
+                    MangaListKeeper(SandboxPublicManga(sandbox.mal, sandboxDevice), liveParts.scope, liveParts.unexpected)
+                }
+            val live =
+                LiveGraph(liveParts, forgetPublicManga = {
+                    if (publicManga.isInitialized()) publicManga.value.forget()
+                })
+            return SandboxGraph(liveParts, sandbox, sandboxDevice, time, publicManga, live)
         }
 
         private val NAME = notShown("sandbox")

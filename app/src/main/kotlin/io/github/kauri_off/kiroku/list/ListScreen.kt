@@ -202,13 +202,17 @@ internal fun ListScreen(
             }
         },
     ) { padding ->
-        positions.SaveableStateProvider(mode.name) {
-            when (pane) {
-                is ListPane.Anime -> AnimeListBody(pane.state, pane.onEvent, motion, padding)
-                is ListPane.Manga ->
-                    key(pane.state.owner) {
-                        MangaListBody(pane.state, pane.onEvent, mangaMotion, padding, publicList = pane.publicName != null)
-                    }
+        if (manga?.publicName != null && mangaContent == null) {
+            MangaListBody(manga.state, manga.onEvent, null, padding, publicList = true)
+        } else {
+            positions.SaveableStateProvider(mode.name) {
+                when (pane) {
+                    is ListPane.Anime -> AnimeListBody(pane.state, pane.onEvent, motion, padding)
+                    is ListPane.Manga ->
+                        key(pane.state.owner) {
+                            MangaListBody(pane.state, pane.onEvent, mangaMotion, padding, publicList = pane.publicName != null)
+                        }
+                }
             }
         }
     }

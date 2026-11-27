@@ -32,6 +32,7 @@ import io.github.kauri_off.kiroku.core.model.Session
 import io.github.kauri_off.kiroku.core.model.owner
 import io.github.kauri_off.kiroku.core.repository.MangaListReader
 import io.github.kauri_off.kiroku.core.repository.SignInStep
+import io.github.kauri_off.kiroku.data.sandbox.SandboxUsers
 import io.github.kauri_off.kiroku.link.appLinks
 import io.github.kauri_off.kiroku.scenario.Scenario
 import io.github.kauri_off.kiroku.scenario.WriteFault
@@ -115,6 +116,39 @@ class SandboxMangaRouteTest {
             assertEquals(SignInStep.SignedIn, step)
             graph.session.observeSession().first { it is Session.SignedIn } as Session.SignedIn
         }
+
+    @Test
+    fun `a private Anime profile opens the Sandbox public Manga fixtures and their title`() {
+        openPrivateProfile()
+        shows("This list is private")
+        compose.onNodeWithText("View manga list").performClick()
+        shows("The Library Below")
+        shows("An Atlas of Quiet Places")
+        compose.onNodeWithText("Paper Observatory").assertDoesNotExist()
+        compose.onNodeWithText("The Library Below").performClick()
+        shows("Manga\u00A0· Finished")
+        assertEquals(emptyList<Any>(), connections.asked)
+    }
+
+    @Test
+    fun `an unavailable Sandbox Anime profile still opens Manga and it recovers on reconnect`() {
+        graph.scenarios.set(Scenario(offline = true))
+        openPrivateProfile()
+        shows("No connection")
+        compose.onNodeWithText("Retry").assertIsDisplayed()
+        compose.onNodeWithText("View manga list").performClick()
+        shows("${SandboxUsers.PRIVATE}'s manga list")
+        shows("No connection")
+
+        graph.scenarios.set(Scenario())
+        shows("The Library Below")
+        assertEquals(emptyList<Any>(), connections.asked)
+    }
+
+    private fun openPrivateProfile() {
+        checkNotNull(RuntimeEnvironment.getApplication().appLinks).opened(Link.Profile(SandboxUsers.PRIVATE))
+        shows("View manga list")
+    }
 
     @Test
     fun `sandbox list retries offline and opens a manga title with Back to the cached list`() {

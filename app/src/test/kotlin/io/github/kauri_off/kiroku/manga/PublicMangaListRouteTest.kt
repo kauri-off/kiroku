@@ -1,12 +1,14 @@
 package io.github.kauri_off.kiroku.manga
 
 import androidx.compose.material3.SnackbarHostState
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.remember
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.assert
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.assertIsOn
 import androidx.compose.ui.test.assertIsSelected
 import androidx.compose.ui.test.getUnclippedBoundsInRoot
 import androidx.compose.ui.test.hasAnyDescendant
@@ -15,6 +17,7 @@ import androidx.compose.ui.test.hasSetTextAction
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.isDisplayed
 import androidx.compose.ui.test.isSelectable
+import androidx.compose.ui.test.junit4.StateRestorationTester
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithTag
@@ -26,6 +29,9 @@ import androidx.compose.ui.test.performSemanticsAction
 import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.test.swipeDown
+import androidx.lifecycle.ViewModelStore
+import androidx.lifecycle.ViewModelStoreOwner
+import androidx.lifecycle.viewmodel.compose.LocalViewModelStoreOwner
 import io.github.kauri_off.kiroku.core.demo.Demo
 import io.github.kauri_off.kiroku.core.error.DataError
 import io.github.kauri_off.kiroku.core.error.Outcome
@@ -97,10 +103,13 @@ class PublicMangaListRouteTest {
                 b: String,
             ) = a == b
         }
-    private val graph =
+    private val graph = coldGraph()
+
+    private fun coldGraph(): AppGraph =
         object : AppGraph by base {
             override val publicMangaLists = MangaListKeeper(source, scope, { throw it })
         }
+
     private lateinit var navigator: ShellNavigator
 
     @Test
@@ -223,6 +232,105 @@ class PublicMangaListRouteTest {
     }
 
     @Test
+    fun `process recreation restores the sorted tab to an anchor on a delayed second page`() = restoreLaterPage(filtered = false)
+
+    @Test
+    fun `process recreation restores the filtered viewport to an anchor on a delayed second page`() = restoreLaterPage(filtered = true)
+
+    private fun restoreLaterPage(filtered: Boolean) {
+        val first = (1L..20).map(::panel)
+        val second = (21L..45).map(::panel)
+        answer = { emit ->
+            emit(first)
+            emit(second)
+            Outcome.Success(Unit)
+        }
+        var owner = routeOwner()
+        var activeGraph = graph
+        val restoration = StateRestorationTester(compose)
+        restoration.setContent {
+            CompositionLocalProvider(LocalViewModelStoreOwner provides owner) {
+                KirokuTheme(dark = false, dynamicColor = false) {
+                    navigator = rememberShellNavigator()
+                    AppRoute(activeGraph, navigator, remember { SnackbarHostState() })
+                }
+            }
+        }
+        openProfile(fixtures.privateUserName)
+        viewManga()
+        val read = compose.onNode(hasText("Read") and isSelectable())
+        read.performClick()
+        val sort = compose.onNodeWithContentDescription("Sort")
+        sort.performClick()
+        compose.onNodeWithText("Title").performClick()
+        compose.onNodeWithText("Z to A").performClick()
+        compose.onNode(SemanticsMatcher.keyIsDefined(SemanticsActions.Dismiss)).performSemanticsAction(SemanticsActions.Dismiss)
+
+        if (filtered) {
+            compose.onNodeWithContentDescription("Filter by title").performClick()
+            compose.onNode(hasSetTextAction()).performTextInput("Panel")
+        }
+        val anchor = row(panel(33).titles.romaji)
+        compose.onNode(scroller and hasAnyDescendant(hasText(second.last().titles.romaji))).performScrollToIndex(12)
+        val aligned = anchor.getUnclippedBoundsInRoot().top
+        compose
+            .onNode(scroller and hasAnyDescendant(hasText(panel(33).titles.romaji)))
+            .performSemanticsAction(SemanticsActions.ScrollBy) { it(0f, 21f) }
+        val savedTop = anchor.getUnclippedBoundsInRoot().top
+        assertNotEquals(aligned, savedTop)
+
+        val nextPage = CompletableDeferred<Outcome<Unit>>()
+        compose.runOnIdle {
+            owner.viewModelStore.clear()
+            owner = routeOwner()
+            activeGraph = coldGraph()
+            answer = { emit ->
+                emit(first)
+                nextPage.await().also { if (it is Outcome.Success) emit(second) }
+            }
+        }
+        restoration.emulateSavedInstanceStateRestore()
+        assertEquals(PublicMangaListKey(fixtures.privateUserName), compose.runOnIdle { navigator.stack.last() })
+        if (filtered) {
+            compose.onNode(hasSetTextAction() and hasText("Panel")).assertIsDisplayed()
+        } else {
+            read.assertIsSelected()
+        }
+        row(first.first().titles.romaji).assertIsDisplayed()
+        anchor.assertDoesNotExist()
+
+        if (filtered) {
+            val retryPage = CompletableDeferred<Unit>()
+            compose.runOnUiThread {
+                nextPage.complete(Outcome.Failure(DataError.ServerError))
+                answer = { emit ->
+                    emit(first)
+                    retryPage.await()
+                    emit(second)
+                    Outcome.Success(Unit)
+                }
+            }
+            compose.onNodeWithText("Retry").performClick()
+            row(first.first().titles.romaji).assertIsDisplayed()
+            anchor.assertDoesNotExist()
+            compose.runOnUiThread { retryPage.complete(Unit) }
+        } else {
+            compose.runOnUiThread { nextPage.complete(Outcome.Success(Unit)) }
+        }
+        assertEquals(savedTop, anchor.getUnclippedBoundsInRoot().top)
+        assertEquals(List(if (filtered) 3 else 2) { fixtures.privateUserName }, requests)
+        if (filtered) compose.onNodeWithContentDescription("Clear").performClick()
+        sort.performClick()
+        compose.onNodeWithText("Title").assertIsSelected()
+        compose.onNodeWithText("Z to A").assertIsOn()
+    }
+
+    private fun routeOwner(): ViewModelStoreOwner =
+        object : ViewModelStoreOwner {
+            override val viewModelStore = ViewModelStore()
+        }
+
+    @Test
     fun `empty tab and filter differ from the whole list being empty`() {
         profile(fixtures.privateUserName)
         viewManga()
@@ -290,6 +398,10 @@ class PublicMangaListRouteTest {
                 AppRoute(graph, navigator, remember { SnackbarHostState() })
             }
         }
+        openProfile(name)
+    }
+
+    private fun openProfile(name: String) {
         compose.runOnIdle {
             navigator.home(Destination.Profile)
             navigator.open(OtherProfileKey(name))

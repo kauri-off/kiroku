@@ -8,6 +8,9 @@ import androidx.lifecycle.viewModelScope
 import io.github.kauri_off.kiroku.ShownLoads
 import io.github.kauri_off.kiroku.core.error.DataError
 import io.github.kauri_off.kiroku.core.error.Outcome
+import io.github.kauri_off.kiroku.core.list.SortDirection
+import io.github.kauri_off.kiroku.core.list.TabSort
+import io.github.kauri_off.kiroku.core.list.mangaListSorts
 import io.github.kauri_off.kiroku.core.list.orderManga
 import io.github.kauri_off.kiroku.core.model.MangaListEntry
 import io.github.kauri_off.kiroku.core.model.MangaReadingStatus
@@ -46,6 +49,7 @@ internal class PublicMangaListViewModel(
             MangaListControls(
                 tab = saved.get<String>(TAB)?.let(::MangaReadingStatus) ?: MangaListControls().tab,
                 filter = ListState.Typed(saved.get<String>(FILTER), saved.get<Int>(FILTER_SESSION) ?: 0),
+                sorts = restoreSorts(),
             ),
         )
     private val read = MutableStateFlow<NamedListState<MangaListEntry>?>(null)
@@ -84,10 +88,13 @@ internal class PublicMangaListViewModel(
 
     val state =
         combine(content, input, refreshing, sessions) { content, controls, refreshing, session ->
-            val ready = content as? MangaListContent.Ready
             val tab = controls.tab
+            val ready =
+                (content as? MangaListContent.Ready)?.let {
+                    if (it.streaming && tab !in it.statuses) it.copy(confirmedStatuses = setOf(tab)) else it
+                }
             MangaListState(
-                content = if (ready != null && refreshing) ready.copy(refreshing = true) else content,
+                content = if (ready != null && refreshing) ready.copy(refreshing = true) else ready ?: content,
                 sessionExpired = session is Session.Expired,
                 tab = if (ready == null || tab in ready.statuses) tab else MangaListControls().tab,
                 sorts = controls.sorts,
@@ -122,6 +129,13 @@ internal class PublicMangaListViewModel(
             else -> {
                 val next = controls.value.after(event, state.value.content as? MangaListContent.Ready)
                 if (next == controls.value) return
+                if (next.sorts != controls.value.sorts) {
+                    val choices =
+                        next.sorts.flatMap { (tab, choice) ->
+                            listOf(tab.code, choice.sort.name, choice.direction?.name.orEmpty())
+                        }
+                    saved[SORTS] = ArrayList(choices)
+                }
                 controls.value = next
                 saved[TAB] = next.tab.code
                 saved[FILTER] = next.filter.text
@@ -142,7 +156,20 @@ internal class PublicMangaListViewModel(
             }
     }
 
+    private fun restoreSorts(): Map<MangaReadingStatus, TabSort> =
+        saved
+            .get<ArrayList<String>>(SORTS)
+            .orEmpty()
+            .chunked(3)
+            .mapNotNull { values ->
+                val status = values.first().takeIf(String::isNotBlank) ?: return@mapNotNull null
+                val sort = mangaListSorts.firstOrNull { it.name == values.getOrNull(1) } ?: return@mapNotNull null
+                val direction = SortDirection.entries.firstOrNull { it.name == values.getOrNull(2) } ?: return@mapNotNull null
+                MangaReadingStatus(status) to TabSort(sort, direction)
+            }.toMap()
+
     private companion object {
+        val SORTS = notShown("publicMangaSorts")
         val TAB = notShown("publicMangaTab")
         val FILTER = notShown("publicMangaFilter")
         val FILTER_SESSION = notShown("publicMangaFilterSession")

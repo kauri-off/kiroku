@@ -11,8 +11,11 @@ import io.github.kauri_off.kiroku.core.repository.MangaListEditResult
 import io.github.kauri_off.kiroku.core.repository.MangaListRemovalResult
 import io.github.kauri_off.kiroku.core.repository.MangaListStatus
 import io.github.kauri_off.kiroku.core.repository.SignInStep
+import io.github.kauri_off.kiroku.core.user.NamedListState
 import io.github.kauri_off.kiroku.data.sandbox.SandboxMal
+import io.github.kauri_off.kiroku.data.sandbox.SandboxUsers
 import io.github.kauri_off.kiroku.data.sandbox.SandboxWrites
+import io.github.kauri_off.kiroku.scenario.Scenario
 import io.github.kauri_off.kiroku.source.DataSource
 import io.github.kauri_off.kiroku.source.StartsOn
 import io.github.kauri_off.kiroku.wiring.AppEnds
@@ -96,6 +99,24 @@ class SandboxProfileTest {
 
     private suspend fun saveManga(graph: SandboxGraph): Session.SignedIn =
         signIn(graph).also { check(graph.mangaList.refresh(it.signIn) is Outcome.Success) }
+
+    @Test
+    fun `normal sign-out clears the Sandbox public manga keeper`() {
+        process { graph ->
+            val account = signIn(graph)
+            val lists = graph.publicMangaLists
+            val name = SandboxUsers.PRIVATE
+            assertEquals(Outcome.Success(Unit), lists.refreshList(name.lowercase()))
+            assertEquals(Outcome.Failure(DataError.PrivateList), lists.refreshList(SandboxUsers.PUBLIC))
+            assertEquals(Outcome.Failure(DataError.UnknownUser), lists.refreshList("unknown_fixture"))
+            graph.scenarios.set(Scenario(offline = true))
+            assertEquals(4, (lists.observeList(name).first() as NamedListState.Whole).entries.size)
+            graph.signOut(account)
+            assertEquals(NamedListState.None(DataError.NoConnection), lists.observeList(name).first { it !is NamedListState.Reading })
+        }
+        assertEquals(emptyList<URI>(), connections.asked)
+        assertEquals(emptyList<Throwable>(), reports)
+    }
 
     @Test
     fun `a new graph over the same files shows the own profile without a request`() {
