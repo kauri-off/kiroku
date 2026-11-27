@@ -19,6 +19,7 @@ import io.github.kauri_off.kiroku.core.repository.SearchRepository
 import io.github.kauri_off.kiroku.core.repository.SessionRepository
 import io.github.kauri_off.kiroku.core.repository.UserRepository
 import io.github.kauri_off.kiroku.core.score.ScoreDistributionRepository
+import io.github.kauri_off.kiroku.core.user.PublicMangaLists
 import io.github.kauri_off.kiroku.notShown
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
@@ -35,6 +36,7 @@ interface AppGraph {
     val manga: MangaRepository? get() = null
     val mangaCatalogue: MangaCatalogue? get() = null
     val mangaList: MangaListReader? get() = null
+    val publicMangaLists: PublicMangaLists? get() = null
     val mangaListEditor: MangaListEditor? get() = null
     val airing: AiringRepository
 

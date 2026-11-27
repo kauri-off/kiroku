@@ -117,6 +117,7 @@ class LiveGraphTest {
             val graph = LiveGraph(parts(backgroundScope), listStore = { store() })
 
             assertEquals(Session.SignedOut, graph.session.observeSession().first())
+            assertNull(graph.publicMangaLists)
             assertEquals(0, device.clientBuilds.get())
             assertEquals(0, stores.get())
 

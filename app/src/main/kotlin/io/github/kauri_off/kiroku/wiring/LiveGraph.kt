@@ -132,6 +132,7 @@ internal class LiveGraph(
     ownProfile: (LiveParts, MalSession) -> MalOwnProfile = ::ownProfileOf,
     notificationStore: (LiveParts, StoredPreferences) -> NotificationStore = ::liveNotificationStore,
     imageFiles: FileSystem = FileSystem.SYSTEM,
+    forgetPublicManga: () -> Unit = {},
     airingOf: AiringOf = ::listAiring,
 ) : AppGraph,
     SignInOwner {
@@ -155,6 +156,7 @@ internal class LiveGraph(
             runLog,
             forgetMangaSorts = { preferences.forgetMangaListSorts(it) },
             forgetManga = {
+                forgetPublicManga()
                 withContext(Dispatchers.IO) {
                     forgetMangaCaptures(this@LiveGraph)
                     !hasDatabase() || mangaList.forgetBeforeSignOut() is Outcome.Success

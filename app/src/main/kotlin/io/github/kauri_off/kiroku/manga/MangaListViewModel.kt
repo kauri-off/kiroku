@@ -8,8 +8,6 @@ import androidx.lifecycle.viewModelScope
 import io.github.kauri_off.kiroku.ShownLoads
 import io.github.kauri_off.kiroku.core.error.DataError
 import io.github.kauri_off.kiroku.core.error.Outcome
-import io.github.kauri_off.kiroku.core.list.TabSort
-import io.github.kauri_off.kiroku.core.list.mangaListSorts
 import io.github.kauri_off.kiroku.core.model.MangaListEntry
 import io.github.kauri_off.kiroku.core.model.MangaListSnapshot
 import io.github.kauri_off.kiroku.core.model.Session
@@ -169,36 +167,7 @@ internal class MangaListViewModel(
         val content = displayed.content as? MangaListContent.Ready
         if (session.value?.owner != owner || current.owner != owner || displayed.owner != owner) return
         val tab = current.sortTab
-        val choice = tab?.let(current.sorts::get) ?: defaultMangaSort
-        val next =
-            when (event) {
-                is MangaListEvent.SelectTab ->
-                    if (content != null && event.status in content.statuses) current.copy(tab = event.status) else current
-                MangaListEvent.StartFilter -> current.copy(filter = current.filter.withText(""), sortTab = null)
-                is MangaListEvent.FilterChanged ->
-                    if (current.filter.text != null) current.copy(filter = current.filter.withText(event.text)) else current
-                MangaListEvent.EndFilter -> current.copy(filter = current.filter.withText(null))
-                is MangaListEvent.OpenSort ->
-                    if (content != null && event.tab in content.statuses && current.filter.text == null) {
-                        current.copy(sortTab = event.tab)
-                    } else {
-                        current
-                    }
-                MangaListEvent.DismissSort -> current.copy(sortTab = null)
-                is MangaListEvent.SelectSort ->
-                    if (tab != null && event.sort in mangaListSorts && event.sort != choice.sort) {
-                        current.copy(sorts = current.sorts + (tab to TabSort(event.sort)))
-                    } else {
-                        current
-                    }
-                is MangaListEvent.SelectDirection ->
-                    if (tab != null && event.direction != choice.direction) {
-                        current.copy(sorts = current.sorts + (tab to choice.copy(direction = event.direction)))
-                    } else {
-                        current
-                    }
-                else -> current
-            }
+        val next = current.after(event, content)
         if (next != current) {
             controls.value = next
             saved.saveMangaControls(next)

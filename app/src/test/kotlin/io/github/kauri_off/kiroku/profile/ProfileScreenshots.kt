@@ -30,6 +30,15 @@ class ProfileScreenshots : ScreenshotRegistry() {
             case("own-no-header") { Screen(me(ProfileContent.Shown(null, fixtures.set.userStatistics))) },
             case("own-refreshing") { Screen(me().copy(refreshing = true)) },
             case("other", largeText = true) { Screen(of(fixtures.otherName, fixtures.other)) },
+            case("other-with-manga", largeText = true) {
+                Screen(of(fixtures.otherName, fixtures.other).copy(publicMangaAvailable = true))
+            },
+            case("private-anime-with-manga", largeText = true) {
+                Screen(of(fixtures.privateName, ProfileContent.Failed(DataError.PrivateList)).copy(publicMangaAvailable = true))
+            },
+            case("offline-anime-with-manga", largeText = true) {
+                Screen(of(fixtures.otherName, ProfileContent.Failed(DataError.NoConnection)).copy(publicMangaAvailable = true))
+            },
             case("other-few") { Screen(of(fixtures.otherName, fixtures.otherFew)) },
             case("other-read-again") {
                 Screen(
