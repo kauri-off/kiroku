@@ -162,15 +162,16 @@ internal fun CoverGallery(
 ) {
     val scope = rememberCoroutineScope()
     val buttonScroll = remember(pager, scope) { GalleryButtonScroll(pager, scope) }
+    val gallery = remember(buttonScroll, pages) { buttonScroll.identify(pages) }
     val motion = MaterialTheme.motionScheme
-    val position = buttonScroll.position(pages)
-    SideEffect { buttonScroll.update(pages, motion) }
+    val position = buttonScroll.position(gallery)
+    SideEffect { buttonScroll.update(gallery) }
 
     Column(Modifier.fillMaxSize(), horizontalAlignment = Alignment.CenterHorizontally) {
         HorizontalPager(
             state = pager,
             modifier = Modifier.fillMaxWidth().weight(1f),
-            key = { pages[it].galleryKey },
+            key = { gallery[it].key },
         ) { index ->
             val description =
                 if (index == 0) {
@@ -179,12 +180,12 @@ internal fun CoverGallery(
                     stringResource(R.string.title_gallery_image, index + 1, pages.size, title)
                 }
             Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                CoverImage(pages[index].sources(), R.string.title_gallery_failed, description)
+                CoverImage(gallery[index].picture.sources(), R.string.title_gallery_failed, description)
             }
         }
         Row(verticalAlignment = Alignment.CenterVertically) {
             TextButton(
-                onClick = { buttonScroll.moveTo(pages, position - 1, motion) },
+                onClick = { buttonScroll.moveTo(gallery, position - 1, motion) },
                 enabled = position > 0,
             ) { Text(stringResource(R.string.title_gallery_previous)) }
             Text(
@@ -193,76 +194,92 @@ internal fun CoverGallery(
                 style = MaterialTheme.typography.labelLarge,
             )
             TextButton(
-                onClick = { buttonScroll.moveTo(pages, position + 1, motion) },
+                onClick = { buttonScroll.moveTo(gallery, position + 1, motion) },
                 enabled = position < pages.lastIndex,
             ) { Text(stringResource(R.string.title_gallery_next)) }
         }
     }
 }
 
-private val TitlePicture.galleryKey: String
-    get() = medium?.takeIf(String::isNotBlank) ?: checkNotNull(large)
-
 private class GalleryButtonScroll(
     private val pager: PagerState,
     private val scope: CoroutineScope,
 ) {
+    private var shown: List<GalleryPage> = emptyList()
+    private var nextKey = 0L
     private var pending by mutableStateOf<GalleryMove?>(null)
     private var animation: Job? = null
 
-    fun position(pages: List<TitlePicture>): Int = pending?.resolve(pages)?.page ?: pager.targetPage.coerceIn(pages.indices)
+    fun identify(pictures: List<TitlePicture>): List<GalleryPage> {
+        val keysBySource = shown.flatMap { page -> page.picture.sources().map { it to page.key } }.toMap()
+        val assigned = mutableSetOf<Long>()
+        var key = nextKey
+        return pictures.map { picture ->
+            val previous = picture.sources().firstNotNullOfOrNull { keysBySource[it]?.takeIf(assigned::add) }
+            GalleryPage(previous ?: key++, picture)
+        }
+    }
+
+    fun position(pages: List<GalleryPage>): Int = pending?.resolve(pages)?.page ?: pager.targetPage.coerceIn(pages.indices)
 
     fun moveTo(
-        pages: List<TitlePicture>,
+        pages: List<GalleryPage>,
         page: Int,
         motion: MotionScheme,
     ) {
-        val origin = pending?.origin ?: pages[pager.settledPage.coerceIn(pages.indices)].galleryKey
-        scroll(GalleryMove(pages[page].galleryKey, origin, page), motion)
+        val origin = pending?.origin ?: pages[pager.settledPage.coerceIn(pages.indices)].key
+        val move = GalleryMove(pages[page].key, origin, pages, page)
+        start(move) {
+            if (pager.currentPage == page && pager.currentPageOffsetFraction == 0f) {
+                pager.scrollToPage(page)
+            } else {
+                pager.animateScrollToPage(page, animationSpec = motion.defaultEffectsSpec())
+            }
+        }
     }
 
-    fun update(
-        pages: List<TitlePicture>,
-        motion: MotionScheme,
-    ) {
-        val current = pending ?: return
-        scroll(current.resolve(pages), motion)
+    fun update(pages: List<GalleryPage>) {
+        if (shown === pages) return
+        shown = pages
+        nextKey = maxOf(nextKey, pages.maxOf { it.key } + 1)
+        val move = pending?.resolve(pages) ?: return
+        start(move) { pager.scrollToPage(move.page) }
     }
 
-    private fun scroll(
-        destination: GalleryMove,
-        motion: MotionScheme,
+    private fun start(
+        move: GalleryMove,
+        scroll: suspend () -> Unit,
     ) {
-        if (destination == pending) return
-        pending = destination
+        if (move == pending) return
+        pending = move
         animation?.cancel()
         animation =
             scope.launch {
-                val page = destination.page
                 try {
-                    if (destination.returning || (pager.currentPage == page && pager.currentPageOffsetFraction == 0f)) {
-                        pager.scrollToPage(page)
-                    } else {
-                        pager.animateScrollToPage(page, animationSpec = motion.defaultEffectsSpec())
-                    }
+                    scroll()
                 } finally {
-                    if (pending === destination) pending = null
+                    if (pending === move) pending = null
                 }
             }
     }
 }
 
+private data class GalleryPage(
+    val key: Long,
+    val picture: TitlePicture,
+)
+
 private data class GalleryMove(
-    val picture: String,
-    val origin: String,
+    val target: Long,
+    val origin: Long,
+    val pages: List<GalleryPage>,
     val page: Int,
-    val returning: Boolean = false,
 ) {
-    fun resolve(pages: List<TitlePicture>): GalleryMove {
-        val target = pages.indexOfFirst { it.galleryKey == picture }
-        if (target >= 0) return copy(page = target, returning = false)
-        val fallback = pages.indexOfFirst { it.galleryKey == origin }.coerceAtLeast(0)
-        return copy(page = fallback, returning = true)
+    fun resolve(pages: List<GalleryPage>): GalleryMove {
+        if (this.pages == pages) return this
+        val targetIndex = pages.indexOfFirst { it.key == target }
+        val destination = if (targetIndex >= 0) targetIndex else pages.indexOfFirst { it.key == origin }.coerceAtLeast(0)
+        return copy(pages = pages, page = destination)
     }
 }
 

@@ -7,9 +7,12 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.State
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.MotionDurationScale
+import androidx.compose.ui.graphics.toArgb
+import androidx.compose.ui.graphics.toPixelMap
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsEnabled
+import androidx.compose.ui.test.captureToImage
 import androidx.compose.ui.test.hasContentDescription
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithText
@@ -143,34 +146,104 @@ class TitleGalleryMotionTest {
         }
     }
 
-    private fun startNextAtZeroOffset(pager: PagerState) {
+    @Test
+    fun nextStillLandsOnTheSamePictureWhenOnlyItsOriginMoves() {
+        val pages = mutableStateOf(listOf(COVER, FIRST, SECOND, THIRD, FOURTH))
+        val requested = CopyOnWriteArrayList<Any>()
+        val pager = gallery(pages, requested, initialPage = 1, highlightedSource = SECOND.medium)
+        startNextAtZeroOffset(pager, targetPage = 2)
+        compose.runOnIdle { pages.value = listOf(COVER, THIRD, SECOND, FIRST, FOURTH) }
+
+        clock.advanceTimeBy(2 * MotionBounds.ENTER)
+        clock.autoAdvance = true
+        assertPictureDisplayed("Image\u00A03\u00A0of\u00A05\u00A0for Sample", HIGHLIGHT)
+        assertTrue(SECOND.medium in requested)
+        compose.runOnIdle {
+            assertEquals(2, pager.settledPage)
+            assertFalse(pager.isScrollInProgress)
+        }
+    }
+
+    @Test
+    fun nextStillRecognizesALargeOnlyDestinationThatGainsAMediumSource() {
+        val largeOnly = TitlePicture(null, SECOND_LARGE)
+        val pages = mutableStateOf(listOf(COVER, FIRST, largeOnly))
+        val requested = CopyOnWriteArrayList<Any>()
+        val pager = gallery(pages, requested, initialPage = 1, highlightedSource = SECOND_LARGE)
+        startNextAtZeroOffset(pager, targetPage = 2)
+        compose.runOnIdle { pages.value = listOf(COVER, FIRST, largeOnly.copy(medium = SECOND.medium)) }
+
+        clock.advanceTimeBy(2 * MotionBounds.ENTER)
+        clock.autoAdvance = true
+        assertPictureDisplayed("Image\u00A03\u00A0of\u00A03\u00A0for Sample", HIGHLIGHT)
+        assertTrue(SECOND_LARGE in requested)
+        compose.runOnIdle {
+            assertEquals(2, pager.settledPage)
+            assertFalse(pager.isScrollInProgress)
+        }
+    }
+
+    @Test
+    fun aMissingDestinationReturnsToTheMovedOriginAfterItGainsAMediumSource() {
+        val largeOnly = TitlePicture(null, FIRST_LARGE)
+        val pages = mutableStateOf(listOf(COVER, largeOnly, SECOND, THIRD))
+        val requested = CopyOnWriteArrayList<Any>()
+        val pager = gallery(pages, requested, initialPage = 1, highlightedSource = FIRST_LARGE)
+        startNextAtZeroOffset(pager, targetPage = 2)
+        compose.runOnIdle { pages.value = listOf(COVER, THIRD, largeOnly.copy(medium = FIRST.medium)) }
+
+        clock.advanceTimeBy(2 * MotionBounds.ENTER)
+        clock.autoAdvance = true
+        assertPictureDisplayed("Image\u00A03\u00A0of\u00A03\u00A0for Sample", HIGHLIGHT)
+        assertTrue(FIRST_LARGE in requested)
+        compose.runOnIdle {
+            assertEquals(2, pager.settledPage)
+            assertFalse(pager.isScrollInProgress)
+        }
+    }
+
+    private fun startNextAtZeroOffset(
+        pager: PagerState,
+        targetPage: Int = 1,
+    ) {
         clock.autoAdvance = false
         compose.onNodeWithText("Next").performClick()
         clock.advanceTimeByFrame()
         compose.runOnIdle {
-            assertEquals(1, pager.targetPage)
+            assertEquals(targetPage, pager.targetPage)
             assertEquals(0f, pager.currentPageOffsetFraction, 0f)
         }
     }
 
-    private fun assertPictureDisplayed(description: String) {
+    private fun assertPictureDisplayed(
+        description: String,
+        color: Int? = null,
+    ) {
         val image = hasContentDescription(description)
         compose.waitUntil { compose.onAllNodes(image).fetchSemanticsNodes().isNotEmpty() }
-        compose.onNode(image).assertIsDisplayed()
+        val shown = compose.onNode(image).assertIsDisplayed()
+        if (color != null) {
+            val pixels = shown.captureToImage().toPixelMap()
+            assertEquals(color, pixels[pixels.width / 2, pixels.height / 2].toArgb())
+        }
     }
 
     private fun gallery(
         pages: State<List<TitlePicture>> = mutableStateOf(listOf(COVER, FIRST)),
         requested: MutableList<Any> = CopyOnWriteArrayList(),
+        initialPage: Int = 0,
+        highlightedSource: String? = null,
     ): PagerState {
-        val image = ColorImage(RemoteImages.BLOCK, width = RemoteImages.POSTER_WIDTH, height = RemoteImages.POSTER_HEIGHT)
         val loader =
             ImageLoader
                 .Builder(compose.activity)
                 .components {
                     add(
                         Interceptor { chain ->
-                            requested += chain.request.data
+                            val source = chain.request.data
+                            requested += source
+                            val color = if (source == highlightedSource) HIGHLIGHT else RemoteImages.BLOCK
+                            val image = ColorImage(color, width = RemoteImages.POSTER_WIDTH, height = RemoteImages.POSTER_HEIGHT)
                             SuccessResult(image, chain.request, DataSource.MEMORY)
                         },
                     )
@@ -179,7 +252,7 @@ class TitleGalleryMotionTest {
         compose.setContent {
             KirokuTheme(dark = false, dynamicColor = false) {
                 CompositionLocalProvider(LocalRouteImages provides loader) {
-                    pager = rememberPagerState { pages.value.size }
+                    pager = rememberPagerState(initialPage) { pages.value.size }
                     CoverGallery(pages.value, "Sample", pager)
                 }
             }
@@ -190,9 +263,13 @@ class TitleGalleryMotionTest {
 
     private companion object {
         const val FRAME = 16L
+        const val HIGHLIGHT = 0xFF3A77C1.toInt()
+        const val SECOND_LARGE = "https://example.invalid/gallery/second-large.jpg"
         const val FIRST_LARGE = "https://example.invalid/gallery/first-large.jpg"
         val COVER = TitlePicture("https://example.invalid/gallery/cover.jpg", null)
         val FIRST = TitlePicture("https://example.invalid/gallery/first.jpg", null)
         val SECOND = TitlePicture("https://example.invalid/gallery/second.jpg", null)
+        val THIRD = TitlePicture("https://example.invalid/gallery/third.jpg", null)
+        val FOURTH = TitlePicture("https://example.invalid/gallery/fourth.jpg", null)
     }
 }
