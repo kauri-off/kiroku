@@ -34,15 +34,18 @@ class MalErrorsTest {
 
     private fun read(anotherUsersList: Boolean = false): MalAnswer<Thing> =
         runBlocking {
-            network.http.call(listError = if (anotherUsersList) ::anotherUsersListError else null) { things.read() }
+            network.http.call(
+                listError = if (anotherUsersList) ({ status, body, _ -> anotherUsersListError(status, body) }) else null,
+            ) { things.read() }
         }
 
     private fun readAnswered(
         code: Int,
         anotherUsersList: Boolean = false,
         body: String = NetworkFixture.THING,
+        type: String = "application/json; charset=utf-8",
     ): MalAnswer<Thing> {
-        network.always(answer(code, body))
+        network.always(answer(code, body, type))
         return read(anotherUsersList)
     }
 
@@ -203,6 +206,10 @@ class MalErrorsTest {
         assertEquals(failed(DataError.NotFound), readAnswered(404))
         assertEquals(failed(DataError.NotFound), readAnswered(404, anotherUsersList = true))
         assertEquals(failed(DataError.NotFound), readAnswered(404, body = recorded("list_unknown_user")))
+        assertEquals(
+            failed(DataError.UnknownUser),
+            readAnswered(404, anotherUsersList = true, body = recorded("list_unknown_user"), type = "text/plain"),
+        )
         for (name in listOf("list_unknown_user", "list_impossible_name")) {
             assertEquals(name, 404, RecordedAnswers.named(name).status)
             assertEquals(name, failed(DataError.UnknownUser), readAnswered(404, anotherUsersList = true, body = recorded(name)))

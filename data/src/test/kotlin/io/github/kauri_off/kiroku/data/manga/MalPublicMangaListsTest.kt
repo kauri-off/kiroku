@@ -3,6 +3,8 @@ package io.github.kauri_off.kiroku.data.manga
 import io.github.kauri_off.kiroku.core.error.DataError
 import io.github.kauri_off.kiroku.core.error.Outcome
 import io.github.kauri_off.kiroku.core.model.MangaListEntry
+import io.github.kauri_off.kiroku.core.user.MangaListKeeper
+import io.github.kauri_off.kiroku.core.user.NamedListState
 import io.github.kauri_off.kiroku.data.network.AUTHORIZATION
 import io.github.kauri_off.kiroku.data.network.CLIENT_ID_HEADER
 import io.github.kauri_off.kiroku.data.network.NetworkFixture
@@ -14,9 +16,11 @@ import io.github.kauri_off.kiroku.data.recorder.insideACheckout
 import io.github.kauri_off.kiroku.data.recorder.ownerFolder
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.cancelAndJoin
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
+import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.int
@@ -86,6 +90,9 @@ class MalPublicMangaListsTest {
                     answer(429, "") to DataError.Refused,
                     answer(404, "") to DataError.NotFound,
                     answer(404, """{"error":"not_found"} trailing""") to DataError.NotFound,
+                    answer(404, """{"error":not_found}""") to DataError.NotFound,
+                    answer(404, """{"error":"forbidden","err\u006fr":"not_found"}""") to DataError.NotFound,
+                    answer(404, """{"error":"not_found"}""", type = "text/plain") to DataError.NotFound,
                 )
             for ((reply, error) in cases) {
                 network.always(reply)
@@ -93,6 +100,26 @@ class MalPublicMangaListsTest {
                 assertEquals(error == DataError.Refused, !network.http.refusedFor().isZero)
                 network.http.backOff.answered(network.http.backOff.mark())
             }
+        }
+
+    @Test
+    fun `an unverified 404 preserves a cached whole list and a verified unknown user replaces it`() =
+        runBlocking {
+            val keeper = MangaListKeeper(lists, this) { error("Unexpected keeper failure") }
+            val page = recordedPage(3)
+            network.always(answer(200, JsonObject(page + ("paging" to JsonObject(emptyMap()))).toString()))
+            assertEquals(Outcome.Success(Unit), keeper.refreshList("sample"))
+            val whole = keeper.observeList("sample").first() as NamedListState.Whole
+            assertFalse(whole.entries.isEmpty())
+
+            val notFound = RecordedAnswers.named("list_unknown_user").body
+            network.always(answer(404, notFound, type = "text/html"))
+            assertEquals(Outcome.Failure(DataError.NotFound), keeper.refreshList("sample"))
+            assertEquals(whole, keeper.observeList("sample").first())
+
+            network.always(answer(404, notFound))
+            assertEquals(Outcome.Failure(DataError.UnknownUser), keeper.refreshList("sample"))
+            assertEquals(NamedListState.None(DataError.UnknownUser), keeper.observeList("sample").first())
         }
 
     @Test
@@ -124,6 +151,54 @@ class MalPublicMangaListsTest {
                 network.always(reply)
                 assertEquals(Outcome.Failure(DataError.ServerError), lists.read("sample") { error("Unexpected page") })
             }
+        }
+
+    @Test
+    fun `duplicate envelope and paging members fail before a page is delivered`() =
+        runBlocking {
+            val ambiguous =
+                listOf(
+                    """{"data":[],"paging":{},"data":[]}""",
+                    """{"data":[],"paging":{"next":"https://example.test/?offset=1"},"pa\u0067ing":{}}""",
+                    """{"data":[],"paging":{"next":"https://example.test/?offset=1","ne\u0078t":null}}""",
+                )
+            for (body in ambiguous) {
+                network.always(answer(200, body))
+                assertEquals(Outcome.Failure(DataError.ServerError), lists.read("sample") { error("Unexpected page") })
+            }
+            assertEquals(ambiguous.size, network.api.requestCount)
+        }
+
+    @Test
+    fun `a previous link must name the preceding request offset when present`() =
+        runBlocking {
+            val first = recordedPage(1)
+            val second = recordedPage(2)
+            val third = recordedPage(3)
+            val paging = third.getValue("paging").jsonObject
+            val previous = paging.getValue("previous").jsonPrimitive.content
+
+            fun enqueue(vararg pages: JsonObject) {
+                pages.forEach { network.api.enqueue(answer(200, it.toString())) }
+            }
+
+            enqueue(JsonObject(first + ("paging" to paging)))
+            assertEquals(Outcome.Failure(DataError.ServerError), lists.read("sample") { error("Unexpected first page") })
+
+            val secondWithoutPrevious = JsonObject(second + ("paging" to JsonObject(second.getValue("paging").jsonObject - "previous")))
+            for (link in listOf(JsonPrimitive("https://example.test/?offset=0"), JsonPrimitive("$previous&offset=10"), JsonNull)) {
+                val contradictory = JsonObject(third + ("paging" to JsonObject(paging + ("previous" to link))))
+                enqueue(first, secondWithoutPrevious, contradictory)
+                var parts = 0
+                assertEquals(Outcome.Failure(DataError.ServerError), lists.read("sample") { parts++ })
+                assertEquals(2, parts)
+            }
+
+            enqueue(first, secondWithoutPrevious, third)
+            var parts = 0
+            assertEquals(Outcome.Success(Unit), lists.read("sample") { parts++ })
+            assertEquals(3, parts)
+            assertEquals(13, network.api.requestCount)
         }
 
     @Test
@@ -167,6 +242,11 @@ class MalPublicMangaListsTest {
 
                 val downloads = captures.filterNot { it.singleOrNull()?.status == 404 }.map(::orderedPages)
                 check(downloads.any { it.size > 1 })
+                val empty =
+                    downloads.single { pages ->
+                        val envelope = pages.singleOrNull()?.second?.json ?: return@single false
+                        envelope.getValue("data").jsonArray.isEmpty() && envelope.getValue("paging").jsonObject.isEmpty()
+                    }
                 for (pages in downloads) {
                     val offsets = pages.map { it.first }
                     val bodies = pages.toMap()
@@ -181,6 +261,7 @@ class MalPublicMangaListsTest {
                             check(network.api.requestCount == before + parts.size)
                         }
                     check(result == Outcome.Success(Unit) && parts.size == pages.size)
+                    if (pages === empty) check(parts.single().isEmpty())
                     for ((index, page) in pages.withIndex()) {
                         val request = network.api.received()
                         check(request.url.pathSegments == listOf("v2", "users", "sample", "mangalist"))
@@ -232,11 +313,13 @@ class MalPublicMangaListsTest {
             }
         }
 
+    private fun recordedPage(number: Int): JsonObject = checkNotNull(RecordedAnswers.named("list_public_$number").body.uniqueMangaObject())
+
     private class Captured(
         val status: Int,
         val body: String,
     ) {
-        val json get() = checkNotNull(body.strictMangaObject())
+        val json get() = checkNotNull(body.uniqueMangaObject())
 
         fun offset(rel: String): Int? =
             json

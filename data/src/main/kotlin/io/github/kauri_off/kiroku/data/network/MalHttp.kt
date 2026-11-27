@@ -118,7 +118,7 @@ class MalHttp(
 
     // Runs [request] off the main thread; however it fails, the failure is an answer: only an Error is not caught.
     internal suspend fun <T> call(
-        listError: ((Int, String) -> DataError?)? = null,
+        listError: ((Int, String, Headers?) -> DataError?)? = null,
         maySendRead: (() -> Boolean)? = null,
         firstRead: (() -> ReadAdmission)? = null,
         maySendWrite: (() -> Boolean)? = null,
@@ -130,7 +130,7 @@ class MalHttp(
 
     private suspend fun <T> asked(
         sends: Sends,
-        listError: ((Int, String) -> DataError?)?,
+        listError: ((Int, String, Headers?) -> DataError?)?,
         request: suspend () -> T,
     ): MalAnswer<T> {
         var tries = 0
@@ -150,7 +150,7 @@ class MalHttp(
     )
 
     private suspend fun <T> once(
-        listError: ((Int, String) -> DataError?)?,
+        listError: ((Int, String, Headers?) -> DataError?)?,
         request: suspend () -> T,
     ): Tried<T> {
         val mark = backOff.mark()
@@ -195,11 +195,11 @@ class MalHttp(
         headers: Headers?,
         // The failure's body, when it was read.
         body: String?,
-        listError: ((Int, String) -> DataError?)?,
+        listError: ((Int, String, Headers?) -> DataError?)?,
     ): Tried<Nothing> {
         // A 403 MAL did not write is the device's network (a portal, a proxy, a block page), not MAL refusing the app.
         val notMals = status == 403 && !malRefusal(status, body)
-        val ofAnotherUsersList = body?.let { listError?.invoke(status, it) }
+        val ofAnotherUsersList = body?.let { listError?.invoke(status, it, headers) }
         val error =
             when {
                 ofAnotherUsersList != null -> ofAnotherUsersList

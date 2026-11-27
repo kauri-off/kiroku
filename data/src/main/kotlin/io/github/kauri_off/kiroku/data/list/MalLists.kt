@@ -82,7 +82,8 @@ class MalLists internal constructor(
         }
         return when (user) {
             is ListUser.SignedIn -> user.session.authorised(http, user.expectedOwner) { read(it) }
-            is ListUser.Named -> http.call(listError = ::anotherUsersListError) { read(null) }.clientIdOutcome()
+            is ListUser.Named ->
+                http.call(listError = { status, body, _ -> anotherUsersListError(status, body) }) { read(null) }.clientIdOutcome()
         }
     }
 

@@ -243,14 +243,19 @@ private fun MangaListWriteAnswer.acknowledgesPatch(): Boolean {
     return body?.strictMangaObject()?.let { it.isNotEmpty() && "error" !in it } == true
 }
 
-internal fun String.strictMangaObject(): JsonObject? {
-    if (!isStrictMangaObject()) return null
-    return try {
-        MalJson.parseToJsonElement(this) as? JsonObject
+internal fun String.uniqueMangaObject(): JsonObject? =
+    strictMangaObject {
+        val names = mutableSetOf<String>()
+        val add: (String) -> Boolean = { raw -> names.add(MalJson.decodeFromString<String>(raw)) }
+        add
+    }
+
+private fun String.strictMangaObject(startsObject: (() -> (String) -> Boolean)? = null): JsonObject? =
+    try {
+        if (isStrictMangaObject(startsObject)) MalJson.parseToJsonElement(this) as? JsonObject else null
     } catch (_: SerializationException) {
         null
     }
-}
 
 internal fun String.isStrictMangaObject(startsObject: (() -> (String) -> Boolean)? = null): Boolean =
     JsonStructure(this, startsObject).isObject()

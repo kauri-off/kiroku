@@ -14,6 +14,9 @@ import io.github.kauri_off.kiroku.data.network.clientIdOutcome
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
 import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.jsonObject
+import okhttp3.Headers
+import okhttp3.MediaType.Companion.toMediaTypeOrNull
 import okhttp3.ResponseBody
 import retrofit2.HttpException
 import retrofit2.Response
@@ -33,11 +36,12 @@ class MalPublicMangaLists(
         if (!isUserSegment(name)) return Outcome.Failure(DataError.UnknownUser)
         val ids = mutableSetOf<MangaId>()
         val repairs = mutableSetOf<String>()
+        var previousOffset: Int? = null
         var offset = 0
         while (true) {
             currentCoroutineContext().ensureActive()
             val page =
-                when (val answer = page(name, offset, repairs)) {
+                when (val answer = page(name, offset, previousOffset, repairs)) {
                     is Outcome.Failure -> return answer
                     is Outcome.Success -> answer.value
                 }
@@ -45,6 +49,7 @@ class MalPublicMangaLists(
             currentCoroutineContext().ensureActive()
             part(page.entries)
             currentCoroutineContext().ensureActive()
+            previousOffset = offset
             offset = page.next ?: break
         }
         if (repairs.isNotEmpty()) http.unexpected(RepairedAnswer(repairs))
@@ -59,6 +64,7 @@ class MalPublicMangaLists(
     private suspend fun page(
         name: String,
         offset: Int,
+        previousOffset: Int?,
         repairs: MutableSet<String>,
     ): Outcome<PublicMangaPage> =
         http
@@ -69,8 +75,10 @@ class MalPublicMangaLists(
                     if (response.code() != 200 || body.contentType()?.subtype?.equals("json", ignoreCase = true) != true) {
                         throw NotAnAnswer()
                     }
-                    val envelope = body.string().strictMangaObject() ?: throw NotAnAnswer()
+                    val envelope = body.string().uniqueMangaObject() ?: throw NotAnAnswer()
                     check("error" !in envelope)
+                    val paging = envelope.getValue("paging").jsonObject
+                    check("previous" !in paging || (previousOffset != null && paging.mangaOffset("previous") == previousOffset))
                     val page = envelope.mangaListPage(offset)
                     check(offset == 0 || page.entries.isNotEmpty())
                     PublicMangaPage(page.entries.map { it.toEntry(repairs) }, page.next)
@@ -86,7 +94,13 @@ private class PublicMangaPage(
 private fun publicMangaListError(
     status: Int,
     body: String,
-): DataError? = DataError.UnknownUser.takeIf { status == 404 && body.strictMangaObject()?.get("error") == JsonPrimitive("not_found") }
+    headers: Headers?,
+): DataError? {
+    if (status != 404) return null
+    val mediaType = headers?.values("Content-Type")?.singleOrNull()?.toMediaTypeOrNull()
+    if (mediaType?.type != "application" || mediaType.subtype != "json") return null
+    return DataError.UnknownUser.takeIf { body.uniqueMangaObject()?.get("error") == JsonPrimitive("not_found") }
+}
 
 private interface PublicMangaListApi {
     @GET("users/{user}/mangalist")

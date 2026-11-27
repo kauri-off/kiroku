@@ -134,7 +134,7 @@ internal fun JsonObject.mangaListPage(offset: Int): MangaListPage {
     val data = getValue("data") as JsonArray
     check(data.size <= MAX_ENTRIES - offset) { "The manga list exceeds its bound" }
     val end = offset + data.size
-    val next = getValue("paging").jsonObject.mangaNextOffset()
+    val next = getValue("paging").jsonObject.mangaOffset("next")
     check(next == null || (data.isNotEmpty() && next == end && next < MAX_ENTRIES)) {
         "The next manga list page does not follow this one"
     }
@@ -164,10 +164,10 @@ private fun JsonObject.membership(): MangaListRow {
     return MangaListRow(MangaId(id), status, this)
 }
 
-private fun JsonObject.mangaNextOffset(): Int? {
-    val next = get("next")
-    if (next == null || next is JsonNull) return null
-    val url = (next as? JsonPrimitive)?.takeIf { it.isString }?.content?.toHttpUrlOrNull()
+internal fun JsonObject.mangaOffset(relation: String): Int? {
+    val link = get(relation)
+    if (link == null || link is JsonNull) return null
+    val url = (link as? JsonPrimitive)?.takeIf { it.isString }?.content?.toHttpUrlOrNull()
     val offset = url?.queryParameterValues("offset")?.singleOrNull()?.toIntOrNull()
     return checkNotNull(offset?.takeIf { it >= 0 }) { "Invalid manga list offset" }
 }
