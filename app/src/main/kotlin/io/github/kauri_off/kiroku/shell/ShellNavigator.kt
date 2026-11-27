@@ -168,12 +168,16 @@ internal fun rememberShellNavigator(
     val mode = rememberSaveable(saver = listModeSaver(saveWithCompose)) { mutableStateOf(ListMode.Anime) }
     val navigator =
         remember(list, search, profile, selected, restarts, mode, activityNavigation) {
-            activityNavigation?.restored ?: ShellNavigator(
-                mapOf(Destination.List to list, Destination.Search to search, Destination.Profile to profile),
-                selected,
-                restarts,
-                mode,
-            ).apply { restoredNavigation = restoredStack }
+            val restoredFromActivity = activityNavigation?.restored
+            val current =
+                restoredFromActivity ?: ShellNavigator(
+                    mapOf(Destination.List to list, Destination.Search to search, Destination.Profile to profile),
+                    selected,
+                    restarts,
+                    mode,
+                ).apply { restoredNavigation = restoredStack }
+            if (activityNavigation != null && current.restoredNavigation && start != null) current.openLinkedPage(start)
+            current
         }
     SideEffect { activityNavigation?.navigator = navigator }
     return navigator

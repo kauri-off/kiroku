@@ -193,8 +193,9 @@ private fun LinkTurns(
 }
 
 // A link opens its page over its destination's root with the List alone beneath (section 6.3), whatever was shown.
-fun ShellNavigator.openLink(link: Link) {
-    val page = linkedPage(link)
+fun ShellNavigator.openLink(link: Link) = openLinkedPage(linkedPage(link))
+
+internal fun ShellNavigator.openLinkedPage(page: OpenedPage) {
     home(Destination.List)
     home(page.destination)
     open(page.key)

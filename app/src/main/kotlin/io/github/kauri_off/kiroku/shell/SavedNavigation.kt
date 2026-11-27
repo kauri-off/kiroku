@@ -81,12 +81,12 @@ internal class ActivityNavigation(
             }
         }
 
-    var navigator by mutableStateOf(restored)
+    var navigator by mutableStateOf<ShellNavigator?>(null)
 
     init {
         registry.registerSavedStateProvider(navigationKey) {
             Bundle().apply {
-                navigator?.let { current ->
+                (navigator ?: restored)?.let { current ->
                     putString(selectionKey, current.current.name)
                     putInt(restartsKey, current.restarts)
                     if (current.listMode != ListMode.Anime) putString(listModeKey, current.listMode.name)

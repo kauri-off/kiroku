@@ -45,7 +45,7 @@ class MainActivity : ComponentActivity() {
         if (savedInstanceState == null) intent.tappedTitle()?.let { links?.opened(Link.Title(it)) }
         val navigation = ActivityNavigation(savedStateRegistry)
         val graph = appGraph
-        setKirokuContent(graph.preferences.observeDisplayPreferences()) { display ->
+        setKirokuContent(graph.preferences.observeDisplayPreferences()) { display, hasTheme ->
             CompositionLocalProvider(LocalSplashHold provides hold) {
                 var showShell by remember { mutableStateOf(false) }
                 if (!showShell) {
@@ -57,16 +57,17 @@ class MainActivity : ComponentActivity() {
                         withContext(Dispatchers.Main) { delay(PATIENCE) }
                         waited = true
                     }
-                    val ready = display != null || (waited && (pending != null || navigation.restored != null))
+                    val ready = display != null || (hasTheme && waited && (pending != null || navigation.restored != null))
                     LaunchedEffect(ready) {
                         if (ready) showShell = true
                     }
                 } else {
-                    val start = remember { if (navigation.restored == null) links?.link?.value else null }
+                    val start = remember { links?.link?.value }
                     val destination = display?.startupTab?.destination ?: Destination.List
                     val navigator = rememberShellNavigator(start?.let { linkedPage(it.link) }, navigation, destination)
-                    val installed = remember(navigator) { start?.takeUnless { navigator.restoredNavigation } }
-                    SideEffect { if (installed != null) links?.taken(installed) }
+                    SideEffect {
+                        if (start != null && navigation.navigator === navigator) links?.taken(start)
+                    }
                     AppRoute(graph, navigator, links = links.takeIf { navigation.navigator === navigator })
                     AskForNotifications(graph.session)
                 }

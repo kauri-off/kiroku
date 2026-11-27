@@ -8,7 +8,6 @@ import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.assertIsSelected
 import androidx.compose.ui.test.hasAnyAncestor
-import androidx.compose.ui.test.hasClickAction
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.isDialog
 import androidx.compose.ui.test.isHeading
@@ -26,6 +25,7 @@ import io.github.kauri_off.kiroku.core.fixtures.Fixtures
 import io.github.kauri_off.kiroku.core.link.Link
 import io.github.kauri_off.kiroku.core.model.StartupTab
 import io.github.kauri_off.kiroku.core.model.ThemeMode
+import io.github.kauri_off.kiroku.core.repository.MangaListReader
 import io.github.kauri_off.kiroku.core.repository.PreferencesRepository
 import io.github.kauri_off.kiroku.link.AppLinks
 import io.github.kauri_off.kiroku.link.LinksOwner
@@ -65,8 +65,16 @@ class StartupPreferencesApplication :
     val ready = MutableStateFlow(false)
     val test = TestGraph(Demo(Fixtures.reference, scope))
     override val links = AppLinks()
+    var listCompositions = 0
+        private set
     override val graph =
         object : AppGraph by test {
+            override val mangaList: MangaListReader?
+                get() {
+                    listCompositions++
+                    return test.mangaList
+                }
+
             override val preferences =
                 object : PreferencesRepository by test.preferences {
                     override fun observeDisplayPreferences() =
@@ -138,7 +146,8 @@ class StartupPreferencesTest {
         ActivityScenario.launch<MainActivity>(tapIntent(app, title.id)).use { scenario ->
             compose.waitForIdle()
             passSplashDeadline()
-            assertTitleShown()
+            compose.onNodeWithContentDescription("Loading").assertExists()
+            compose.onNode(isHeading() and hasText(title.titles.romaji)).assertDoesNotExist()
             assertEquals(0, app.test.wholeListReads)
             app.ready.value = true
             assertTitleShown()
@@ -151,7 +160,8 @@ class StartupPreferencesTest {
             tab("Profile").assertDoesNotExist()
             app.links.opened(Link.Title(title.id))
             passSplashDeadline()
-            assertTitleShown()
+            compose.onNodeWithContentDescription("Loading").assertExists()
+            compose.onNode(isHeading() and hasText(title.titles.romaji)).assertDoesNotExist()
             assertEquals(previousReads, app.test.wholeListReads)
             app.ready.value = true
             assertTitleShown()
@@ -227,11 +237,19 @@ class StartupPreferencesTest {
     }
 
     @Test
-    fun `a linked launch waits briefly for the stored theme`() {
+    fun `a cold linked launch shows loading beyond the splash deadline until the stored theme arrives`() {
         runBlocking { app.graph.preferences.setTheme(ThemeMode.PureBlack) }
         ActivityScenario.launch<MainActivity>(tapIntent(app, title.id)).use { scenario ->
             compose.onNode(isHeading() and hasText(title.titles.romaji)).assertDoesNotExist()
             scenario.onActivity { assertTrue(checkNotNull(it.splash).keeping) }
+            passSplashDeadline()
+            scenario.onActivity { assertFalse(checkNotNull(it.splash).keeping) }
+            compose.onNodeWithContentDescription("Loading").assertExists()
+            tab("List").assertDoesNotExist()
+            compose.onNode(isHeading() and hasText(title.titles.romaji)).assertDoesNotExist()
+            assertTrue(app.test.requested.isEmpty())
+            assertEquals(0, app.test.wholeListReads)
+            assertLightBars(scenario, lightIcons = true)
             app.ready.value = true
             assertTitleShown()
             assertLightBars(scenario, lightIcons = true)
@@ -266,6 +284,48 @@ class StartupPreferencesTest {
         }
     }
 
+    @Test
+    fun `a pending link takes precedence over valid restored navigation before List reads again`() {
+        app.ready.value = true
+        val first = Robolectric.buildActivity(MainActivity::class.java).setup()
+        val state = Bundle()
+        try {
+            tab("Profile").performClick()
+            compose.onNodeWithContentDescription("Settings").performClick()
+            compose.onNodeWithText("Startup tab").assertExists()
+            tab("List").performClick()
+            compose.onNodeWithText("My list").assertExists()
+            first.pause().saveInstanceState(state).stop()
+        } finally {
+            first.destroy()
+        }
+        val previousReads = app.test.wholeListReads
+        assertTrue(previousReads > 0)
+        val previousCompositions = app.listCompositions
+        assertTrue(previousCompositions > 0)
+        app.links.opened(Link.Title(FixtureAnime.premiereYear.id))
+        app.links.opened(Link.Title(title.id))
+
+        val restored = Robolectric.buildActivity(MainActivity::class.java).setup(state)
+        try {
+            assertTitleShown()
+            assertEquals(previousCompositions, app.listCompositions)
+            assertEquals(previousReads, app.test.wholeListReads)
+            assertNull(app.links.link.value)
+            restored.get().onBackPressedDispatcher.onBackPressed()
+            compose.onNodeWithText("My list").assertExists()
+            tab("Profile").performClick()
+            compose.onNodeWithText("Startup tab").assertExists()
+
+            restored.recreate()
+            compose.onNodeWithText("Startup tab").assertExists()
+            tab("List").performClick()
+            compose.onNodeWithText("My list").assertExists()
+        } finally {
+            restored.pause().stop().destroy()
+        }
+    }
+
     private fun passSplashDeadline() {
         shadowOf(Looper.getMainLooper()).idleFor(PATIENCE.toJavaDuration())
         compose.waitForIdle()
@@ -287,5 +347,5 @@ class StartupPreferencesTest {
         compose.onNodeWithText("My list").assertDoesNotExist()
     }
 
-    private fun tab(name: String) = compose.onNode(hasText(name) and hasClickAction())
+    private fun tab(name: String) = compose.onNode(hasText(name) and SemanticsMatcher.keyIsDefined(SemanticsProperties.Selected))
 }

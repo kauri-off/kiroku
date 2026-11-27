@@ -13,6 +13,7 @@ import androidx.compose.material3.MaterialExpressiveTheme
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Typography
+import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.dynamicDarkColorScheme
 import androidx.compose.material3.dynamicLightColorScheme
 import androidx.compose.runtime.Composable
@@ -38,6 +39,14 @@ import kotlinx.coroutines.flow.Flow
 import androidx.compose.ui.graphics.Color as ComposeColor
 
 private val LocalDarkTheme = staticCompositionLocalOf { false }
+
+private val StartupColors =
+    darkColorScheme(
+        surface = ComposeColor(0xFF181818),
+        onSurface = ComposeColor(0xFFE6E6E6),
+        primary = ComposeColor(0xFFE6E6E6),
+        surfaceContainer = ComposeColor(0xFF242424),
+    )
 
 data class ThemeSettings(
     val mode: ThemeMode = ThemeMode.System,
@@ -86,10 +95,17 @@ fun KirokuTheme(
     seed: Seed = Seed.Teal,
     pureBlack: Boolean = false,
     content: @Composable () -> Unit,
+) = KirokuTheme(dark, kirokuColorScheme(dark, dynamicColor, seed, pureBlack), content)
+
+@Composable
+private fun KirokuTheme(
+    dark: Boolean,
+    colors: ColorScheme,
+    content: @Composable () -> Unit,
 ) {
     CompositionLocalProvider(LocalDarkTheme provides dark) {
         MaterialExpressiveTheme(
-            colorScheme = kirokuColorScheme(dark, dynamicColor, seed, pureBlack),
+            colorScheme = colors,
             typography = ExpressiveTypography,
             content = content,
         )
@@ -112,28 +128,30 @@ fun ComponentActivity.setKirokuContent(
 
 internal fun ComponentActivity.setKirokuContent(
     preferences: Flow<DisplayPreferences>,
-    content: @Composable (DisplayPreferences?) -> Unit,
+    content: @Composable (display: DisplayPreferences?, hasTheme: Boolean) -> Unit,
 ) {
     enableEdgeToEdge()
     setContent {
         val display = preferences.collectAsScreenState(initial = null).value
         var savedTheme by rememberSaveable { mutableStateOf<String?>(null) }
-        val mode = display?.theme ?: ThemeMode.entries.firstOrNull { it.name == savedTheme } ?: ThemeMode.System
+        val mode = display?.theme ?: ThemeMode.entries.firstOrNull { it.name == savedTheme }
         SideEffect {
             if (display != null) savedTheme = display.theme.name
         }
-        KirokuWindow(ThemeSettings(mode = mode), Seed.Teal) { content(display) }
+        KirokuWindow(mode?.let { ThemeSettings(mode = it) }, Seed.Teal) { content(display, mode != null) }
     }
 }
 
 @Composable
-private fun ComponentActivity.KirokuWindow(
-    settings: ThemeSettings,
+internal fun ComponentActivity.KirokuWindow(
+    settings: ThemeSettings?,
     seed: Seed,
     content: @Composable () -> Unit,
 ) {
-    val dark = settings.isDark()
-    KirokuTheme(dark, settings.dynamicColor, seed, pureBlack = settings.mode == ThemeMode.PureBlack) {
+    val dark = settings?.isDark() ?: true
+    val colors =
+        if (settings == null) StartupColors else kirokuColorScheme(dark, settings.dynamicColor, seed, settings.mode == ThemeMode.PureBlack)
+    KirokuTheme(dark, colors) {
         val scrim =
             MaterialTheme.colorScheme.surfaceContainer
                 .copy(alpha = NAVIGATION_SCRIM_ALPHA)

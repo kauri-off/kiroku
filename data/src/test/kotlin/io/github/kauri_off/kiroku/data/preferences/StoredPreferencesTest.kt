@@ -478,6 +478,17 @@ class StoredPreferencesTest {
         process { assertEquals(TabSort(ListSort.Score), it.observeListSorts().first().getValue(ListStatus.Completed)) }
     }
 
+    @Test
+    fun `a file the disk cannot read emits display defaults and reports the failure`() {
+        process {
+            it.setTheme(ThemeMode.PureBlack)
+            it.setStartupTab(StartupTab.Search)
+        }
+        readsFail = true
+        process { assertEquals(DisplayPreferences(), it.observeDisplayPreferences().first()) }
+        assertTrue(reports.single() is PreferencesFailure)
+    }
+
     // The codes are the file's format: a file written with them is read as these sorts, and a choice is written so.
     @Test
     fun `every status, sort and direction is stored under its own code`() {

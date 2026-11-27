@@ -1,5 +1,7 @@
 package io.github.kauri_off.kiroku.shell
 
+import androidx.activity.ComponentActivity
+import androidx.activity.compose.LocalActivity
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -11,6 +13,8 @@ import io.github.kauri_off.kiroku.R
 import io.github.kauri_off.kiroku.core.fixtures.FixtureAnime
 import io.github.kauri_off.kiroku.design.MotionBounds
 import io.github.kauri_off.kiroku.design.component.ScreenState
+import io.github.kauri_off.kiroku.design.theme.KirokuWindow
+import io.github.kauri_off.kiroku.design.theme.Seed
 import io.github.kauri_off.kiroku.list.ListFixtureStates
 import io.github.kauri_off.kiroku.list.ListScreen
 import io.github.kauri_off.kiroku.screenshots.ScreenshotRegistry
@@ -28,7 +32,13 @@ import io.github.kauri_off.kiroku.title.TitleScreen
 class ShellScreenshots : ScreenshotRegistry() {
     override val content = contentCase("list-selected") { Shell(ShellState(Destination.List)) }
 
-    override val loading = shown { ScreenState(ScreenState.Loading, delayLoading = false) }
+    override val loading =
+        shown {
+            val activity = LocalActivity.current as ComponentActivity
+            activity.KirokuWindow(settings = null, seed = Seed.Teal) {
+                ScreenState(ScreenState.Loading, delayLoading = false)
+            }
+        }
     override val empty = notShown("The shell is never empty: its placeholders are the destinations' empty states")
     override val error = notShown("The shell has no request that can fail; each destination's screen shows its own errors")
 
