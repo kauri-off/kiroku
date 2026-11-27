@@ -51,4 +51,8 @@
 
     <string name="title_relation_alt_setting">Alt. setting</string>
     <string name="title_relation_alt_version">Alt. version</string>
+    <string name="title_cover_open">Enlarge cover</string>
+    <string name="title_cover_close">Close cover</string>
+    <string name="title_cover_image">Cover of %1$s</string>
+    <string name="title_cover_failed">Could not load the cover</string>
 </resources>

@@ -46,6 +46,7 @@ sealed interface TitleState {
         val refreshing: Boolean = false,
         // The walk along the chain of sequels has run for a second and goes on.
         val chainLoading: Boolean = false,
+        val coverOpen: Boolean = false,
     ) : TitleState
 }
 
@@ -192,6 +193,10 @@ data class RelatedCard(
 
 sealed interface TitleEvent {
     data object Back : TitleEvent
+
+    data object OpenCover : TitleEvent
+
+    data object CloseCover : TitleEvent
 
     data object OpenOnMal : TitleEvent
 

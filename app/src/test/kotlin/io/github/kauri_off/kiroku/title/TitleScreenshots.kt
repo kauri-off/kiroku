@@ -31,6 +31,7 @@ import io.github.kauri_off.kiroku.core.model.Titles
 import io.github.kauri_off.kiroku.core.repository.ListWrite
 import io.github.kauri_off.kiroku.design.MotionBounds
 import io.github.kauri_off.kiroku.screenshots.ArrivingPoster
+import io.github.kauri_off.kiroku.screenshots.RemoteImages
 import io.github.kauri_off.kiroku.screenshots.ScreenshotRegistry
 import io.github.kauri_off.kiroku.screenshots.Transition
 import io.github.kauri_off.kiroku.screenshots.WindowSize
@@ -96,6 +97,20 @@ class TitleScreenshots : ScreenshotRegistry() {
             case("opened-from-related") { Screen(TitleFixtures.openedFromRelated) },
             case("paired-owned", largeText = true) { Screen(TitleFixtures.pairedOwned) },
             case("paired-owned-wide", window = WindowSize(840, 600)) { Screen(TitleFixtures.pairedOwned) },
+            case("cover-open", largeText = true) { Screen(TitleFixtures.of(FixtureAnime.exactToWatch).copy(coverOpen = true)) },
+            case("cover-open-wide", window = WindowSize(840, 600)) {
+                Screen(TitleFixtures.of(FixtureAnime.exactToWatch).copy(coverOpen = true))
+            },
+            case("cover-loading") {
+                ArrivingPoster.inMemory = false
+                ArrivingPoster.arrived.tryEmit(false)
+                val anime = FixtureAnime.exactToWatch.copy(largePosterUrl = ArrivingPoster.URL)
+                Screen(TitleFixtures.of(anime).copy(coverOpen = true))
+            },
+            case("cover-failed", largeText = true) {
+                val anime = FixtureAnime.exactToWatch.copy(posterUrl = RemoteImages.UNAVAILABLE, largePosterUrl = null)
+                Screen(TitleFixtures.of(anime).copy(coverOpen = true))
+            },
             case("poster-arriving") { Arriving(inMemory = false, arrived = false) },
             case("poster-arrived") { Arriving(inMemory = true, arrived = false) },
             case("chain-loading") { Screen(TitleFixtures.chainLoading) },

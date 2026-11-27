@@ -80,9 +80,7 @@ import io.github.kauri_off.kiroku.core.model.ListStatus
 import io.github.kauri_off.kiroku.core.model.ListValues
 import io.github.kauri_off.kiroku.core.model.TitleStatistics
 import io.github.kauri_off.kiroku.design.component.EpisodeStepper
-import io.github.kauri_off.kiroku.design.component.Poster
 import io.github.kauri_off.kiroku.design.component.PosterCard
-import io.github.kauri_off.kiroku.design.component.PosterSize
 import io.github.kauri_off.kiroku.design.component.RefreshBox
 import io.github.kauri_off.kiroku.design.component.ScreenScaffold
 import io.github.kauri_off.kiroku.design.component.ScreenSnackbarHost
@@ -135,6 +133,10 @@ fun TitleScreen(
                 )
             is TitleState.Shown -> TitleContent(state, onEvent, padding, scrollBehavior.nestedScrollConnection)
         }
+    }
+    if (state is TitleState.Shown && state.coverOpen) {
+        val page = state.page
+        TitleCoverDialog(page.title, page.anime.posterUrl, page.anime.largePosterUrl) { onEvent(TitleEvent.CloseCover) }
     }
 }
 
@@ -213,7 +215,9 @@ private fun TitleContent(
             modifier = Modifier.widthIn(max = Sizes.contentMaxWidth).fillMaxSize().nestedScroll(barScroll),
             contentPadding = PaddingValues(top = Spacing.s, bottom = padding.calculateBottomPadding() + Spacing.l),
         ) {
-            item(key = Section.Header) { Box(Modifier.testTag(TitleTags.header)) { Header(page) } }
+            item(key = Section.Header) {
+                Box(Modifier.testTag(TitleTags.header)) { Header(page) { onEvent(TitleEvent.OpenCover) } }
+            }
             // The list block and the airing lines are one group.
             item(key = Section.List) {
                 Gap {
@@ -259,11 +263,14 @@ private fun Gap(
 
 // The poster leads; the title, its facts and MAL's numbers are centred under it. A title without a picture has no box.
 @Composable
-private fun Header(page: TitlePage) {
+private fun Header(
+    page: TitlePage,
+    onOpenCover: () -> Unit,
+) {
     val anime = page.anime
     Column(Modifier.fillMaxWidth().padding(horizontal = Spacing.l), horizontalAlignment = Alignment.CenterHorizontally) {
-        if (anime.posterUrl != null || anime.largePosterUrl != null) {
-            Poster(anime.posterUrl, PosterSize.Hero, Modifier.testTag(TitleTags.poster), large = anime.largePosterUrl)
+        if (hasTitleCover(anime.posterUrl, anime.largePosterUrl)) {
+            TitleCover(anime.posterUrl, anime.largePosterUrl, onOpenCover, Modifier.testTag(TitleTags.poster))
             Spacer(Modifier.height(Spacing.l))
         }
         TitleSelection {

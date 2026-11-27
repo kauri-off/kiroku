@@ -56,4 +56,8 @@
 
     <string name="title_relation_alt_setting">Альт. вселенная</string>
     <string name="title_relation_alt_version">Альт. версия</string>
+    <string name="title_cover_open">Увеличить обложку</string>
+    <string name="title_cover_close">Закрыть обложку</string>
+    <string name="title_cover_image">Обложка тайтла «%1$s»</string>
+    <string name="title_cover_failed">Не удалось загрузить обложку</string>
 </resources>

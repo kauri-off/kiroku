@@ -7,16 +7,19 @@ import coil3.SingletonImageLoader
 import coil3.annotation.DelicateCoilApi
 import coil3.asImage
 import coil3.decode.DataSource
+import coil3.request.ErrorResult
 import coil3.request.SuccessResult
 import coil3.test.FakeImageLoaderEngine
 import io.github.kauri_off.kiroku.standin.StandInPosters
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.first
+import java.io.IOException
 
 // A fixture title's poster is its stand-in art; any other remote image is a flat block in a colour no surface role
 // uses, with a MAL poster's proportions.
 @OptIn(DelicateCoilApi::class)
 object RemoteImages {
+    const val UNAVAILABLE = "https://example.invalid/kiroku/unavailable.jpg"
     const val BLOCK = 0xFF8C8C8C.toInt()
     const val POSTER_WIDTH = 225
     const val POSTER_HEIGHT = 318
@@ -26,6 +29,7 @@ object RemoteImages {
             FakeImageLoaderEngine
                 .Builder()
                 .intercept({ it == ArrivingPoster.URL }, ArrivingPoster.answer)
+                .intercept({ it == UNAVAILABLE }) { ErrorResult(null, it.request, IOException()) }
                 .default(ColorImage(BLOCK, width = POSTER_WIDTH, height = POSTER_HEIGHT))
                 .build()
         SingletonImageLoader.setUnsafe(

@@ -46,6 +46,10 @@ class MangaTitleScreenshots : ScreenshotRegistry() {
             case("opened-with-summary") { Screen(openingSummary) },
             case("opened-with-summary-offline") { Screen(openingSummary.copy(detailsError = DataError.NoConnection)) },
             case("unavailable") { Screen(MangaTitleContent.Failed(MangaTitleProblem.Unavailable)) },
+            case("cover-open", largeText = true) { Screen(mangaFixture.shown(), coverOpen = true) },
+            case("cover-open-landscape", window = WindowSize(760, 360)) {
+                Screen(mangaFixture.shown(), coverOpen = true)
+            },
             case("from-catalogue") { Screen(mangaFixture.copy(synopsis = null).shown()) },
             case("wide", window = WindowSize(840, 600)) { Screen(mangaFixture.shown()) },
             case("without-cover-or-totals") {
@@ -141,6 +145,7 @@ private fun Screen(
     addAction: MangaAddAction? = null,
     message: ShellMessage? = null,
     reconcilingAdd: Boolean = false,
+    coverOpen: Boolean = false,
 ) {
     MangaTitleScreen(
         MangaTitleState(
@@ -149,6 +154,7 @@ private fun Screen(
             membershipError = membershipError,
             addAction = addAction,
             reconcilingAdd = reconcilingAdd,
+            coverOpen = coverOpen,
         ),
         {},
         rememberHostShowing(message),

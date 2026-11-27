@@ -5,8 +5,11 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation3.runtime.NavKey
 import io.github.kauri_off.kiroku.CountAsShown
@@ -73,6 +76,7 @@ internal fun MangaTitleRoute(
             )
         }
     val state by manga.state.collectAsScreenState()
+    var coverOpen by rememberSaveable(key.id) { mutableStateOf(false) }
     CountAsShown(manga.shown)
     val editor = LocalMangaEditing.current
     val origin = LocalMangaEditOrigin.current
@@ -117,10 +121,13 @@ internal fun MangaTitleRoute(
             addAction = addAction,
             reconcilingAdd = reconciling,
             checkingMembership = checking || (reconciling && id in editing.adding),
+            coverOpen = coverOpen,
         ),
         onEvent = {
             when (it) {
                 MangaTitleEvent.Back -> onBack()
+                MangaTitleEvent.OpenCover -> coverOpen = true
+                MangaTitleEvent.CloseCover -> coverOpen = false
                 MangaTitleEvent.SignIn -> onSignIn()
                 MangaTitleEvent.RetryMembership -> {
                     if (reconciling && owner != null) editor.refreshAdd(owner, id) else membership?.request(force = true)

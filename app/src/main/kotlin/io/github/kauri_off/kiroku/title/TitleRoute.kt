@@ -6,6 +6,9 @@ import android.content.Intent
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalContext
 import androidx.core.net.toUri
 import androidx.lifecycle.createSavedStateHandle
@@ -80,12 +83,15 @@ fun TitleRoute(
     val editor = editSheetViewModel(graph, messages)
     val context = LocalContext.current
     val state by title.state.collectAsScreenState()
+    var coverOpen by rememberSaveable(key.id) { mutableStateOf(false) }
     CountAsShown(title.shown)
     TitleScreen(
-        state = state,
+        state = (state as? TitleState.Shown)?.copy(coverOpen = coverOpen) ?: state,
         onEvent = { event ->
             when (event) {
                 TitleEvent.Back -> links.back()
+                TitleEvent.OpenCover -> coverOpen = true
+                TitleEvent.CloseCover -> coverOpen = false
                 TitleEvent.OpenOnMal -> context.open(Intent(Intent.ACTION_VIEW, malUrl(id).toUri()))
                 TitleEvent.Share ->
                     context.open(
