@@ -94,44 +94,48 @@ class MalHttp(
 
     // For the image loader, which asks off the main thread.
     val callFactory: Call.Factory =
-        Call.Factory { request ->
-            val sends = calling.get()
-            client.newCall(if (sends == null) request else request.newBuilder().tag(Sends::class.java, sends).build())
-        }
+        Call.Factory { request -> client.newCall(request.withSends()) }
+
+    private fun Request.withSends(): Request = calling.get()?.let { newBuilder().tag(Sends::class.java, it).build() } ?: this
 
     private val clientWithoutRedirects by lazy { client.newBuilder().followRedirects(false).build() }
 
     internal fun newCallWithoutRedirects(request: Request): Call = clientWithoutRedirects.newCall(request)
 
     private val apiServices by lazy { services(hosts.api) }
+    private val unredirectedApiServices by lazy {
+        services(hosts.api, Call.Factory { request -> newCallWithoutRedirects(request.withSends()) })
+    }
     private val signInServices by lazy { services(hosts.signIn) }
 
     // A Retrofit service of MAL's API, made on its first use; its methods return the body and are called in [call].
-    internal fun <S : Any> api(service: KClass<S>): Lazy<S> = lazy { apiServices.create(service.java) }
+    internal fun <S : Any> api(
+        service: KClass<S>,
+        followRedirects: Boolean = true,
+    ): Lazy<S> = lazy { (if (followRedirects) apiServices else unredirectedApiServices).create(service.java) }
 
     internal fun <S : Any> signIn(service: KClass<S>): Lazy<S> = lazy { signInServices.create(service.java) }
 
     // Runs [request] off the main thread; however it fails, the failure is an answer: only an Error is not caught.
     internal suspend fun <T> call(
-        // MAL's answers for a private list and an unknown name are then those outcomes, and no reason to back off.
-        anotherUsersList: Boolean = false,
+        listError: ((Int, String, Headers?) -> DataError?)? = null,
         maySendRead: (() -> Boolean)? = null,
         firstRead: (() -> ReadAdmission)? = null,
         maySendWrite: (() -> Boolean)? = null,
         request: suspend () -> T,
     ): MalAnswer<T> {
         val sends = Sends(limit = 1 + repeatReadsAfter.size, maySendRead = maySendRead, firstRead = firstRead, maySendWrite = maySendWrite)
-        return withContext(io + calling.asContextElement(sends)) { asked(sends, anotherUsersList, request) }
+        return withContext(io + calling.asContextElement(sends)) { asked(sends, listError, request) }
     }
 
     private suspend fun <T> asked(
         sends: Sends,
-        anotherUsersList: Boolean,
+        listError: ((Int, String, Headers?) -> DataError?)?,
         request: suspend () -> T,
     ): MalAnswer<T> {
         var tries = 0
         while (true) {
-            val tried = once(anotherUsersList, request)
+            val tried = once(listError, request)
             val wait = repeatReadsAfter.getOrNull(tries++)
             if (!tried.again || wait == null || sends.wrote || sends.spent) return tried.answer
             currentCoroutineContext().ensureActive()
@@ -146,7 +150,7 @@ class MalHttp(
     )
 
     private suspend fun <T> once(
-        anotherUsersList: Boolean,
+        listError: ((Int, String, Headers?) -> DataError?)?,
         request: suspend () -> T,
     ): Tried<T> {
         val mark = backOff.mark()
@@ -156,14 +160,17 @@ class MalHttp(
             currentCoroutineContext().ensureActive()
             unusable(e)
         } catch (e: HttpException) {
-            val body = if (anotherUsersList || e.code() == 403) e.response()?.errorBody()?.let(::text) else null
-            answered(e.code(), e.response()?.headers(), body, anotherUsersList)
+            val body =
+                e.response()?.errorBody()?.use {
+                    if (listError != null || e.code() == 403) text(it) else null
+                }
+            answered(e.code(), e.response()?.headers(), body, listError)
         } catch (e: ReadDeferred) {
             throw e
         } catch (_: RequestOwnerEnded) {
             Tried(MalAnswer.Failed(DataError.ListEnded))
         } catch (e: NotSentAgain) {
-            e.status?.let { answered(it, null, body = null, anotherUsersList = false) } ?: unanswered(e.failure)
+            e.status?.let { answered(it, null, body = null, listError = null) } ?: unanswered(e.failure)
         } catch (_: NoClientId) {
             Tried(MalAnswer.Failed(DataError.NoClientId))
         } catch (_: NotAnAnswer) {
@@ -188,11 +195,11 @@ class MalHttp(
         headers: Headers?,
         // The failure's body, when it was read.
         body: String?,
-        anotherUsersList: Boolean,
+        listError: ((Int, String, Headers?) -> DataError?)?,
     ): Tried<Nothing> {
         // A 403 MAL did not write is the device's network (a portal, a proxy, a block page), not MAL refusing the app.
         val notMals = status == 403 && !malRefusal(status, body)
-        val ofAnotherUsersList = if (anotherUsersList && body != null) anotherUsersListError(status, body) else null
+        val ofAnotherUsersList = body?.let { listError?.invoke(status, it, headers) }
         val error =
             when {
                 ofAnotherUsersList != null -> ofAnotherUsersList
@@ -282,12 +289,15 @@ class MalHttp(
             false
         }
 
-    private fun services(host: String): Retrofit {
+    private fun services(
+        host: String,
+        calls: Call.Factory = callFactory,
+    ): Retrofit {
         offMainThread()
         return Retrofit
             .Builder()
             .baseUrl(host)
-            .callFactory(callFactory)
+            .callFactory(calls)
             .addConverterFactory(MalBodies(MalJson.asConverterFactory("application/json".toMediaType())))
             .build()
     }

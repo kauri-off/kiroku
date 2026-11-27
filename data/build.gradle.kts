@@ -121,11 +121,16 @@ val ownerRecordings: String =
         .get()
 
 val mangaMutationCapture = providers.gradleProperty("kiroku.mangaMutationCapture")
+val publicMangaReplay = providers.environmentVariable("KIROKU_PUBLIC_MANGA_REPLAY")
 
 tasks.withType<Test>().configureEach {
     mangaMutationCapture.orNull?.let { path ->
         systemProperty("kiroku.mangaMutationCapture", path)
         inputs.files(file(path)).withPropertyName("kiroku.mangaMutationCapture")
+    }
+    publicMangaReplay.orNull?.let { paths ->
+        systemProperty("kiroku.publicMangaReplay", paths)
+        inputs.files(paths.split(File.pathSeparator).map { fileTree(it) }).withPropertyName("kiroku.publicMangaReplay")
     }
     systemProperty("kiroku.ownerRecordings", ownerRecordings)
     systemProperty("kiroku.ownerRecordings.explicit", selectedOwnerRecordings.isPresent)

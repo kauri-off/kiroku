@@ -3,9 +3,6 @@ package io.github.kauri_off.kiroku.data.recorder
 import io.github.kauri_off.kiroku.core.repository.MangaListStatus
 import io.github.kauri_off.kiroku.core.repository.readingStatus
 import io.github.kauri_off.kiroku.data.list.updatedAtOf
-import io.github.kauri_off.kiroku.data.manga.isStrictMangaObject
-import io.github.kauri_off.kiroku.data.network.MalJson
-import kotlinx.serialization.SerializationException
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
@@ -38,26 +35,6 @@ internal fun JsonObject.projectMangaValues(
 }
 
 private val ProjectionInteger = Regex("-?(?:0|[1-9][0-9]*)")
-
-internal fun String.hasUniqueMangaMembers(): Boolean =
-    try {
-        isStrictMangaObject {
-            val names = mutableSetOf<String>()
-            val add: (String) -> Boolean = { raw -> names.add(MalJson.decodeFromString<String>(raw)) }
-            add
-        }
-    } catch (_: SerializationException) {
-        false
-    }
-
-internal fun String.uniqueMangaObject(): JsonObject? {
-    if (!hasUniqueMangaMembers()) return null
-    return try {
-        MalJson.parseToJsonElement(this) as? JsonObject
-    } catch (_: SerializationException) {
-        null
-    }
-}
 
 internal fun JsonObject.agreeWith(form: Map<String, String>): Boolean =
     form.all { (key, value) -> key !in this || (get(key) as? JsonPrimitive)?.content == value }

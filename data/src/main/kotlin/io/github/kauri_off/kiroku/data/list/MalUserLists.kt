@@ -21,7 +21,12 @@ class MalUserLists(
     override fun sameUser(
         a: String,
         b: String,
-    ): Boolean = a.length == b.length && a.indices.all { folded(a[it]) == folded(b[it]) }
-
-    private fun folded(c: Char): Char = if (c in 'A'..'Z') c.lowercaseChar() else c
+    ): Boolean = sameMalUser(a, b)
 }
+
+internal fun sameMalUser(
+    a: String,
+    b: String,
+): Boolean = a.length == b.length && a.indices.all { folded(a[it]) == folded(b[it]) }
+
+private fun folded(c: Char): Char = if (c in 'A'..'Z') c.lowercaseChar() else c

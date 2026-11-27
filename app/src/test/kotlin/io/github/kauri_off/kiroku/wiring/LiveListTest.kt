@@ -25,6 +25,8 @@ import io.github.kauri_off.kiroku.core.repository.MangaListEdit
 import io.github.kauri_off.kiroku.core.repository.MangaListEditResult
 import io.github.kauri_off.kiroku.core.repository.SignIn
 import io.github.kauri_off.kiroku.core.repository.SignInStep
+import io.github.kauri_off.kiroku.core.user.NamedListState
+import io.github.kauri_off.kiroku.core.user.UserListState
 import io.github.kauri_off.kiroku.data.db.RoomLocalList
 import io.github.kauri_off.kiroku.data.db.TitleStore
 import io.github.kauri_off.kiroku.data.network.Device
@@ -48,9 +50,11 @@ import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.withTimeout
+import mockwebserver3.RecordedRequest
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertSame
@@ -65,6 +69,7 @@ import java.io.File
 import java.io.IOException
 import java.time.Clock
 import java.util.concurrent.CopyOnWriteArrayList
+import java.util.concurrent.atomic.AtomicReference
 import kotlin.time.Duration.Companion.seconds
 
 // The live graph's list over its own database and MAL's client, MAL being recorded answers behind a local server.
@@ -105,16 +110,23 @@ class LiveListTest {
         KeysInMemory.uninstall()
     }
 
-    private fun parts(scope: CoroutineScope) =
-        LiveParts(
-            context,
-            LiveSource("served", mal.hosts, aniList = ServedMal.NO_ANILIST, tenrai = ServedMal.NO_TENRAI),
-            "0123abcd",
-            Clock.systemUTC(),
-            scope,
-            unexpected::add,
-            device = online,
-        )
+    private fun parts(
+        scope: CoroutineScope,
+        sourceName: String = "served",
+    ) = LiveParts(
+        context,
+        LiveSource(
+            sourceName,
+            mal.hosts,
+            aniList = ServedMal.NO_ANILIST,
+            tenrai = ServedMal.NO_TENRAI,
+        ),
+        "0123abcd",
+        Clock.systemUTC(),
+        scope,
+        unexpected::add,
+        device = online,
+    )
 
     // A whole sign-in: MAL's page is opened, and the browser comes back with a code for its state.
     private suspend fun SignIn.once() {
@@ -163,6 +175,71 @@ class LiveListTest {
             .toSet()
 
     private fun TestScope.store(parts: LiveParts) = RoomLocalList(parts.database, backgroundScope, Dispatchers.IO) {}
+
+    @Test
+    fun `default live public manga uses only the client id across sessions and keeps a separate cache cleared by sign-out`() =
+        runBlocking {
+            val named = CopyOnWriteArrayList<RecordedRequest>()
+            val namedPage = AtomicReference(mangaPage)
+            mal.publicManga = {
+                named += it
+                ServedMal.answer(200, namedPage.get())
+            }
+            val parts = parts(process())
+            val graph = LiveGraph(parts, listStore = { InMemoryLocalList() })
+            val lists = graph.publicMangaLists
+            val name = "test-user"
+
+            assertEquals(Session.SignedOut, graph.session.observeSession().first())
+            assertEquals(Outcome.Success(Unit), lists.refreshList(name))
+            val whole =
+                lists
+                    .observeList(name.uppercase())
+                    .first() as NamedListState.Whole
+            assertEquals(listOf("Test Manga"), whole.entries.map { it.titles.romaji })
+            assertEquals(UserListState.None(DataError.UnknownUser), graph.user.observeList(name).first { it is UserListState.None })
+            assertEquals(1, named.size)
+            assertTrue(mangaRequests().isEmpty())
+            assertFalse(context.getDatabasePath(parts.databaseName).exists())
+
+            graph.signInOnce()
+            val signedIn = graph.session.observeSession().first() as Session.SignedIn
+            mal.manga = ServedMal.answer(200, mangaPage)
+            val personal = graph.mangaList.refresh(signedIn.signIn)
+            assertTrue(personal is Outcome.Success && personal.value.entries.isNotEmpty())
+            namedPage.set(mangaPage.replace("Test Manga", "Public Manga"))
+            assertEquals(Outcome.Success(Unit), lists.refreshList(name))
+            val namedSignedIn = lists.observeList(name).first() as NamedListState.Whole
+            assertEquals(listOf("Public Manga"), namedSignedIn.entries.map { it.titles.romaji })
+            assertEquals(personal, graph.mangaList.stored(signedIn.signIn))
+
+            graph.signOut(signedIn)
+            assertEquals(Session.SignedOut, graph.session.observeSession().first())
+            assertEquals(Outcome.Failure(DataError.ListEnded), graph.mangaList.stored(signedIn.signIn))
+            assertEquals(Outcome.Success(Unit), lists.refreshList(name))
+            val oldRoute = lists.observeList(name).first() as NamedListState.Whole
+            assertEquals(listOf("Public Manga"), oldRoute.entries.map { it.titles.romaji })
+
+            namedPage.set("""{"data":[],"paging":{}}""")
+            val afterSignOut =
+                graph.publicMangaLists
+                    .observeList(name)
+                    .first { it is NamedListState.Whole } as NamedListState.Whole
+            assertTrue(afterSignOut.entries.isEmpty())
+            assertEquals(4, named.size)
+
+            val expired = SignInId("0f8fad5b-d9cb-469f-a165-70867728950e")
+            val expiredParts = parts(process(), sourceName = "served-expired")
+            expiredParts.tokenFile.writeBytes(byteArrayOf(0) + expired.value.encodeToByteArray())
+            val expiredGraph = LiveGraph(expiredParts, listStore = { InMemoryLocalList() })
+            assertEquals(Session.Expired(expired), expiredGraph.session.observeSession().first())
+            assertEquals(Outcome.Success(Unit), expiredGraph.publicMangaLists.refreshList(name))
+            assertEquals(5, named.size)
+            assertTrue(named.all { it.method == "GET" && it.url.encodedPath == "/v2/users/test-user/mangalist" })
+            assertTrue(named.all { it.headers["X-MAL-CLIENT-ID"] == "0123abcd" })
+            assertTrue(named.all { it.headers["Authorization"] == null && it.headers["Cookie"] == null })
+            assertEquals(1, mal.asked.count { "/v1/oauth2/token" in it })
+        }
 
     @Test
     fun `the live manga reader retains a failed snapshot and clears it on replacement and sign-out`() =

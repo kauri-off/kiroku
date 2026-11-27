@@ -15,11 +15,15 @@ import io.github.kauri_off.kiroku.core.repository.ListSource
 import io.github.kauri_off.kiroku.core.repository.ListWrite
 import io.github.kauri_off.kiroku.core.repository.SessionRepository
 import io.github.kauri_off.kiroku.core.score.KeptScoreDistributions
+import io.github.kauri_off.kiroku.core.user.MangaListKeeper
+import io.github.kauri_off.kiroku.core.user.PublicMangaLists
+import io.github.kauri_off.kiroku.core.user.RemoteMangaLists
 import io.github.kauri_off.kiroku.data.anilist.AniListAiring
 import io.github.kauri_off.kiroku.data.anime.MalSearch
 import io.github.kauri_off.kiroku.data.db.KirokuDatabase
 import io.github.kauri_off.kiroku.data.manga.MalMangaCatalogue
 import io.github.kauri_off.kiroku.data.manga.MalMangaRepository
+import io.github.kauri_off.kiroku.data.manga.MalPublicMangaLists
 import io.github.kauri_off.kiroku.data.manga.RoomMangaList
 import io.github.kauri_off.kiroku.data.network.AndroidDevice
 import io.github.kauri_off.kiroku.data.network.Device
@@ -132,7 +136,7 @@ internal class LiveGraph(
     ownProfile: (LiveParts, MalSession) -> MalOwnProfile = ::ownProfileOf,
     notificationStore: (LiveParts, StoredPreferences) -> NotificationStore = ::liveNotificationStore,
     imageFiles: FileSystem = FileSystem.SYSTEM,
-    forgetPublicManga: () -> Unit = {},
+    private val publicMangaSource: RemoteMangaLists = MalPublicMangaLists(parts.http),
     airingOf: AiringOf = ::listAiring,
 ) : AppGraph,
     SignInOwner {
@@ -144,6 +148,10 @@ internal class LiveGraph(
         LiveImages(parts.context, parts.source.name, { parts.file(notShown("retired-images")) }, images, parts.scope, imageFiles) { owner ->
             account.currentSession()?.let { it.owner == owner } == true
         }
+
+    @Volatile
+    private var publicManga = MangaListKeeper(publicMangaSource, parts.scope, parts.unexpected)
+    override val publicMangaLists: PublicMangaLists get() = publicManga
     private val sessionWithCleanup by lazy {
         SignOutForgets(
             account,
@@ -156,7 +164,9 @@ internal class LiveGraph(
             runLog,
             forgetMangaSorts = { preferences.forgetMangaListSorts(it) },
             forgetManga = {
-                forgetPublicManga()
+                val old = publicManga
+                publicManga = MangaListKeeper(publicMangaSource, parts.scope, parts.unexpected)
+                old.forget()
                 withContext(Dispatchers.IO) {
                     forgetMangaCaptures(this@LiveGraph)
                     !hasDatabase() || mangaList.forgetBeforeSignOut() is Outcome.Success

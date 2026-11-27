@@ -6,6 +6,7 @@ import io.github.kauri_off.kiroku.core.model.Session
 import io.github.kauri_off.kiroku.core.model.SessionOwner
 import io.github.kauri_off.kiroku.data.manga.MangaListQuery
 import io.github.kauri_off.kiroku.data.manga.mangaListPage
+import io.github.kauri_off.kiroku.data.manga.uniqueMangaObject
 import io.github.kauri_off.kiroku.data.network.AUTHORIZATION
 import io.github.kauri_off.kiroku.data.network.MalFields
 import io.github.kauri_off.kiroku.data.network.MalHttp

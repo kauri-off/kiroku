@@ -18,7 +18,6 @@ import io.github.kauri_off.kiroku.core.repository.Ranked
 import io.github.kauri_off.kiroku.core.repository.SearchRepository
 import io.github.kauri_off.kiroku.core.repository.SignIn
 import io.github.kauri_off.kiroku.core.repository.SignInBrowser
-import io.github.kauri_off.kiroku.core.user.MangaListKeeper
 import io.github.kauri_off.kiroku.data.network.AndroidDevice
 import io.github.kauri_off.kiroku.data.network.Device
 import io.github.kauri_off.kiroku.data.sandbox.Planted
@@ -64,7 +63,6 @@ class SandboxGraph private constructor(
     val sandbox: Sandbox,
     private val device: SandboxDevice,
     private val aniListTime: SandboxAniListTime,
-    publicManga: Lazy<MangaListKeeper>,
     private val live: LiveGraph,
 ) : AppGraph by live,
     SignInOwner,
@@ -77,7 +75,7 @@ class SandboxGraph private constructor(
 
     override val mangaCatalogue: MangaCatalogue? get() = null
 
-    override val publicMangaLists by publicManga
+    override val publicMangaLists get() = checkNotNull(live.publicMangaLists)
 
     private val mangaFixtures by lazy {
         SandboxManga(
@@ -193,15 +191,8 @@ class SandboxGraph private constructor(
             val time = SandboxAniListTime(aniListTime)
             val source = LiveSource(NAME, SandboxMal.Hosts, sandbox.mal, aniListTime = time)
             val liveParts = parts(source, sandboxDevice, clock)
-            val publicManga =
-                lazy {
-                    MangaListKeeper(SandboxPublicManga(sandbox.mal, sandboxDevice), liveParts.scope, liveParts.unexpected)
-                }
-            val live =
-                LiveGraph(liveParts, forgetPublicManga = {
-                    if (publicManga.isInitialized()) publicManga.value.forget()
-                })
-            return SandboxGraph(liveParts, sandbox, sandboxDevice, time, publicManga, live)
+            val live = LiveGraph(liveParts, publicMangaSource = SandboxPublicManga(sandbox.mal, sandboxDevice))
+            return SandboxGraph(liveParts, sandbox, sandboxDevice, time, live)
         }
 
         private val NAME = notShown("sandbox")

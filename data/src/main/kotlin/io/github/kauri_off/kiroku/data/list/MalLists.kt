@@ -9,6 +9,7 @@ import io.github.kauri_off.kiroku.data.network.AUTHORIZATION
 import io.github.kauri_off.kiroku.data.network.MalFields
 import io.github.kauri_off.kiroku.data.network.MalHttp
 import io.github.kauri_off.kiroku.data.network.RepairedAnswer
+import io.github.kauri_off.kiroku.data.network.anotherUsersListError
 import io.github.kauri_off.kiroku.data.network.clientIdOutcome
 import io.github.kauri_off.kiroku.data.session.MalSession
 import io.github.kauri_off.kiroku.data.session.authorised
@@ -81,7 +82,8 @@ class MalLists internal constructor(
         }
         return when (user) {
             is ListUser.SignedIn -> user.session.authorised(http, user.expectedOwner) { read(it) }
-            is ListUser.Named -> http.call(anotherUsersList = true) { read(null) }.clientIdOutcome()
+            is ListUser.Named ->
+                http.call(listError = { status, body, _ -> anotherUsersListError(status, body) }) { read(null) }.clientIdOutcome()
         }
     }
 
@@ -105,7 +107,7 @@ class MalLists internal constructor(
 private const val ME = "@me"
 
 // A name nobody can have is not asked: one that is no segment of an address, or MAL's word for the signed-in user.
-private fun isUserSegment(name: String): Boolean = name != "" && name != "." && name != ".." && !name.equals(ME, ignoreCase = true)
+internal fun isUserSegment(name: String): Boolean = name != "" && name != "." && name != ".." && !name.equals(ME, ignoreCase = true)
 
 private interface ListApi {
     @GET("users/{user}/animelist")
