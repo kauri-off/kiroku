@@ -44,6 +44,7 @@ internal fun imageLoaderBuilder(
         .components {
             requests?.let { add(it) }
             add(OnlySchemes(schemes))
+            if (exports) add(captureEncodedIdentity())
             standIn?.let { add(it) }
             if (exports) add(encodedImageReader(calls))
             calls?.let { add(OkHttpNetworkFetcherFactory(callFactory = { it })) }

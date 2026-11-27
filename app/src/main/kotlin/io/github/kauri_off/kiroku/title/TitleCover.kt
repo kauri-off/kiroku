@@ -20,7 +20,6 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableIntStateOf
@@ -59,6 +58,8 @@ import io.github.kauri_off.kiroku.design.theme.DialogSystemBarAppearance
 import io.github.kauri_off.kiroku.design.theme.Sizes
 import io.github.kauri_off.kiroku.design.theme.Spacing
 import io.github.kauri_off.kiroku.wiring.LoadedImageSource
+import io.github.kauri_off.kiroku.wiring.captureCoverIdentity
+import io.github.kauri_off.kiroku.wiring.coverSource
 import kotlinx.coroutines.flow.first
 
 internal fun hasTitleCover(
@@ -122,13 +123,20 @@ internal fun CoverViewer(
 ) {
     val identity = remember { GalleryIdentity() }
     var displayed by remember { mutableStateOf(pictures) }
-    val pager = rememberPagerState(initialPage) { displayed.size }
+    var pages by remember { mutableStateOf(identity.identify(pictures).also(identity::update)) }
+    val pager = rememberPagerState(initialPage) { pages.size }
     LaunchedEffect(pager, pictures) {
+        if (pictures == displayed) return@LaunchedEffect
         snapshotFlow { pager.isScrollInProgress }.first { !it }
+        val previous = pager.settledPage.coerceIn(pages.indices)
+        val selected = pages[previous].key
+        val next = identity.identify(pictures)
+        val destination = next.indexOfFirst { it.key == selected }.takeIf { it >= 0 } ?: previous.coerceIn(next.indices)
+        identity.update(next)
+        pages = next
         displayed = pictures
+        pager.requestScrollToPage(destination)
     }
-    val pages = remember(identity, displayed) { identity.identify(displayed) }
-    SideEffect { identity.update(pages) }
 
     val loader = routeImageLoader()
     val loaded = remember(loader) { mutableStateMapOf<GalleryPage, LoadedImageSource>() }
@@ -259,6 +267,7 @@ private fun CoverImage(
                     ImageRequest
                         .Builder(context)
                         .data(url)
+                        .apply { extras[captureCoverIdentity] = true }
                         .diskCachePolicy(if (retrying) CachePolicy.WRITE_ONLY else CachePolicy.ENABLED)
                         .build()
                 }
@@ -268,7 +277,7 @@ private fun CoverImage(
                 imageLoader = routeImageLoader(),
                 modifier = Modifier.widthIn(max = Sizes.contentMaxWidth).fillMaxSize(),
                 contentScale = ContentScale.Fit,
-                onSuccess = { loaded = LoadedImageSource(url, it.result.diskCacheKey) },
+                onSuccess = { loaded = it.result.coverSource(url) },
                 onError = { if (source == attempt) source = attempt + 1 },
             )
             val image = loaded

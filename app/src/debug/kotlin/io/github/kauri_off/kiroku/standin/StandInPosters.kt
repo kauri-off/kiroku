@@ -14,6 +14,7 @@ import coil3.request.ImageResult
 import coil3.request.SuccessResult
 import io.github.kauri_off.kiroku.core.fixtures.FixtureAnime
 import io.github.kauri_off.kiroku.wiring.encodedImageExport
+import io.github.kauri_off.kiroku.wiring.recordSyntheticCover
 import java.io.ByteArrayOutputStream
 import java.io.IOException
 import kotlin.random.Random
@@ -26,12 +27,20 @@ object StandInPosters : Interceptor {
     override suspend fun intercept(chain: Interceptor.Chain): ImageResult {
         val id = FixtureAnime.posterId(chain.request.data.toString()) ?: return chain.proceed()
         val art = draw(id)
-        val export = chain.request.extras[encodedImageExport] ?: return SuccessResult(art.asImage(), chain.request, DataSource.MEMORY)
-        val encoded = ByteArrayOutputStream()
-        if (!art.compress(Bitmap.CompressFormat.PNG, 100, encoded)) throw IOException()
-        encoded.toByteArray().inputStream().use { export.stage(it) }
-        return export.finish(chain.request)
+        val export = chain.request.extras[encodedImageExport]
+        if (export != null) {
+            art.encodePng().inputStream().use { export.stage(it) }
+            return export.finish(chain.request)
+        }
+        chain.request.recordSyntheticCover { art.encodePng() }
+        return SuccessResult(art.asImage(), chain.request, DataSource.MEMORY)
     }
+
+    private fun Bitmap.encodePng(): ByteArray =
+        ByteArrayOutputStream().use {
+            if (!compress(Bitmap.CompressFormat.PNG, 100, it)) throw IOException()
+            it.toByteArray()
+        }
 
     // A sky in two hues, a disc and a ridge, all chosen by the id, so each title is told apart at a glance.
     fun draw(id: Long): Bitmap {

@@ -34,6 +34,7 @@ import io.github.kauri_off.kiroku.R
 import io.github.kauri_off.kiroku.notShown
 import io.github.kauri_off.kiroku.shell.show
 import io.github.kauri_off.kiroku.wiring.LoadedImageSource
+import io.github.kauri_off.kiroku.wiring.MAX_ENCODED_IMAGE_BYTES
 import io.github.kauri_off.kiroku.wiring.exportEncodedImage
 import io.github.kauri_off.kiroku.wiring.exportScope
 import kotlinx.coroutines.CancellationException
@@ -115,7 +116,7 @@ internal fun CoverExportActions(
             val pending = folderRequest
             folderRequest = null
             if (uri != null && pending != null && pending[0] == owner) {
-                save(LoadedImageSource(pending[1], pending[2].ifEmpty { null }), uri)
+                save(LoadedImageSource(pending[1], pending[2].ifEmpty { null }, pending[3].ifEmpty { null }), uri)
             }
         }
     val enabled = selectedForExport() != null
@@ -126,7 +127,7 @@ internal fun CoverExportActions(
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
                     save(source)
                 } else {
-                    folderRequest = arrayListOf(checkNotNull(owner), source.url, source.cacheKey.orEmpty())
+                    folderRequest = arrayListOf(checkNotNull(owner), source.url, source.cacheKey.orEmpty(), source.fingerprint.orEmpty())
                     try {
                         folderPicker.launch(null)
                     } catch (e: RuntimeException) {
@@ -156,7 +157,6 @@ internal class CoverShareProvider : FileProvider()
 private val shareDirectory = notShown("cover-shares")
 private val stageName = notShown("cover-export.tmp")
 private const val SHARE_COUNT = 16
-private const val EXPORT_BYTES = 64L * 1024 * 1024
 private const val SHARE_AGE_MILLIS = 24 * 60 * 60 * 1000L
 private val exportLock = Mutex()
 
@@ -179,7 +179,7 @@ private suspend fun withEncodedCover(
     consume: suspend (EncodedCover) -> Unit,
 ) = withContext(Dispatchers.IO) {
     exportLock.withLock {
-        val limit = if (share) remainingShareBytes(context) else EXPORT_BYTES
+        val limit = if (share) remainingShareBytes(context) else MAX_ENCODED_IMAGE_BYTES
         val stage = File(context.cacheDir, stageName)
         try {
             loader.exportEncodedImage(context, source, stage, limit) { file ->
@@ -202,7 +202,7 @@ private fun remainingShareBytes(context: Context): Long {
     val now = System.currentTimeMillis()
     val recent = files.filterNot { now - it.lastModified() >= SHARE_AGE_MILLIS && it.delete() }
     if (recent.size >= SHARE_COUNT) throw IOException()
-    return EXPORT_BYTES - recent.sumOf { it.length() }
+    return MAX_ENCODED_IMAGE_BYTES - recent.sumOf { it.length() }
 }
 
 @RequiresApi(Build.VERSION_CODES.Q)

@@ -298,10 +298,11 @@ class TitleCoverTest {
     }
 
     @Test
-    fun aFastSwipeKeepsItsDestinationWhenPicturesReorderDuringTheSnap() {
+    fun aFastSwipeKeepsItsDestinationAcrossAFarMoveDuringTheSnap() {
         val storage = registerStorage()
         val extra = jpeg(Color.GREEN)
-        val urls = CoverResponses { url -> if (url == EXTRA) extra else jpeg(Color.RED) }
+        val cover = jpeg(Color.RED)
+        val urls = CoverResponses { url -> if (url == EXTRA) extra else cover }
         val pictures = mutableStateOf(listOf(TitlePicture(EXTRA, null), TitlePicture(LAST, null)))
         show(urls.loader) { TitleCoverDialog("Sample", REGULAR, LARGE, pictures.value) {} }
         waitForCover("Sample")
@@ -318,13 +319,16 @@ class TitleCoverTest {
             compose.mainClock.advanceTimeByFrame()
             compose.onNodeWithText("1\u00A0/\u00A03").assertIsDisplayed()
             compose.onNodeWithContentDescription("Share image").assertIsNotEnabled()
-            compose.runOnUiThread { pictures.value = pictures.value.reversed() }
+            compose.runOnUiThread {
+                val inserted = List(150) { TitlePicture("https://example.invalid/inserted/$it.jpg", null) }
+                pictures.value = inserted + pictures.value
+            }
             compose.mainClock.advanceTimeByFrame()
             compose.onNodeWithText("1\u00A0/\u00A03").assertIsDisplayed()
         } finally {
             compose.mainClock.autoAdvance = true
         }
-        waitForPhoto(3, 3)
+        waitForPhoto(152, 153)
         saveAndShare(extra, storage)
     }
 
@@ -344,6 +348,45 @@ class TitleCoverTest {
         storage.rejectPublish = false
         saveAndShare(cover, storage)
         assertEquals(listOf(LARGE, LARGE, LARGE, LARGE), urls.requested.toList())
+    }
+
+    @Test
+    fun refusesChangedBytesAtTheSameUrlAfterCacheEviction() {
+        assertChangedImageIsRejected(replaceCachedBytes = false)
+    }
+
+    @Test
+    fun refusesChangedBytesStoredUnderTheDisplayedCacheKey() {
+        assertChangedImageIsRejected(replaceCachedBytes = true)
+    }
+
+    private fun assertChangedImageIsRejected(replaceCachedBytes: Boolean) {
+        val storage = registerStorage()
+        val original = jpeg(Color.RED)
+        val replacement = jpeg(Color.BLUE)
+        val changed = AtomicBoolean(false)
+        val urls = CoverResponses { if (changed.get()) replacement else original }
+        show(urls.loader) { TitleCoverDialog("Sample", REGULAR, LARGE) {} }
+        waitForCover("Sample")
+        changed.set(true)
+        val cache = checkNotNull(urls.loader.diskCache)
+        if (replaceCachedBytes) {
+            val editor = checkNotNull(cache.openEditor(LARGE))
+            cache.fileSystem.write(editor.data) { write(replacement) }
+            editor.commit()
+        } else {
+            assertTrue(cache.remove(LARGE))
+        }
+
+        compose.onNodeWithContentDescription("Download image").performClick()
+        waitForMessage("Could not save the image")
+        assertNull(storage.name)
+        assertTrue(!storage.file.exists())
+        compose.onNodeWithContentDescription("Share image").performClick()
+        waitForMessage("Could not share the image")
+        assertNull(shadowOf(compose.activity).nextStartedActivity)
+        assertTrue(checkNotNull(File(compose.activity.cacheDir, "cover-shares").list()).isEmpty())
+        assertEquals(if (replaceCachedBytes) listOf(LARGE) else listOf(LARGE, LARGE, LARGE), urls.requested.toList())
     }
 
     @Test
