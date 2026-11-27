@@ -111,7 +111,7 @@ internal class MalMangaListSource(
     }
 }
 
-private fun MangaListRow.toEntry(repairs: MutableSet<String>): MangaListEntry {
+internal fun MangaListRow.toEntry(repairs: MutableSet<String>): MangaListEntry {
     val node = fields.getValue("node").jsonObject
     val manga = node.toManga(id, repairs)
     val alternatives = node["alternative_titles"] as? JsonObject

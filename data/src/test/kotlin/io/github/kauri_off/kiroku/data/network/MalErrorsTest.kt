@@ -34,7 +34,7 @@ class MalErrorsTest {
 
     private fun read(anotherUsersList: Boolean = false): MalAnswer<Thing> =
         runBlocking {
-            network.http.call(anotherUsersList) { things.read() }
+            network.http.call(listError = if (anotherUsersList) ::anotherUsersListError else null) { things.read() }
         }
 
     private fun readAnswered(
