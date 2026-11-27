@@ -90,6 +90,7 @@ internal sealed interface MangaListContent {
         val language: TitleLanguage,
         val refreshing: Boolean = false,
         val canEdit: Boolean = false,
+        val streaming: Boolean = false,
         val confirmedStatuses: Set<MangaReadingStatus> = emptySet(),
     ) : MangaListContent {
         val pages: Map<MangaReadingStatus, List<MangaListEntry>> = entries.groupBy(MangaListEntry::status)
@@ -101,6 +102,8 @@ internal sealed interface MangaListContent {
 }
 
 internal sealed interface MangaListEvent {
+    data object Back : MangaListEvent
+
     data object SignIn : MangaListEvent
 
     data object Refresh : MangaListEvent
@@ -171,6 +174,7 @@ internal fun MangaListBody(
     onEvent: (MangaListEvent) -> Unit,
     motion: ListTabMotion?,
     padding: PaddingValues,
+    publicList: Boolean = false,
 ) {
     val refresh = { onEvent(MangaListEvent.Refresh) }
     val body = Modifier.padding(padding)
@@ -186,10 +190,12 @@ internal fun MangaListBody(
             )
         is MangaListContent.Failed ->
             ScreenState(
-                if (state.sessionExpired) {
-                    ScreenState.Empty(stringResource(content.error.message()))
-                } else {
-                    errorState(content.error) { onEvent(MangaListEvent.Retry) }
+                when {
+                    publicList && content.error == DataError.PrivateList -> ScreenState.Empty(stringResource(R.string.list_private))
+                    publicList && content.error == DataError.UnknownUser -> ScreenState.Empty(stringResource(R.string.list_unknown_user))
+                    publicList -> ScreenState.Error(stringResource(content.error.publicListMessage())) { onEvent(MangaListEvent.Retry) }
+                    state.sessionExpired -> ScreenState.Empty(stringResource(content.error.message()))
+                    else -> errorState(content.error) { onEvent(MangaListEvent.Retry) }
                 },
                 body,
             )
@@ -212,9 +218,9 @@ internal fun MangaListBody(
             val pages: @Composable () -> Unit = {
                 if (motion == null) {
                     val matches = state.matches.takeIf { state.filter.session == state.activeFilterSession }
-                    key(state.activeFilterSession, state.filter.text) {
+                    key(state.activeFilterSession, state.filter.text, content.language.name) {
                         val scroll = rememberMangaScroll(matches.orEmpty())
-                        FilterResults(matches?.isNotEmpty(), pagePadding) { bottom ->
+                        FilterResults(matches?.isNotEmpty()?.takeUnless { !it && content.streaming }, pagePadding) { bottom ->
                             val rows = checkNotNull(matches)
                             MangaRows(
                                 rows,
@@ -226,16 +232,17 @@ internal fun MangaListBody(
                                     end = pagePadding.calculateEndPadding(direction),
                                     bottom = bottom.calculateBottomPadding(),
                                 ),
+                                publicList = publicList,
                                 showStatus = true,
                             )
                         }
                     }
                 } else {
-                    MangaPages(state.tab, content, motion, scrolls, onEvent, pagePadding)
+                    MangaPages(state.tab, content, motion, scrolls, onEvent, pagePadding, publicList)
                 }
             }
             val pagerBody = Modifier.belowBars(padding).fillMaxSize()
-            if (state.sessionExpired) {
+            if (state.sessionExpired && !publicList) {
                 Box(pagerBody) { pages() }
             } else {
                 RefreshBox(content.refreshing, refresh, pagerBody) { pages() }
@@ -283,6 +290,7 @@ private fun MangaPages(
     scrolls: Map<MangaReadingStatus, LazyListState?>,
     onEvent: (MangaListEvent) -> Unit,
     padding: PaddingValues,
+    publicList: Boolean,
 ) {
     val index = content.pageIndex(tab)
     val selection = rememberUpdatedState(tab)
@@ -297,7 +305,7 @@ private fun MangaPages(
     key(motion) {
         ListStatusPager(motion, key = { content.statuses[it].code }) { page ->
             val status = content.statuses[page]
-            MangaListPage(content, status, scrolls.getValue(status), onEvent, padding)
+            MangaListPage(content, status, scrolls.getValue(status), onEvent, padding, publicList)
         }
     }
 }
@@ -309,17 +317,22 @@ private fun MangaListPage(
     scroll: LazyListState?,
     onEvent: (MangaListEvent) -> Unit,
     padding: PaddingValues,
+    publicList: Boolean,
 ) {
     val entries = content.pages[status].orEmpty()
+    if (entries.isEmpty() && content.streaming) {
+        ScreenState(ScreenState.Loading, Modifier.padding(padding))
+        return
+    }
     val empty =
         if (entries.isNotEmpty()) {
             null
         } else if (content.entries.isEmpty()) {
-            stringResource(R.string.manga_list_empty)
+            stringResource(if (publicList) R.string.public_manga_list_empty else R.string.manga_list_empty)
         } else {
             stringResource(R.string.list_empty, status.displayName())
         }
-    MangaRows(entries, content, scroll, onEvent, padding, empty)
+    MangaRows(entries, content, scroll, onEvent, padding, publicList, empty)
 }
 
 @Composable
@@ -329,6 +342,7 @@ private fun MangaRows(
     scroll: LazyListState?,
     onEvent: (MangaListEvent) -> Unit,
     padding: PaddingValues,
+    publicList: Boolean,
     empty: String? = null,
     showStatus: Boolean = false,
 ) {
@@ -344,8 +358,9 @@ private fun MangaRows(
                         entry,
                         content.language,
                         showStatus,
+                        publicList,
                         open = { onEvent(MangaListEvent.Open(entry)) },
-                        edit = if (content.canEdit) ({ onEvent(MangaListEvent.Edit(entry)) }) else null,
+                        edit = if (content.canEdit && !publicList) ({ onEvent(MangaListEvent.Edit(entry)) }) else null,
                     )
                 }
             }
@@ -360,10 +375,11 @@ private fun MangaListRow(
     entry: MangaListEntry,
     language: TitleLanguage,
     showStatus: Boolean,
+    publicList: Boolean,
     open: () -> Unit,
     edit: (() -> Unit)?,
 ) {
-    val progress = entry.progressParts()
+    val progress = entry.progressParts(publicList)
     ListItem(
         onClick = open,
         onLongClick = edit,
@@ -388,9 +404,21 @@ internal fun MangaReadingStatus.displayName(): String =
     MangaEditStatus.entries.find { it.readingStatus == this }?.let { stringResource(it.label) } ?: malCodeAsText(code).ifBlank { code }
 
 @Composable
-internal fun MangaListEntry.progressParts(): List<String> {
+internal fun MangaListEntry.progressParts(publicList: Boolean = false): List<String> {
     val chapters = chaptersRead?.let { pluralStringResource(R.plurals.manga_chapters, it, countText(it)) }
     val volumes = volumesRead?.let { pluralStringResource(R.plurals.manga_volumes, it, countText(it)) }
-    val scoreLabel = score?.let { stringResource(R.string.title_your_score_spoken, it) }
+    val scoreLabel =
+        score?.let {
+            stringResource(
+                if (publicList) R.string.list_score else R.string.title_your_score_spoken,
+                it,
+            )
+        }
     return listOfNotNull(chapters, volumes, scoreLabel)
 }
+
+private fun DataError.publicListMessage(): Int =
+    when (this) {
+        DataError.NoConnection, DataError.Refused, DataError.NoClientId -> message()
+        else -> R.string.list_failed
+    }

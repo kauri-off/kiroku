@@ -33,4 +33,6 @@
     <string name="profile_recent">Недавние</string>
     <string name="profile_open">Открыть</string>
     <string name="profile_cancel">Отмена</string>
+    <string name="profile_view_anime_list">Открыть список аниме</string>
+    <string name="profile_view_manga_list">Открыть список манги</string>
 </resources>

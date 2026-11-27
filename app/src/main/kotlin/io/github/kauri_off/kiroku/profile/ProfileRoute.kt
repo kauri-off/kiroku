@@ -13,6 +13,7 @@ import androidx.navigation3.runtime.NavKey
 import io.github.kauri_off.kiroku.CountAsShown
 import io.github.kauri_off.kiroku.R
 import io.github.kauri_off.kiroku.collectAsScreenState
+import io.github.kauri_off.kiroku.manga.PublicMangaListKey
 import io.github.kauri_off.kiroku.settings.SettingsKey
 import io.github.kauri_off.kiroku.shell.Destination
 import io.github.kauri_off.kiroku.shell.NotBuiltScreen
@@ -74,7 +75,8 @@ fun ProfileRoute(
         LaunchedEffect(own) { if (own) navigator.remove(key) }
     }
     val name = key?.name
-    ProfileScreen(state.copy(openProfile = profile.openProfile(recent)), snackbars = snackbars, onEvent = { event ->
+    val displayed = state.copy(openProfile = profile.openProfile(recent), publicMangaAvailable = graph.publicMangaLists != null)
+    ProfileScreen(displayed, snackbars = snackbars, onEvent = { event ->
         profile.onEvent(event)
         when (event) {
             ProfileEvent.Back -> navigator.back()
@@ -82,6 +84,7 @@ fun ProfileRoute(
             ProfileEvent.SignIn -> onSignIn()
             is ProfileEvent.OpenStatistics -> navigator.open(ProfileNotBuiltKey(event.screen.notBuilt(), name))
             ProfileEvent.ViewList -> navigator.open(ProfileNotBuiltKey(ProfileNotBuilt.UserList, name))
+            ProfileEvent.ViewMangaList -> if (name != null && displayed.canViewManga) navigator.open(PublicMangaListKey(name))
             is ProfileEvent.OpenProfile ->
                 if (profile.isOwnName(event.name)) navigator.home(Destination.Profile) else navigator.open(OtherProfileKey(event.name))
             else -> Unit

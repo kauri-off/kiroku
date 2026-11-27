@@ -129,7 +129,8 @@ fun ProfileScreen(
     ) { padding ->
         val body = Modifier.padding(padding)
         when (val content = state.content) {
-            ProfileContent.Loading -> ScreenState(ScreenState.Loading, body)
+            ProfileContent.Loading ->
+                ProfileReadState(state, onEvent, body) { ScreenState(ScreenState.Loading) }
             ProfileContent.SignedOut ->
                 ScreenState(
                     ScreenState.Empty(
@@ -139,12 +140,35 @@ fun ProfileScreen(
                     ),
                     body,
                 )
-            ProfileContent.ListLoading -> state.reading?.let { ListReadProgress(it.loaded, it.total, body) }
-            is ProfileContent.Failed -> ScreenState(failedState(content.error, state.owner, onEvent), body)
+            ProfileContent.ListLoading ->
+                ProfileReadState(state, onEvent, body) {
+                    state.reading?.let { ListReadProgress(it.loaded, it.total) }
+                }
+            is ProfileContent.Failed ->
+                ProfileReadState(state, onEvent, body) { ScreenState(failedState(content.error, state.owner, onEvent)) }
             is ProfileContent.Shown -> Shown(content, state, onEvent, padding, scrollBehavior.nestedScrollConnection)
         }
     }
     state.openProfile?.let { OpenProfileDialog(it, onEvent) }
+}
+
+@Composable
+private fun ProfileReadState(
+    state: ProfileState,
+    onEvent: (ProfileEvent) -> Unit,
+    modifier: Modifier,
+    content: @Composable () -> Unit,
+) {
+    Column(modifier.fillMaxSize(), horizontalAlignment = Alignment.CenterHorizontally) {
+        if (state.canViewManga) {
+            Box(Modifier.weight(1f)) { content() }
+            Box(Modifier.widthIn(max = Sizes.contentMaxWidth).padding(bottom = Spacing.l)) {
+                WideButton(R.string.profile_view_manga_list, tonal = true) { onEvent(ProfileEvent.ViewMangaList) }
+            }
+        } else {
+            content()
+        }
+    }
 }
 
 // A list that cannot be read says why; a private list or an unknown name offers another name instead of Retry, and
@@ -200,7 +224,7 @@ private fun Shown(
                     .testTag(ProfileTags.page),
             contentPadding = PaddingValues(top = Spacing.s, bottom = padding.calculateBottomPadding() + Spacing.l),
         ) {
-            pageBlocks(blocks(content, state.owner, heading, onEvent))
+            pageBlocks(blocks(content, state, heading, onEvent))
         }
     }
 }
@@ -208,12 +232,12 @@ private fun Shown(
 // The page in one rhythm: Spacing.l from the header to the numbers, which end it, and Spacing.xl between groups.
 private fun blocks(
     content: ProfileContent.Shown,
-    owner: ProfileOwner,
+    state: ProfileState,
     heading: Dp,
     onEvent: (ProfileEvent) -> Unit,
 ): List<PageBlock> =
     buildList {
-        val own = owner == ProfileOwner.Me
+        val own = state.owner == ProfileOwner.Me
         val statistics = content.statistics
         // Another user's name is in the bar.
         val header = content.header?.takeIf { own }
@@ -230,7 +254,13 @@ private fun blocks(
         if (!own) {
             add(
                 PageBlock(Section.List, Spacing.xl) {
-                    WideButton(R.string.profile_view_list, tonal = true) { onEvent(ProfileEvent.ViewList) }
+                    Column(verticalArrangement = Arrangement.spacedBy(Spacing.s)) {
+                        val animeLabel = if (state.canViewManga) R.string.profile_view_anime_list else R.string.profile_view_list
+                        WideButton(animeLabel, tonal = true) { onEvent(ProfileEvent.ViewList) }
+                        if (state.canViewManga) {
+                            WideButton(R.string.profile_view_manga_list, tonal = true) { onEvent(ProfileEvent.ViewMangaList) }
+                        }
+                    }
                 },
             )
         }

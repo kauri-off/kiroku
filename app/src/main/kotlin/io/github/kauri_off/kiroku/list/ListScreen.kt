@@ -130,6 +130,7 @@ internal sealed interface ListPane {
     data class Manga(
         val state: MangaListState,
         val onEvent: (MangaListEvent) -> Unit,
+        val publicName: String? = null,
     ) : ListPane
 }
 
@@ -204,7 +205,10 @@ internal fun ListScreen(
         positions.SaveableStateProvider(mode.name) {
             when (pane) {
                 is ListPane.Anime -> AnimeListBody(pane.state, pane.onEvent, motion, padding)
-                is ListPane.Manga -> key(pane.state.owner) { MangaListBody(pane.state, pane.onEvent, mangaMotion, padding) }
+                is ListPane.Manga ->
+                    key(pane.state.owner) {
+                        MangaListBody(pane.state, pane.onEvent, mangaMotion, padding, publicList = pane.publicName != null)
+                    }
             }
         }
     }
@@ -541,6 +545,7 @@ private fun ListTopBar(
                     FilterField(filter, onChange = { manga.onEvent(MangaListEvent.FilterChanged(it)) }, onClose = closeFilter)
                 }
             owner is ListOwner.Other -> Text(stringResource(R.string.list_title_other, owner.name))
+            manga?.publicName != null -> Text(stringResource(R.string.public_manga_list_title, manga.publicName))
             onMode != null -> ListModeSwitch(mode, onMode)
             else -> Text(stringResource(R.string.list_title))
         }
@@ -549,6 +554,7 @@ private fun ListTopBar(
         when {
             filter != null -> BackButton(closeFilter)
             state?.owner is ListOwner.Other -> BackButton { anime.onEvent(ListEvent.Back) }
+            manga?.publicName != null -> BackButton { manga.onEvent(MangaListEvent.Back) }
         }
     }
     val actions: @Composable RowScope.() -> Unit = {

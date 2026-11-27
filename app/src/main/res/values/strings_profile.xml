@@ -34,4 +34,6 @@
     <string name="profile_recent">Recent</string>
     <string name="profile_open">Open</string>
     <string name="profile_cancel">Cancel</string>
+    <string name="profile_view_anime_list">View anime list</string>
+    <string name="profile_view_manga_list">View manga list</string>
 </resources>

@@ -28,6 +28,8 @@ import io.github.kauri_off.kiroku.manga.LocalMangaEditing
 import io.github.kauri_off.kiroku.manga.MangaEditOrigin
 import io.github.kauri_off.kiroku.manga.MangaTitleKey
 import io.github.kauri_off.kiroku.manga.MangaTitleRoute
+import io.github.kauri_off.kiroku.manga.PublicMangaListKey
+import io.github.kauri_off.kiroku.manga.PublicMangaListRoute
 import io.github.kauri_off.kiroku.notifysettings.NotifySettingsKey
 import io.github.kauri_off.kiroku.notifysettings.NotifySettingsRoute
 import io.github.kauri_off.kiroku.profile.OpenedProfiles
@@ -265,6 +267,23 @@ fun appEntries(
         }
         entry<ProfileRoot> { ProfileRoute(null, graph, messages, profiles, navigator, signIn, snackbars) }
         entry<OtherProfileKey> { key -> ProfileRoute(key, graph, messages, profiles, navigator, signIn, snackbars) }
+        entry<PublicMangaListKey> { key ->
+            val lists = graph.publicMangaLists
+            if (lists != null) {
+                PublicMangaListRoute(
+                    key,
+                    lists,
+                    graph,
+                    onRefreshFailed = { messages.post(ShellMessage(ShellMessage.Text.RefreshFailed(it))) },
+                    snackbars,
+                    onOpen = { navigator.open(it) },
+                    onBack = { back() },
+                    onSignIn = signIn,
+                )
+            } else {
+                LaunchedEffect(key) { navigator.remove(key) }
+            }
+        }
         entry<ProfileNotBuiltKey> { key ->
             val name = key.name
             val page = key.statisticsPage

@@ -17,7 +17,11 @@ data class ProfileState(
     val reading: UserListProgress? = null,
     // The "Open another profile" dialog; null while it is closed.
     val openProfile: OpenProfile? = null,
+    val publicMangaAvailable: Boolean = false,
 ) {
+    val canViewManga: Boolean
+        get() = owner is ProfileOwner.Other && publicMangaAvailable && content != ProfileContent.Failed(DataError.UnknownUser)
+
     init {
         require(content !is ProfileContent.SignedOut || owner == ProfileOwner.Me)
         require(content !is ProfileContent.ListLoading || (owner is ProfileOwner.Other && reading != null))
@@ -79,6 +83,8 @@ sealed interface ProfileEvent {
     ) : ProfileEvent
 
     data object ViewList : ProfileEvent
+
+    data object ViewMangaList : ProfileEvent
 
     // Opens the dialog with [name] in its field.
     data class StartOpenProfile(

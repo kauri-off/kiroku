@@ -7,4 +7,6 @@
     <string name="manga_list_on_hold">Отложено</string>
     <string name="manga_list_dropped">Брошено</string>
     <string name="manga_list_planned">Запланировано</string>
+    <string name="public_manga_list_title">Список манги %1$s</string>
+    <string name="public_manga_list_empty">Этот список манги пуст</string>
 </resources>

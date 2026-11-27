@@ -7,4 +7,6 @@
     <string name="manga_list_on_hold">On hold</string>
     <string name="manga_list_dropped">Dropped</string>
     <string name="manga_list_planned">Planned</string>
+    <string name="public_manga_list_title">%1$s\'s manga list</string>
+    <string name="public_manga_list_empty">This manga list is empty</string>
 </resources>

@@ -54,7 +54,7 @@ internal fun mangaListPane(
     val state = list.forDisplay(loaded)
     val ready = state.content as? MangaListContent.Ready
     CountAsShown(list.shown)
-    return ListPane.Manga(state) {
+    return ListPane.Manga(state, onEvent = {
         when (it) {
             MangaListEvent.SignIn -> onSignIn()
             MangaListEvent.Refresh -> list.refresh()
@@ -69,10 +69,10 @@ internal fun mangaListPane(
             }
             else -> state.owner?.let { owner -> list.control(owner, it) }
         }
-    }
+    })
 }
 
-private fun MangaListEntry.summary(
-    owner: SignInId,
+internal fun MangaListEntry.summary(
+    owner: SignInId?,
     language: TitleLanguage,
 ): MangaTitleSummary = MangaTitleSummary(MangaDetails(id, titles, posterUrl, null, null, null, null, null, null, null), language, owner)

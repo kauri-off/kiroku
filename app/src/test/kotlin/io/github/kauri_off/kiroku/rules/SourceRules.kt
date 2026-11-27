@@ -342,12 +342,14 @@ private val initBlock = Regex("""\binit\s*\{""")
 
 // Another user's list holds nothing that writes or downloads the person's list, posts a message that can act on it, or
 // asks the airing source; of the graph's list it takes the entries alone.
-val USER_LIST_SOURCES = setOf("UserListRoute.kt", "UserListViewModel.kt")
+val USER_LIST_SOURCES =
+    setOf("UserListRoute.kt", "UserListViewModel.kt", "PublicMangaListRoute.kt", "PublicMangaListViewModel.kt")
 
 private val writerOrAiring =
     Regex(
-        """\b\w*(ListRepository|ListEngine|ListSource|ListWrite|ShellMessage|EditSheet|editSheet|Airing(Repository|Source))\w*\b""" +
-            """|\.airing\b|\.(sync|write)\s*\(|\bgraph\.list\b(?!\.observeEntries\(\))""",
+        """\b\w*(ListRepository|ListEngine|ListSource|ListWrite|MangaListEditor|ShellMessage|""" +
+            """EditSheet|editSheet|Airing(Repository|Source))\w*\b""" +
+            """|\.airing\b|\.(sync|write)\s*\(|\bgraph\.list\b(?!\.observeEntries\(\))|\bgraph\.mangaList\b""",
     )
 
 fun readOnlyListProblems(

@@ -1,0 +1,111 @@
+package io.github.kauri_off.kiroku.core.user
+
+import io.github.kauri_off.kiroku.core.error.DataError
+import io.github.kauri_off.kiroku.core.error.Outcome
+import io.github.kauri_off.kiroku.core.model.MangaId
+import io.github.kauri_off.kiroku.core.model.MangaListEntry
+import io.github.kauri_off.kiroku.core.model.MangaReadingStatus
+import io.github.kauri_off.kiroku.core.model.Titles
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.test.UnconfinedTestDispatcher
+import kotlinx.coroutines.test.runCurrent
+import kotlinx.coroutines.test.runTest
+import org.junit.Assert.assertEquals
+import org.junit.Test
+
+@OptIn(ExperimentalCoroutinesApi::class)
+class MangaListKeeperTest {
+    @Test
+    fun `readers share pages for one name and retain independent whole lists`() =
+        runTest {
+            val tail = CompletableDeferred<Unit>()
+            val calls = mutableListOf<String>()
+            val lists =
+                MangaListKeeper(
+                    source { name, emit ->
+                        calls += name
+                        if (name == "sample") {
+                            emit(listOf(row(1)))
+                            tail.await()
+                            emit(listOf(row(1), row(2)))
+                        } else {
+                            emit(listOf(row(3)))
+                        }
+                        Outcome.Success(Unit)
+                    },
+                    backgroundScope,
+                    { throw it },
+                )
+            val states = mutableListOf<NamedListState<MangaListEntry>>()
+            backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { lists.observeList("sample").collect { states += it } }
+            runCurrent()
+            assertEquals(NamedListState.Reading(listOf(row(1)), null, null), states.last())
+            val second = mutableListOf<NamedListState<MangaListEntry>>()
+            backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { lists.observeList("SAMPLE").collect { second += it } }
+            assertEquals(states.last(), second.last())
+            assertEquals(NamedListState.Whole(listOf(row(3)), null), lists.observeList("another").first { it is NamedListState.Whole })
+            tail.complete(Unit)
+            runCurrent()
+            assertEquals(NamedListState.Whole(listOf(row(1), row(2)), null), states.last())
+            assertEquals(states.last(), second.last())
+            assertEquals(listOf("sample", "another"), calls)
+        }
+
+    @Test
+    fun `only a complete refresh or a confirmed user response replaces cached content`() =
+        runTest {
+            var answer: Outcome<Unit> = Outcome.Success(Unit)
+            var entries = listOf(row(1))
+            val lists =
+                MangaListKeeper(
+                    source { _, emit ->
+                        emit(entries)
+                        answer
+                    },
+                    backgroundScope,
+                    { throw it },
+                )
+            val initial = NamedListState.Whole(listOf(row(1)), null)
+            assertEquals(initial, lists.observeList("sample").first { it is NamedListState.Whole })
+            val states = mutableListOf<NamedListState<MangaListEntry>>()
+            backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { lists.observeList("sample").collect { states += it } }
+            answer = Outcome.Failure(DataError.ServerError)
+            entries = listOf(row(2))
+            assertEquals(answer, lists.refreshList("sample"))
+            assertEquals(initial, states.last())
+
+            for (error in listOf(DataError.PrivateList, DataError.UnknownUser)) {
+                answer = Outcome.Failure(error)
+                assertEquals(answer, lists.refreshList("sample"))
+                assertEquals(NamedListState.None(error), states.last())
+                assertEquals(NamedListState.None(error), lists.observeList("sample").first())
+                answer = Outcome.Success(Unit)
+                entries = emptyList()
+                lists.refreshList("sample")
+                assertEquals(NamedListState.Whole<MangaListEntry>(emptyList(), null), states.last())
+            }
+
+            entries = listOf(row(3))
+            lists.forget()
+            runCurrent()
+            assertEquals(NamedListState.Whole(listOf(row(3)), null), states.last())
+        }
+
+    private fun source(read: suspend (String, suspend (List<MangaListEntry>) -> Unit) -> Outcome<Unit>): RemoteMangaLists =
+        object : RemoteMangaLists {
+            override suspend fun read(
+                name: String,
+                part: suspend (List<MangaListEntry>) -> Unit,
+            ) = read(name, part)
+
+            override fun sameUser(
+                a: String,
+                b: String,
+            ) = a.equals(b, ignoreCase = true)
+        }
+
+    private fun row(id: Long) = MangaListEntry(MangaId(id), Titles("Title $id"), MangaReadingStatus("reading"))
+}
