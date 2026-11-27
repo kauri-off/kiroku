@@ -2,7 +2,6 @@ package io.github.kauri_off.kiroku.notifysettings
 
 import android.Manifest
 import android.app.NotificationManager
-import android.view.View
 import androidx.activity.compose.LocalActivityResultRegistryOwner
 import androidx.activity.result.ActivityResultRegistry
 import androidx.activity.result.ActivityResultRegistryOwner
@@ -12,7 +11,6 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.test.junit4.StateRestorationTester
 import androidx.core.app.ActivityOptionsCompat
 import androidx.lifecycle.Lifecycle
@@ -89,13 +87,13 @@ class AskForNotificationsTest {
     // Each start of the app is a new composition over the same install's file.
     private fun app(
         lifecycle: LifecycleOwner? = null,
-        hold: (View) -> SplashHold? = { null },
+        hold: SplashHold? = null,
     ) {
         compose.setContent {
             key(starts) {
                 CompositionLocalProvider(
                     LocalActivityResultRegistryOwner provides registry,
-                    LocalSplashHold provides hold(LocalView.current),
+                    LocalSplashHold provides hold,
                     LocalLifecycleOwner provides (lifecycle ?: LocalLifecycleOwner.current),
                 ) {
                     AskForNotifications(sessions, AskedOnce(marker, Dispatchers.Unconfined))
@@ -214,12 +212,17 @@ class AskForNotificationsTest {
 
     @Test
     fun `nothing is asked while the splash is held, and the prompt comes once the window has drawn`() {
-        var splash: SplashHold? = null
-        app(hold = { view -> splash ?: SplashHold(view, atMost = 1.hours).also { it.hold() }.also { splash = it } })
+        val decor = compose.activity.window.decorView
+        val splash = compose.runOnUiThread { SplashHold(decor, atMost = 1.hours).also { it.hold() } }
+        app(hold = splash)
+        compose.runOnUiThread { assertTrue(decor.viewTreeObserver.dispatchOnPreDraw()) }
         idle()
         assertEquals(emptyList<Any?>(), asks)
 
-        compose.runOnUiThread { splash!!.release() }
+        compose.runOnUiThread {
+            splash.release()
+            assertFalse(decor.viewTreeObserver.dispatchOnPreDraw())
+        }
         idle()
         assertEquals(listOf(Manifest.permission.POST_NOTIFICATIONS), asks)
     }

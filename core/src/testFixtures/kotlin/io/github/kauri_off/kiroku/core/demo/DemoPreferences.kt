@@ -2,9 +2,12 @@ package io.github.kauri_off.kiroku.core.demo
 
 import io.github.kauri_off.kiroku.core.error.Outcome
 import io.github.kauri_off.kiroku.core.list.TabSort
+import io.github.kauri_off.kiroku.core.model.DisplayPreferences
 import io.github.kauri_off.kiroku.core.model.ListStatus
 import io.github.kauri_off.kiroku.core.model.MangaReadingStatus
 import io.github.kauri_off.kiroku.core.model.SignInId
+import io.github.kauri_off.kiroku.core.model.StartupTab
+import io.github.kauri_off.kiroku.core.model.ThemeMode
 import io.github.kauri_off.kiroku.core.model.TitleLanguage
 import io.github.kauri_off.kiroku.core.repository.AdultSearchChoice
 import io.github.kauri_off.kiroku.core.repository.PreferencesRepository
@@ -17,6 +20,20 @@ class DemoPreferences : PreferencesRepository {
     private val sorts = MutableStateFlow(ListStatus.entries.associateWith(TabSort::defaultFor))
     private val mangaChoices = MutableStateFlow(emptyMap<Pair<SignInId, MangaReadingStatus>, TabSort>())
     private val opened = MutableStateFlow(emptyList<String>())
+
+    private val display = MutableStateFlow(DisplayPreferences())
+
+    override fun observeDisplayPreferences(): Flow<DisplayPreferences> = display
+
+    override suspend fun setTheme(mode: ThemeMode): Outcome<Unit> {
+        display.update { it.copy(theme = mode) }
+        return Outcome.Success(Unit)
+    }
+
+    override suspend fun setStartupTab(tab: StartupTab): Outcome<Unit> {
+        display.update { it.copy(startupTab = tab) }
+        return Outcome.Success(Unit)
+    }
 
     private val language = MutableStateFlow(TitleLanguage.Romaji)
     private val adult = MutableStateFlow(AdultSearchChoice())

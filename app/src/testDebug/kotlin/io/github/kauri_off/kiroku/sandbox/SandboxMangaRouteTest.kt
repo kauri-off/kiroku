@@ -426,9 +426,13 @@ class SandboxMangaRouteTest {
         waited {
             val owner = graph.manga.observeOwner().first { it.id == account.signIn }
             check(graph.manga.refresh(id, owner) { true } is Outcome.Success)
-            assertEquals(Outcome.Success(null), manga.stored(account.signIn))
         }
         graph.scenarios.set(Scenario(offline = true))
+        compose.waitUntil(WAIT) {
+            shadowOf(Looper.getMainLooper()).idle()
+            graph.signIn.step.value == SignInStep.None
+        }
+        assertEquals(Outcome.Success(null), waited { manga.stored(account.signIn) })
         checkNotNull(RuntimeEnvironment.getApplication().appLinks).opened(Link.MangaTitle(id))
         shows("Paper Observatory")
         shows("Could not check your list")

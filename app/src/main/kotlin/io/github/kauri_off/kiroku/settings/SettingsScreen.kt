@@ -25,7 +25,12 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.navigation3.runtime.NavKey
 import io.github.kauri_off.kiroku.R
+import io.github.kauri_off.kiroku.core.model.DisplayPreferences
+import io.github.kauri_off.kiroku.core.model.StartupTab
+import io.github.kauri_off.kiroku.core.model.ThemeMode
 import io.github.kauri_off.kiroku.core.model.TitleLanguage
+import io.github.kauri_off.kiroku.design.theme.DialogSystemBarAppearance
+import io.github.kauri_off.kiroku.shell.destination
 import io.github.kauri_off.kiroku.titlesub.SubScreen
 import io.github.kauri_off.kiroku.titlesub.SubScreenBody
 import kotlinx.serialization.Serializable
@@ -37,6 +42,7 @@ data class SettingsState(
     val language: TitleLanguage?,
     val adultInSearch: Boolean?,
     val appLanguageAvailable: Boolean,
+    val display: DisplayPreferences?,
 )
 
 sealed interface SettingsEvent {
@@ -52,8 +58,18 @@ sealed interface SettingsEvent {
         val language: TitleLanguage,
     ) : SettingsEvent
 
+    data class SetTheme(
+        val mode: ThemeMode,
+    ) : SettingsEvent
+
+    data class SetStartupTab(
+        val tab: StartupTab,
+    ) : SettingsEvent
+
     data object ToggleAdultInSearch : SettingsEvent
 }
+
+private enum class Picker { Theme, StartupTab, TitleLanguage }
 
 @Composable
 fun SettingsScreen(
@@ -62,8 +78,10 @@ fun SettingsScreen(
     snackbars: SnackbarHostState,
     modifier: Modifier = Modifier,
 ) {
-    var chooseLanguage by rememberSaveable { mutableStateOf(false) }
+    var picker by rememberSaveable { mutableStateOf<Picker?>(null) }
     val language = state.language
+    val display = state.display
+    val dismiss = { picker = null }
     SubScreen(
         title = stringResource(R.string.settings_title),
         sessionExpired = false,
@@ -72,6 +90,12 @@ fun SettingsScreen(
         snackbars = snackbars,
         body =
             SubScreenBody.List {
+                item {
+                    ChoiceRow(R.string.settings_theme, display?.theme?.label) { picker = Picker.Theme }
+                }
+                item {
+                    ChoiceRow(R.string.settings_startup_tab, display?.startupTab?.label) { picker = Picker.StartupTab }
+                }
                 if (state.appLanguageAvailable) {
                     item {
                         ListItem(
@@ -81,12 +105,7 @@ fun SettingsScreen(
                     }
                 }
                 item {
-                    ListItem(
-                        onClick = { chooseLanguage = true },
-                        enabled = language != null,
-                        supportingContent = language?.let { { Text(stringResource(it.label)) } },
-                        content = { Text(stringResource(R.string.settings_title_language)) },
-                    )
+                    ChoiceRow(R.string.settings_title_language, language?.label) { picker = Picker.TitleLanguage }
                 }
                 item {
                     val checked = state.adultInSearch
@@ -118,35 +137,76 @@ fun SettingsScreen(
             },
         modifier = modifier,
     )
-    if (chooseLanguage && language != null) {
-        TitleLanguageDialog(
-            language,
-            dismiss = { chooseLanguage = false },
-            choose = {
-                chooseLanguage = false
-                onEvent(SettingsEvent.SetTitleLanguage(it))
-            },
-        )
+
+    fun choose(event: SettingsEvent) {
+        dismiss()
+        onEvent(event)
+    }
+    when (picker) {
+        Picker.Theme -> if (display != null) ThemeDialog(display.theme, dismiss) { choose(SettingsEvent.SetTheme(it)) }
+        Picker.StartupTab -> if (display != null) StartupTabDialog(display.startupTab, dismiss) { choose(SettingsEvent.SetStartupTab(it)) }
+        Picker.TitleLanguage -> if (language != null) TitleLanguageDialog(language, dismiss) { choose(SettingsEvent.SetTitleLanguage(it)) }
+        null -> Unit
     }
 }
+
+@Composable
+private fun ChoiceRow(
+    title: Int,
+    selected: Int?,
+    onClick: () -> Unit,
+) {
+    ListItem(
+        onClick = onClick,
+        enabled = selected != null,
+        supportingContent = selected?.let { { Text(stringResource(it)) } },
+        content = { Text(stringResource(title)) },
+    )
+}
+
+@Composable
+internal fun ThemeDialog(
+    current: ThemeMode,
+    dismiss: () -> Unit,
+    choose: (ThemeMode) -> Unit,
+) = ChoiceDialog(R.string.settings_theme, ThemeMode.entries, current, { it.label }, dismiss, choose)
+
+@Composable
+internal fun StartupTabDialog(
+    current: StartupTab,
+    dismiss: () -> Unit,
+    choose: (StartupTab) -> Unit,
+) = ChoiceDialog(R.string.settings_startup_tab, StartupTab.entries, current, { it.label }, dismiss, choose)
 
 @Composable
 internal fun TitleLanguageDialog(
     current: TitleLanguage,
     dismiss: () -> Unit,
     choose: (TitleLanguage) -> Unit,
+) = ChoiceDialog(R.string.settings_title_language, TitleLanguage.entries, current, { it.label }, dismiss, choose)
+
+@Composable
+private fun <T> ChoiceDialog(
+    title: Int,
+    options: List<T>,
+    current: T,
+    label: (T) -> Int,
+    dismiss: () -> Unit,
+    choose: (T) -> Unit,
 ) {
     AlertDialog(
         onDismissRequest = dismiss,
-        title = { Text(stringResource(R.string.settings_title_language)) },
+        title = { Text(stringResource(title)) },
         text = {
+            DialogSystemBarAppearance()
             Column(Modifier.verticalScroll(rememberScrollState()).selectableGroup()) {
-                TitleLanguage.entries.forEach { language ->
+                options.forEach { option ->
+                    val selected = option == current
                     ListItem(
-                        modifier = Modifier.selectable(selected = language == current, role = Role.RadioButton) { choose(language) },
-                        leadingContent = { RadioButton(selected = language == current, onClick = null) },
+                        modifier = Modifier.selectable(selected = selected, role = Role.RadioButton) { choose(option) },
+                        leadingContent = { RadioButton(selected = selected, onClick = null) },
                         colors = ListItemDefaults.colors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh),
-                        content = { Text(stringResource(language.label)) },
+                        content = { Text(stringResource(label(option))) },
                     )
                 }
             }
@@ -164,3 +224,14 @@ private val TitleLanguage.label: Int
             TitleLanguage.English -> R.string.settings_english
             TitleLanguage.Japanese -> R.string.settings_japanese
         }
+
+private val ThemeMode.label: Int
+    get() =
+        when (this) {
+            ThemeMode.System -> R.string.settings_theme_system
+            ThemeMode.Light -> R.string.settings_theme_light
+            ThemeMode.Dark -> R.string.settings_theme_dark
+            ThemeMode.PureBlack -> R.string.settings_theme_pure_black
+        }
+
+private val StartupTab.label: Int get() = destination.label

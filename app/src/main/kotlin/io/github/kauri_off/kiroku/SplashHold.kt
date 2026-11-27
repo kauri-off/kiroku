@@ -36,7 +36,7 @@ class SplashHold(
     }
 
     fun release() {
-        if (--holds == 0) end()
+        if (--holds == 0) view.invalidate()
     }
 
     val keeping: Boolean get() = !over && holds > 0

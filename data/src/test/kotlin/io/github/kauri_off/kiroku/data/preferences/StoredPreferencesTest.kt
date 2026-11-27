@@ -13,9 +13,12 @@ import io.github.kauri_off.kiroku.core.error.Outcome
 import io.github.kauri_off.kiroku.core.list.ListSort
 import io.github.kauri_off.kiroku.core.list.SortDirection
 import io.github.kauri_off.kiroku.core.list.TabSort
+import io.github.kauri_off.kiroku.core.model.DisplayPreferences
 import io.github.kauri_off.kiroku.core.model.ListStatus
 import io.github.kauri_off.kiroku.core.model.MangaReadingStatus
 import io.github.kauri_off.kiroku.core.model.SignInId
+import io.github.kauri_off.kiroku.core.model.StartupTab
+import io.github.kauri_off.kiroku.core.model.ThemeMode
 import io.github.kauri_off.kiroku.core.model.TitleLanguage
 import io.github.kauri_off.kiroku.core.notify.NotificationDelay
 import io.github.kauri_off.kiroku.core.notify.NotificationSettings
@@ -112,6 +115,53 @@ class StoredPreferencesTest {
                 .first()
                 .also { scope.coroutineContext.job.cancelAndJoin() }
         }
+
+    @Test
+    fun `display choices default to system and list and persist independently across processes and sign out`() {
+        process {
+            assertEquals(DisplayPreferences(), it.observeDisplayPreferences().first())
+            assertEquals(Outcome.Success(Unit), it.setTheme(ThemeMode.PureBlack))
+            assertEquals(Outcome.Success(Unit), it.setStartupTab(StartupTab.Search))
+            it.forgetUsersChoices()
+        }
+        process {
+            assertEquals(DisplayPreferences(ThemeMode.PureBlack, StartupTab.Search), it.observeDisplayPreferences().first())
+            assertEquals(Outcome.Success(Unit), it.setStartupTab(StartupTab.Profile))
+            assertEquals(DisplayPreferences(ThemeMode.PureBlack, StartupTab.Profile), it.observeDisplayPreferences().first())
+            assertEquals(Outcome.Success(Unit), it.setTheme(ThemeMode.Light))
+        }
+        process {
+            assertEquals(DisplayPreferences(ThemeMode.Light, StartupTab.Profile), it.observeDisplayPreferences().first())
+        }
+        assertEquals("Light", stored()[stringPreferencesKey("theme_mode")])
+        assertEquals("Profile", stored()[stringPreferencesKey("startup_tab")])
+        assertTrue(reports.isEmpty())
+    }
+
+    @Test
+    fun `existing theme names retain their meaning when the startup tab is absent`() {
+        val key = stringPreferencesKey("theme_mode")
+        for (mode in listOf(ThemeMode.System, ThemeMode.Light, ThemeMode.Dark)) {
+            written(key to mode.name)
+            process { assertEquals(DisplayPreferences(theme = mode), it.observeDisplayPreferences().first()) }
+            assertEquals(mode.name, stored()[key])
+        }
+        assertTrue(reports.isEmpty())
+    }
+
+    @Test
+    fun `unknown display choices use defaults and stay stored`() {
+        val theme = stringPreferencesKey("theme_mode")
+        val startup = stringPreferencesKey("startup_tab")
+        written(theme to "FutureTheme", startup to "FutureTab")
+        process {
+            assertEquals(DisplayPreferences(), it.observeDisplayPreferences().first())
+            assertEquals(DisplayPreferences(), it.observeDisplayPreferences().first())
+        }
+        assertEquals("FutureTheme", stored()[theme])
+        assertEquals("FutureTab", stored()[startup])
+        assertEquals(2, reports.size)
+    }
 
     @Test
     fun `title language and the search filter persist, retain notification choices and stay after sign out`() {
@@ -426,6 +476,17 @@ class StoredPreferencesTest {
         assertTrue(reports.single() is PreferencesFailure)
         readsFail = false
         process { assertEquals(TabSort(ListSort.Score), it.observeListSorts().first().getValue(ListStatus.Completed)) }
+    }
+
+    @Test
+    fun `a file the disk cannot read emits display defaults and reports the failure`() {
+        process {
+            it.setTheme(ThemeMode.PureBlack)
+            it.setStartupTab(StartupTab.Search)
+        }
+        readsFail = true
+        process { assertEquals(DisplayPreferences(), it.observeDisplayPreferences().first()) }
+        assertTrue(reports.single() is PreferencesFailure)
     }
 
     // The codes are the file's format: a file written with them is read as these sorts, and a choice is written so.

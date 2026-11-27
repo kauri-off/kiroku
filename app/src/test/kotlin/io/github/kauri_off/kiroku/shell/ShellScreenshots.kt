@@ -1,5 +1,7 @@
 package io.github.kauri_off.kiroku.shell
 
+import androidx.activity.ComponentActivity
+import androidx.activity.compose.LocalActivity
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -10,14 +12,19 @@ import androidx.navigation3.runtime.NavKey
 import io.github.kauri_off.kiroku.R
 import io.github.kauri_off.kiroku.core.fixtures.FixtureAnime
 import io.github.kauri_off.kiroku.design.MotionBounds
+import io.github.kauri_off.kiroku.design.component.ScreenState
+import io.github.kauri_off.kiroku.design.theme.KirokuWindow
+import io.github.kauri_off.kiroku.design.theme.Seed
 import io.github.kauri_off.kiroku.list.ListFixtureStates
 import io.github.kauri_off.kiroku.list.ListScreen
 import io.github.kauri_off.kiroku.screenshots.ScreenshotRegistry
 import io.github.kauri_off.kiroku.screenshots.Transition
+import io.github.kauri_off.kiroku.screenshots.Variant
 import io.github.kauri_off.kiroku.screenshots.WindowSize
 import io.github.kauri_off.kiroku.screenshots.case
 import io.github.kauri_off.kiroku.screenshots.contentCase
 import io.github.kauri_off.kiroku.screenshots.notShown
+import io.github.kauri_off.kiroku.screenshots.shown
 import io.github.kauri_off.kiroku.title.TitleFixtures
 import io.github.kauri_off.kiroku.title.TitleKey
 import io.github.kauri_off.kiroku.title.TitleScreen
@@ -25,7 +32,13 @@ import io.github.kauri_off.kiroku.title.TitleScreen
 class ShellScreenshots : ScreenshotRegistry() {
     override val content = contentCase("list-selected") { Shell(ShellState(Destination.List)) }
 
-    override val loading = notShown("The shell loads nothing itself; each destination's screen shows its own loading state")
+    override val loading =
+        shown {
+            val activity = LocalActivity.current as ComponentActivity
+            activity.KirokuWindow(settings = null, seed = Seed.Teal) {
+                ScreenState(ScreenState.Loading, delayLoading = false)
+            }
+        }
     override val empty = notShown("The shell is never empty: its placeholders are the destinations' empty states")
     override val error = notShown("The shell has no request that can fail; each destination's screen shows its own errors")
 
@@ -34,7 +47,7 @@ class ShellScreenshots : ScreenshotRegistry() {
             case("snackbar") { Shell(ShellState(Destination.List), snackbar = true) },
             case("session-banner") { Shell(ShellState(Destination.List), sessionExpired = true) },
             case("wide", window = WindowSize(widthDp = 840, heightDp = 600)) { Shell(ShellState(Destination.List)) },
-            case("list") { Screens(remember { navigatorOf() }) },
+            case("list", additionalVariants = listOf(Variant.EnBlack)) { Screens(remember { navigatorOf() }) },
             case("title") { Screens(remember { navigatorOf(TITLE) }) },
             case("search") { Screens(remember { navigatorOf(selected = Destination.Search) }) },
         )

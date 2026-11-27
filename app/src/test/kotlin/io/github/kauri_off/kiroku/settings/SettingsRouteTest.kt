@@ -3,10 +3,14 @@ package io.github.kauri_off.kiroku.settings
 import android.app.NotificationManager
 import android.provider.Settings
 import androidx.compose.material3.SnackbarHostState
+import androidx.compose.ui.test.assertIsNotSelected
 import androidx.compose.ui.test.assertIsOff
 import androidx.compose.ui.test.assertIsOn
+import androidx.compose.ui.test.assertIsSelected
+import androidx.compose.ui.test.hasAnyAncestor
 import androidx.compose.ui.test.hasClickAction
 import androidx.compose.ui.test.hasText
+import androidx.compose.ui.test.isDialog
 import androidx.compose.ui.test.junit4.StateRestorationTester
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
@@ -14,12 +18,16 @@ import androidx.compose.ui.test.performClick
 import io.github.kauri_off.kiroku.core.demo.Demo
 import io.github.kauri_off.kiroku.core.error.Outcome
 import io.github.kauri_off.kiroku.core.fixtures.Fixtures
+import io.github.kauri_off.kiroku.core.model.DisplayPreferences
+import io.github.kauri_off.kiroku.core.model.StartupTab
+import io.github.kauri_off.kiroku.core.model.ThemeMode
 import io.github.kauri_off.kiroku.core.model.TitleLanguage
 import io.github.kauri_off.kiroku.core.repository.PreferencesRepository
 import io.github.kauri_off.kiroku.design.composeRule
 import io.github.kauri_off.kiroku.design.registered
 import io.github.kauri_off.kiroku.design.theme.KirokuTheme
 import io.github.kauri_off.kiroku.notifysettings.NotifySettingsKey
+import io.github.kauri_off.kiroku.search.MangaSearchKey
 import io.github.kauri_off.kiroku.shell.AppRoute
 import io.github.kauri_off.kiroku.shell.Destination
 import io.github.kauri_off.kiroku.shell.ShellMessages
@@ -61,6 +69,8 @@ class SettingsRouteTest {
     private val app = RuntimeEnvironment.getApplication()
 
     private val restoration = StateRestorationTester(compose)
+
+    private fun option(label: String) = compose.onNode(hasText(label) and hasAnyAncestor(isDialog()))
 
     @Test
     fun `the Profile's settings lead to the notification settings, and Back returns the same way to the Profile`() {
@@ -109,6 +119,47 @@ class SettingsRouteTest {
         val intent = shadowOf(compose.activity).nextStartedActivity
         assertEquals(Settings.ACTION_APP_LOCALE_SETTINGS, intent.action)
         assertEquals("package:${app.packageName}", intent.dataString)
+    }
+
+    @Test
+    fun `theme and startup tab can be changed without moving or losing any stack`() {
+        restoration.setContent {
+            KirokuTheme(dark = false, dynamicColor = false) {
+                navigator = rememberShellNavigator()
+                AppRoute(graph, navigator)
+            }
+        }
+        compose.runOnIdle {
+            navigator.select(Destination.Search)
+            navigator.open(MangaSearchKey)
+            navigator.select(Destination.Profile)
+            navigator.open(SettingsKey)
+        }
+        compose.waitForIdle()
+        compose.onNodeWithText("Theme").performClick()
+        option("System").assertIsSelected()
+        option("Pure black").assertIsNotSelected().performClick()
+        compose.onNodeWithText("Pure black").assertExists()
+
+        compose.onNodeWithText("Startup tab").performClick()
+        option("List").assertIsSelected()
+        option("Search").assertIsNotSelected().performClick()
+        compose.onNode(hasText("Startup tab") and hasText("Search")).assertExists()
+        assertEquals(
+            DisplayPreferences(ThemeMode.PureBlack, StartupTab.Search),
+            runBlocking {
+                graph.preferences.observeDisplayPreferences().first()
+            },
+        )
+
+        compose.onNodeWithText("Startup tab").performClick()
+        option("Profile").assertIsNotSelected()
+        compose.onNodeWithText("Cancel").performClick()
+        compose.runOnIdle {
+            assertEquals(Destination.Profile, navigator.current)
+            assertEquals(listOf(Destination.Profile.root, SettingsKey), navigator.stack)
+            assertEquals(listOf(Destination.Search.root, MangaSearchKey), navigator.stackOf(Destination.Search))
+        }
     }
 
     @Test

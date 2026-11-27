@@ -21,10 +21,13 @@ import io.github.kauri_off.kiroku.core.list.TabSort
 import io.github.kauri_off.kiroku.core.list.defaultDirection
 import io.github.kauri_off.kiroku.core.list.mangaListSorts
 import io.github.kauri_off.kiroku.core.list.sortsFor
+import io.github.kauri_off.kiroku.core.model.DisplayPreferences
 import io.github.kauri_off.kiroku.core.model.ListStatus
 import io.github.kauri_off.kiroku.core.model.MangaReadingStatus
 import io.github.kauri_off.kiroku.core.model.SessionOwner
 import io.github.kauri_off.kiroku.core.model.SignInId
+import io.github.kauri_off.kiroku.core.model.StartupTab
+import io.github.kauri_off.kiroku.core.model.ThemeMode
 import io.github.kauri_off.kiroku.core.model.TitleLanguage
 import io.github.kauri_off.kiroku.core.notify.NotificationDelay
 import io.github.kauri_off.kiroku.core.notify.NotificationSettings
@@ -107,6 +110,24 @@ class StoredPreferences internal constructor(
                 }
             block(choice)
         }
+
+    override fun observeDisplayPreferences(): Flow<DisplayPreferences> =
+        settings
+            .map { stored ->
+                DisplayPreferences(
+                    theme = choiceOf(stored, THEME_MODE, ThemeMode.System) { value -> ThemeMode.entries.firstOrNull { it.name == value } },
+                    startupTab =
+                        choiceOf(
+                            stored,
+                            STARTUP_TAB,
+                            StartupTab.List,
+                        ) { value -> StartupTab.entries.firstOrNull { it.name == value } },
+                )
+            }.distinctUntilChanged()
+
+    override suspend fun setTheme(mode: ThemeMode): Outcome<Unit> = save { it[THEME_MODE] = mode.name }
+
+    override suspend fun setStartupTab(tab: StartupTab): Outcome<Unit> = save { it[STARTUP_TAB] = tab.name }
 
     override fun observeTitleLanguage(): Flow<TitleLanguage> =
         settings
@@ -360,6 +381,8 @@ class StoredPreferences internal constructor(
         const val DIRECTION = "list_direction_"
         const val NAMES_APART = "\n"
 
+        val THEME_MODE = stringPreferencesKey("theme_mode")
+        val STARTUP_TAB = stringPreferencesKey("startup_tab")
         val TITLE_LANGUAGE = stringPreferencesKey("title_language")
         val ADULT_IN_SEARCH = booleanPreferencesKey("adult_in_search")
         val ADULT_REVISION = longPreferencesKey("adult_search_revision")
