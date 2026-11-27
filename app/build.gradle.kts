@@ -1222,6 +1222,7 @@ val releaseComponents =
         "androidx.room.MultiInstanceInvalidationService",
         "io.github.kauri_off.kiroku.notify.MarkWatchedReceiver",
         "io.github.kauri_off.kiroku.notify.RunReceiver",
+        "io.github.kauri_off.kiroku.title.CoverShareProvider",
         DeclarationRule.enabledBy(scheduledWork, "@bool/enable_system_job_service_default"),
         DeclarationRule.enabledBy(savingInTheForeground, "@bool/saving_in_the_foreground"),
         "androidx.work.impl.utils.ForceStopRunnable\$BroadcastReceiver",

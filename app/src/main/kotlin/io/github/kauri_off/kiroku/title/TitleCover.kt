@@ -3,33 +3,31 @@ package io.github.kauri_off.kiroku.title
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.pager.HorizontalPager
-import androidx.compose.foundation.pager.PagerState
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.MotionScheme
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -53,14 +51,16 @@ import io.github.kauri_off.kiroku.design.component.BarTitle
 import io.github.kauri_off.kiroku.design.component.LocalOnTop
 import io.github.kauri_off.kiroku.design.component.Poster
 import io.github.kauri_off.kiroku.design.component.PosterSize
+import io.github.kauri_off.kiroku.design.component.ScreenSnackbarHost
 import io.github.kauri_off.kiroku.design.component.ScreenState
 import io.github.kauri_off.kiroku.design.component.routeImageLoader
 import io.github.kauri_off.kiroku.design.theme.DialogSystemBarAppearance
 import io.github.kauri_off.kiroku.design.theme.Sizes
 import io.github.kauri_off.kiroku.design.theme.Spacing
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Job
-import kotlinx.coroutines.launch
+import io.github.kauri_off.kiroku.wiring.LoadedImageSource
+import io.github.kauri_off.kiroku.wiring.captureCoverIdentity
+import io.github.kauri_off.kiroku.wiring.coverSource
+import kotlinx.coroutines.flow.first
 
 internal fun hasTitleCover(
     url: String?,
@@ -110,29 +110,53 @@ internal fun TitleCoverDialog(
                     picture.takeIf { candidates.isNotEmpty() && candidates.none(seen::contains) }?.also { seen.addAll(candidates) }
                 }
         }
-    TitleCoverWindow(title, pages.size > 1, onClose) {
-        if (pages.size == 1) {
-            CoverImage(sources, R.string.title_cover_failed, stringResource(R.string.title_cover_image, title))
-        } else {
-            CoverGallery(pages, title, rememberPagerState { pages.size })
-        }
-    }
+    CoverViewer(title, pages, onClose = onClose)
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-internal fun TitleCoverWindow(
+internal fun CoverViewer(
     title: String,
-    gallery: Boolean,
+    pictures: List<TitlePicture>,
+    initialPage: Int = 0,
     onClose: () -> Unit,
-    content: @Composable () -> Unit,
 ) {
+    val identity = remember { GalleryIdentity() }
+    var displayed by remember { mutableStateOf(pictures) }
+    var pages by remember { mutableStateOf(identity.identify(pictures).also(identity::update)) }
+    val pager = rememberPagerState(initialPage) { pages.size }
+    LaunchedEffect(pager, pictures) {
+        if (pictures == displayed) return@LaunchedEffect
+        snapshotFlow { pager.isScrollInProgress }.first { !it }
+        val previous = pager.settledPage.coerceIn(pages.indices)
+        val selected = pages[previous].key
+        val next = identity.identify(pictures)
+        val destination = next.indexOfFirst { it.key == selected }.takeIf { it >= 0 } ?: previous.coerceIn(next.indices)
+        identity.update(next)
+        pages = next
+        displayed = pictures
+        pager.requestScrollToPage(destination)
+    }
+
+    val loader = routeImageLoader()
+    val loaded = remember(loader) { mutableStateMapOf<GalleryPage, LoadedImageSource>() }
+    val gallery = pages.size > 1
+    val snackbars = remember { SnackbarHostState() }
+
+    fun selectedImage(): LoadedImageSource? {
+        if (pager.isScrollInProgress || displayed != pictures) return null
+        val page = pages.getOrNull(pager.settledPage) ?: return null
+        if (pager.layoutInfo.visiblePagesInfo.none { it.index == pager.settledPage && it.key == page.key }) return null
+        return loaded[page]
+    }
+
     Dialog(
         onDismissRequest = onClose,
         properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false),
     ) {
         DialogSystemBarAppearance()
         Scaffold(
+            snackbarHost = { ScreenSnackbarHost(snackbars) },
             topBar = {
                 TopAppBar(
                     title = { BarTitle(title) },
@@ -144,71 +168,54 @@ internal fun TitleCoverWindow(
                             )
                         }
                     },
+                    actions = { key(loader) { CoverExportActions(title, loader, snackbars, ::selectedImage) } },
                 )
             },
         ) { padding ->
-            Box(Modifier.fillMaxSize().padding(padding).padding(Spacing.l), contentAlignment = Alignment.Center) {
-                content()
-            }
-        }
-    }
-}
-
-@Composable
-internal fun CoverGallery(
-    pages: List<TitlePicture>,
-    title: String,
-    pager: PagerState,
-) {
-    val scope = rememberCoroutineScope()
-    val buttonScroll = remember(pager, scope) { GalleryButtonScroll(pager, scope) }
-    val gallery = remember(buttonScroll, pages) { buttonScroll.identify(pages) }
-    val motion = MaterialTheme.motionScheme
-    val position = buttonScroll.position(gallery)
-    SideEffect { buttonScroll.update(gallery) }
-
-    Column(Modifier.fillMaxSize(), horizontalAlignment = Alignment.CenterHorizontally) {
-        HorizontalPager(
-            state = pager,
-            modifier = Modifier.fillMaxWidth().weight(1f),
-            key = { gallery[it].key },
-        ) { index ->
-            val description =
-                if (index == 0) {
-                    stringResource(R.string.title_cover_image, title)
-                } else {
-                    stringResource(R.string.title_gallery_image, index + 1, pages.size, title)
+            Column(
+                Modifier.fillMaxSize().padding(padding).padding(Spacing.l),
+                horizontalAlignment = Alignment.CenterHorizontally,
+            ) {
+                HorizontalPager(
+                    state = pager,
+                    modifier = Modifier.fillMaxWidth().weight(1f),
+                    userScrollEnabled = gallery,
+                    key = { pages[it].key },
+                ) { index ->
+                    val page = pages[index]
+                    val description =
+                        if (index == 0) {
+                            stringResource(R.string.title_cover_image, title)
+                        } else {
+                            stringResource(R.string.title_gallery_image, index + 1, pages.size, title)
+                        }
+                    val failure = if (gallery) R.string.title_gallery_failed else R.string.title_cover_failed
+                    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                        key(loader, page) {
+                            CoverImage(page.picture.sources(), failure, description) { image ->
+                                DisposableEffect(image) {
+                                    loaded[page] = image
+                                    onDispose { loaded.remove(page) }
+                                }
+                            }
+                        }
+                    }
                 }
-            Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                CoverImage(gallery[index].picture.sources(), R.string.title_gallery_failed, description)
+                if (gallery) {
+                    Text(
+                        stringResource(R.string.title_gallery_position, pager.settledPage.coerceIn(pages.indices) + 1, pages.size),
+                        Modifier.semantics { liveRegion = LiveRegionMode.Polite },
+                        style = MaterialTheme.typography.labelLarge,
+                    )
+                }
             }
-        }
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            TextButton(
-                onClick = { buttonScroll.moveTo(gallery, position - 1, motion) },
-                enabled = position > 0,
-            ) { Text(stringResource(R.string.title_gallery_previous)) }
-            Text(
-                stringResource(R.string.title_gallery_position, pager.settledPage.coerceIn(pages.indices) + 1, pages.size),
-                Modifier.padding(horizontal = Spacing.s).semantics { liveRegion = LiveRegionMode.Polite },
-                style = MaterialTheme.typography.labelLarge,
-            )
-            TextButton(
-                onClick = { buttonScroll.moveTo(gallery, position + 1, motion) },
-                enabled = position < pages.lastIndex,
-            ) { Text(stringResource(R.string.title_gallery_next)) }
         }
     }
 }
 
-private class GalleryButtonScroll(
-    private val pager: PagerState,
-    private val scope: CoroutineScope,
-) {
+private class GalleryIdentity {
     private var shown: List<GalleryPage> = emptyList()
     private var nextKey = 0L
-    private var pending by mutableStateOf<GalleryMove?>(null)
-    private var animation: Job? = null
 
     fun identify(pictures: List<TitlePicture>): List<GalleryPage> {
         val keysBySource = shown.flatMap { page -> page.picture.sources().map { it to page.key } }.toMap()
@@ -222,47 +229,9 @@ private class GalleryButtonScroll(
         }
     }
 
-    fun position(pages: List<GalleryPage>): Int = pending?.resolve(pages)?.page ?: pager.targetPage.coerceIn(pages.indices)
-
-    fun moveTo(
-        pages: List<GalleryPage>,
-        page: Int,
-        motion: MotionScheme,
-    ) {
-        val origin = pending?.origin ?: pages[pager.settledPage.coerceIn(pages.indices)].key
-        val move = GalleryMove(pages[page].key, origin, pages, page)
-        start(move) {
-            if (pager.currentPage == page && pager.currentPageOffsetFraction == 0f) {
-                pager.scrollToPage(page)
-            } else {
-                pager.animateScrollToPage(page, animationSpec = motion.defaultEffectsSpec())
-            }
-        }
-    }
-
     fun update(pages: List<GalleryPage>) {
-        if (shown === pages) return
         shown = pages
         nextKey = maxOf(nextKey, pages.maxOf { it.key } + 1)
-        val move = pending?.resolve(pages) ?: return
-        start(move) { pager.scrollToPage(move.page) }
-    }
-
-    private fun start(
-        move: GalleryMove,
-        scroll: suspend () -> Unit,
-    ) {
-        if (move == pending) return
-        pending = move
-        animation?.cancel()
-        animation =
-            scope.launch {
-                try {
-                    scroll()
-                } finally {
-                    if (pending === move) pending = null
-                }
-            }
     }
 }
 
@@ -271,25 +240,12 @@ private data class GalleryPage(
     val picture: TitlePicture,
 )
 
-private data class GalleryMove(
-    val target: Long,
-    val origin: Long,
-    val pages: List<GalleryPage>,
-    val page: Int,
-) {
-    fun resolve(pages: List<GalleryPage>): GalleryMove {
-        if (this.pages == pages) return this
-        val targetIndex = pages.indexOfFirst { it.key == target }
-        val destination = if (targetIndex >= 0) targetIndex else pages.indexOfFirst { it.key == origin }.coerceAtLeast(0)
-        return copy(pages = pages, page = destination)
-    }
-}
-
 @Composable
 private fun CoverImage(
     sources: List<String>,
     failure: Int,
     description: String,
+    onLoaded: @Composable (LoadedImageSource) -> Unit,
 ) {
     var source by remember(sources) { mutableIntStateOf(0) }
     var retrying by remember(sources) { mutableStateOf(false) }
@@ -303,26 +259,30 @@ private fun CoverImage(
         )
     } else {
         key(sources, source) {
-            var loaded by remember { mutableStateOf(false) }
+            var loaded by remember { mutableStateOf<LoadedImageSource?>(null) }
+            val attempt = source
             val context = LocalPlatformContext.current
             val request =
                 remember(context, url, retrying) {
                     ImageRequest
                         .Builder(context)
                         .data(url)
+                        .apply { extras[captureCoverIdentity] = true }
+                        .memoryCachePolicy(if (retrying) CachePolicy.WRITE_ONLY else CachePolicy.ENABLED)
                         .diskCachePolicy(if (retrying) CachePolicy.WRITE_ONLY else CachePolicy.ENABLED)
                         .build()
                 }
             AsyncImage(
                 model = request,
-                contentDescription = description.takeIf { loaded },
+                contentDescription = description.takeIf { loaded != null },
                 imageLoader = routeImageLoader(),
                 modifier = Modifier.widthIn(max = Sizes.contentMaxWidth).fillMaxSize(),
                 contentScale = ContentScale.Fit,
-                onSuccess = { loaded = true },
-                onError = { source++ },
+                onSuccess = { loaded = it.result.coverSource(url) },
+                onError = { if (source == attempt) source = attempt + 1 },
             )
-            if (!loaded) ScreenState(ScreenState.Loading)
+            val image = loaded
+            if (image == null) ScreenState(ScreenState.Loading) else onLoaded(image)
         }
     }
 }

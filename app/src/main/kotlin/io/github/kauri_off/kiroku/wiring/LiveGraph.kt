@@ -307,7 +307,7 @@ internal class LiveGraph(
     }
 
     override fun newImageLoader(context: Context) =
-        imageLoaderBuilder(context, images, standInPosters).memoryCache(null).diskCache(null).build()
+        imageLoaderBuilder(context, images, standInPosters, exports = false).memoryCache(null).diskCache(null).build()
 
     override fun imageLoaderFor(session: Session) = imageCache.loader(session.owner)
 

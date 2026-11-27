@@ -11,6 +11,7 @@ import coil3.request.ErrorResult
 import coil3.request.SuccessResult
 import coil3.test.FakeImageLoaderEngine
 import io.github.kauri_off.kiroku.standin.StandInPosters
+import io.github.kauri_off.kiroku.wiring.enableEncodedExports
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.first
 import java.io.IOException
@@ -35,6 +36,7 @@ object RemoteImages {
         SingletonImageLoader.setUnsafe(
             ImageLoader
                 .Builder(context)
+                .enableEncodedExports()
                 .components {
                     add(StandInPosters)
                     add(engine)

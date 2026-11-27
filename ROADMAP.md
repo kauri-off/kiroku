@@ -349,6 +349,7 @@ Not to forget:
 - [x] View another user's public manga list.
 - [x] Preserve remaining snackbar time across destination changes.
 - [x] Swipeable gallery for anime and manga titles.
+- [x] Download and share anime and manga gallery images.
 - [x] Pure-black theme.
 - [x] Choice of startup tab.
 

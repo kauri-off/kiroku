@@ -35,14 +35,18 @@ internal fun imageLoaderBuilder(
     standIn: Interceptor?,
     schemes: Set<String> = Https,
     requests: Interceptor? = null,
+    exports: Boolean = true,
 ): ImageLoader.Builder =
     ImageLoader
         .Builder(context)
         .serviceLoaderEnabled(false)
+        .apply { if (exports) enableEncodedExports().memoryCache { coverMemoryCache(context) } }
         .components {
             requests?.let { add(it) }
             add(OnlySchemes(schemes))
+            if (exports) add(captureEncodedIdentity())
             standIn?.let { add(it) }
+            if (exports) add(encodedImageReader(calls))
             calls?.let { add(OkHttpNetworkFetcherFactory(callFactory = { it })) }
         }
 
@@ -63,7 +67,7 @@ internal class LiveImages(
     private var inspected = false
 
     private val closed by lazy {
-        imageLoaderBuilder(context, null, null, requests = Interceptor { throw CancellationException() })
+        imageLoaderBuilder(context, null, null, requests = Interceptor { throw CancellationException() }, exports = false)
             .memoryCache(null)
             .diskCache(null)
             .build()
@@ -204,13 +208,17 @@ private class ImageCache(
         }
 
     fun closeAdmission() {
-        synchronized(loading) { retired = true }
+        val (jobs, calls) =
+            synchronized(loading) {
+                retired = true
+                loading.keys.toList() to loading.values.flatten()
+            }
+        jobs.forEach { it.cancel() }
+        calls.forEach { it.cancel() }
     }
 
     suspend fun drain() {
-        val (jobs, calls) = synchronized(loading) { loading.keys.toList() to loading.values.flatten() }
-        calls.forEach { it.cancel() }
-        jobs.forEach { it.cancel() }
+        val jobs = synchronized(loading) { loading.keys.toList() }
         if (built.isInitialized()) loader.memoryCache?.clear()
         jobs.joinAll()
         if (built.isInitialized()) loader.shutdown()
