@@ -4,6 +4,7 @@ import android.view.View
 import androidx.activity.BackEventCompat
 import androidx.compose.material3.SnackbarDuration
 import androidx.compose.material3.SnackbarHostState
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.test.SemanticsMatcher
@@ -46,6 +47,7 @@ import io.github.kauri_off.kiroku.core.model.Session
 import io.github.kauri_off.kiroku.core.model.SignInId
 import io.github.kauri_off.kiroku.core.repository.BrowseList
 import io.github.kauri_off.kiroku.core.repository.SessionRepository
+import io.github.kauri_off.kiroku.design.component.LocalSnackbarUptime
 import io.github.kauri_off.kiroku.design.composeRule
 import io.github.kauri_off.kiroku.design.registered
 import io.github.kauri_off.kiroku.design.theme.KirokuTheme
@@ -74,6 +76,9 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertNull
+import org.junit.Assert.assertSame
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
@@ -106,7 +111,9 @@ class AppRouteTest {
         compose.setContent {
             KirokuTheme(dark = false, dynamicColor = false) {
                 navigator = rememberShellNavigator()
-                AppRoute(graph, navigator, snackbars)
+                CompositionLocalProvider(LocalSnackbarUptime provides { compose.mainClock.currentTime }) {
+                    AppRoute(graph, navigator, snackbars)
+                }
             }
         }
         compose.waitForIdle()
@@ -376,6 +383,35 @@ class AppRouteTest {
         compose.waitForIdle()
         shows("Save")
         assertEquals(ListStatus.Planned, values(FixtureAnime.notOnListAiring)?.status)
+    }
+
+    @Test
+    fun `the add confirmation expires on time across repeated tab switches`() {
+        app()
+        val added = FixtureAnime.notOnListAiring
+        compose.runOnUiThread { navigator.open(TitleKey(added.id.value)) }
+        compose.waitForIdle()
+        click("Add to list")
+        compose.waitForIdle()
+        val posted = compose.runOnIdle { snackbars.currentSnackbarData }
+        assertNotNull(posted)
+        assertEquals(ListStatus.Planned, values(added)?.status)
+
+        compose.mainClock.advanceTimeBy(2_000)
+        back()
+        for (destination in listOf("Search", "Profile", "List")) {
+            compose.mainClock.advanceTimeBy(1_500)
+            click(destination)
+            compose.onNodeWithText("Added to Planned").assertIsDisplayed()
+            compose.onNodeWithText("Change").assertIsDisplayed()
+            compose.runOnIdle { assertSame(posted, snackbars.currentSnackbarData) }
+        }
+
+        compose.mainClock.advanceTimeBy(4_000)
+        compose.runOnIdle { assertNull(snackbars.currentSnackbarData) }
+        click("Search")
+        compose.onNodeWithText("Added to Planned").assertDoesNotExist()
+        compose.onNodeWithText("Change").assertDoesNotExist()
     }
 
     @Test
@@ -703,9 +739,11 @@ class AppRouteTest {
         plusOnFirstRow()
         compose.waitForIdle()
         shows("Could not save")
+        compose.mainClock.advanceTimeBy(5_000)
         windowFocus(false)
         compose.mainClock.advanceTimeBy(AWAY_MILLIS)
         windowFocus(true)
+        compose.mainClock.advanceTimeBy(8_000)
         shows("Could not save")
         graph.demo.server.failingWrites.value = false
         click("Retry")

@@ -4,6 +4,10 @@ import android.content.ComponentName
 import androidx.activity.ComponentActivity
 import androidx.compose.material3.SnackbarDuration
 import androidx.compose.material3.SnackbarHostState
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.ui.platform.AccessibilityManager
+import androidx.compose.ui.platform.LocalAccessibilityManager
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.SemanticsMatcher
@@ -15,6 +19,8 @@ import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.unit.DpRect
 import androidx.compose.ui.unit.dp
+import io.github.kauri_off.kiroku.design.component.LocalSnackbarUptime
+import io.github.kauri_off.kiroku.design.theme.KirokuTheme
 import io.github.kauri_off.kiroku.design.theme.ThemeSettings
 import io.github.kauri_off.kiroku.design.theme.setKirokuContent
 import io.github.kauri_off.kiroku.screenshots.SystemBars
@@ -22,6 +28,9 @@ import kotlinx.coroutines.MainScope
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
 import org.junit.After
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
@@ -104,5 +113,55 @@ class ShellSnackbarTest {
             assertTrue("${destination.name}: $shown over $rail", shown.left >= rail.right)
             clearOfTheGestureBar(shown)
         }
+    }
+
+    @Test
+    @Config(qualifiers = "en-w411dp-h891dp")
+    fun `the extended timeout for a message without an action survives a host change`() = extendedTimeout(null, 4_000)
+
+    @Test
+    @Config(qualifiers = "en-w411dp-h891dp")
+    fun `the extended timeout for a message with an action survives a host change`() = extendedTimeout("Change", 10_000)
+
+    private fun extendedTimeout(
+        action: String?,
+        baseMillis: Long,
+    ) {
+        val requested = mutableListOf<Pair<Long, Boolean>>()
+        val extraMillis = 8_000L
+        val accessibility =
+            object : AccessibilityManager {
+                override fun calculateRecommendedTimeoutMillis(
+                    originalTimeoutMillis: Long,
+                    containsIcons: Boolean,
+                    containsText: Boolean,
+                    containsControls: Boolean,
+                ): Long {
+                    if (originalTimeoutMillis == Long.MAX_VALUE) return originalTimeoutMillis
+                    assertTrue(containsIcons && containsText)
+                    requested += originalTimeoutMillis to containsControls
+                    return originalTimeoutMillis + extraMillis
+                }
+            }
+        compose.setContent {
+            CompositionLocalProvider(
+                LocalAccessibilityManager provides accessibility,
+                LocalSnackbarUptime provides { compose.mainClock.currentTime },
+            ) {
+                KirokuTheme(dark = false, dynamicColor = false) { ShellRoute(snackbars = snackbars) }
+                LaunchedEffect(snackbars) { snackbars.show("Added to Planned", action) }
+            }
+        }
+        compose.runOnIdle { assertNotNull(snackbars.currentSnackbarData) }
+        val start = compose.mainClock.currentTime
+        compose.mainClock.advanceTimeBy(3_000)
+        compose.onNode(hasText("Search") and hasClickAction()).performClick()
+        compose.waitForIdle()
+        val spent = compose.mainClock.currentTime - start
+        compose.mainClock.advanceTimeBy(baseMillis + extraMillis - spent - 1_000)
+        compose.runOnIdle { assertNotNull(snackbars.currentSnackbarData) }
+        compose.mainClock.advanceTimeBy(2_000)
+        compose.runOnIdle { assertNull(snackbars.currentSnackbarData) }
+        assertEquals(listOf(baseMillis to (action != null)), requested)
     }
 }

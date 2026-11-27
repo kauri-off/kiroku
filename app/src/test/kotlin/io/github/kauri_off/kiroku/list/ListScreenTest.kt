@@ -76,6 +76,7 @@ import io.github.kauri_off.kiroku.core.model.ListStatus
 import io.github.kauri_off.kiroku.core.model.TitleLanguage
 import io.github.kauri_off.kiroku.core.user.UserListProgress
 import io.github.kauri_off.kiroku.design.MotionBounds
+import io.github.kauri_off.kiroku.design.component.LocalSnackbarUptime
 import io.github.kauri_off.kiroku.design.component.ScreenSnackbarHost
 import io.github.kauri_off.kiroku.design.registered
 import io.github.kauri_off.kiroku.design.theme.KirokuTheme
@@ -606,12 +607,21 @@ class ListScreenTest {
             }
         compose.setContent {
             KirokuTheme(dark = false, dynamicColor = false) {
-                Scaffold(snackbarHost = { ScreenSnackbarHost(host, ime) }) { padding ->
-                    Box(Modifier.padding(padding))
+                CompositionLocalProvider(LocalSnackbarUptime provides { compose.mainClock.currentTime }) {
+                    Scaffold(snackbarHost = { ScreenSnackbarHost(host, ime) }) { padding ->
+                        Box(Modifier.padding(padding))
+                    }
+                    LaunchedEffect(host) { host.show("Moved to Completed", "Undo") }
                 }
-                LaunchedEffect(host) { host.show("Moved to Completed", "Undo") }
             }
         }
+        compose.mainClock.advanceTimeBy(11_000)
+        compose.runOnIdle { assertNotNull(host.currentSnackbarData) }
+        compose.runOnIdle { obstructed.value = false }
+        compose.onNodeWithText("Undo").assertIsDisplayed()
+        compose.mainClock.advanceTimeBy(6_000)
+        compose.runOnIdle { obstructed.value = true }
+        compose.waitForIdle()
         compose.mainClock.advanceTimeBy(11_000)
         compose.runOnIdle { assertNotNull(host.currentSnackbarData) }
         compose.runOnIdle { obstructed.value = false }

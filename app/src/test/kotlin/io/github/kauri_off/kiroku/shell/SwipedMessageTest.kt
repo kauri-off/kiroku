@@ -46,6 +46,7 @@ import io.github.kauri_off.kiroku.core.fixtures.Fixtures
 import io.github.kauri_off.kiroku.core.repository.ListWrite
 import io.github.kauri_off.kiroku.core.repository.WriteFailure
 import io.github.kauri_off.kiroku.design.MotionBounds
+import io.github.kauri_off.kiroku.design.component.LocalSnackbarUptime
 import io.github.kauri_off.kiroku.design.component.ScreenSnackbarHost
 import io.github.kauri_off.kiroku.design.registered
 import io.github.kauri_off.kiroku.design.theme.KirokuTheme
@@ -87,7 +88,10 @@ private class SwipeHarness(
     fun show() =
         compose.setContent {
             KirokuTheme(dark = false, dynamicColor = false) {
-                CompositionLocalProvider(LocalLayoutDirection provides direction) {
+                CompositionLocalProvider(
+                    LocalLayoutDirection provides direction,
+                    LocalSnackbarUptime provides { compose.mainClock.currentTime },
+                ) {
                     Box(Modifier.fillMaxSize().clickable { taps++ })
                     if (composed) {
                         val host = remember { SnackbarHostState() }

@@ -346,6 +346,7 @@ Not to forget:
 ## Completed enhancements
 
 - [x] Open anime and manga covers full-screen.
+- [x] Preserve remaining snackbar time across destination changes.
 - [x] Swipeable gallery for anime and manga titles.
 
 ## After 1.0

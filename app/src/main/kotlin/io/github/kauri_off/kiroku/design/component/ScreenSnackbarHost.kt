@@ -1,5 +1,6 @@
 package io.github.kauri_off.kiroku.design.component
 
+import android.os.SystemClock
 import androidx.compose.animation.core.animate
 import androidx.compose.foundation.gestures.AnchoredDraggableDefaults
 import androidx.compose.foundation.gestures.AnchoredDraggableState
@@ -58,8 +59,11 @@ import androidx.compose.ui.unit.LayoutDirection
 import io.github.kauri_off.kiroku.design.theme.AtSystemScale
 import io.github.kauri_off.kiroku.design.theme.Spacing
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlin.math.roundToInt
 
 // False for a screen composed under the top one, as during a predictive back gesture.
@@ -93,6 +97,8 @@ fun ScreenSnackbarHost(
 private fun LayoutCoordinates.spaceBelow(): Int =
     (findRootCoordinates().size.height - positionInRoot().y - size.height).roundToInt().coerceAtLeast(0)
 
+internal val LocalSnackbarUptime = staticCompositionLocalOf<() -> Long> { SystemClock::uptimeMillis }
+
 // A message whose time the host runs itself, so that a finger holding it stops the time; the stock host's would not.
 class TimedMessage(
     override val message: String,
@@ -101,6 +107,36 @@ class TimedMessage(
 ) : SnackbarVisuals {
     override val withDismissAction: Boolean get() = false
     override val duration: SnackbarDuration get() = SnackbarDuration.Indefinite
+
+    private val host = Mutex()
+    private var remainingMillis: Long? = null
+
+    internal suspend fun runTimeout(
+        visible: Flow<Boolean>,
+        accessibility: AccessibilityManager?,
+        uptime: () -> Long,
+        dismiss: () -> Unit,
+    ) {
+        if (time == SnackbarDuration.Indefinite) return
+        host.withLock {
+            var wasVisible = false
+            visible.collectLatest { shown ->
+                if (shown) {
+                    wasVisible = true
+                    val millis = remainingMillis ?: time.millis(actionLabel != null, accessibility)
+                    val startedAt = uptime()
+                    try {
+                        delay(millis)
+                        dismiss()
+                    } finally {
+                        remainingMillis = if (millis == Long.MAX_VALUE) millis else (millis - (uptime() - startedAt)).coerceAtLeast(0L)
+                    }
+                } else if (wasVisible) {
+                    remainingMillis = null
+                }
+            }
+        }
+    }
 }
 
 private enum class Swiped { No, ToStart, ToEnd }
@@ -122,19 +158,18 @@ private fun SwipeableSnackbar(
     val action = data.visuals.actionLabel
     val drags = remember(data) { MutableInteractionSource() }
     val held by drags.collectIsDraggedAsState()
-    val time = (data.visuals as? TimedMessage)?.time
+    val message = data.visuals as? TimedMessage
     val accessibility = LocalAccessibilityManager.current
     val density = LocalDensity.current
+    val uptime = LocalSnackbarUptime.current
     val belowMessage = remember(data) { mutableIntStateOf(-1) }
-    LaunchedEffect(data, held, ime, density, accessibility) {
-        if (held || time == null || time == SnackbarDuration.Indefinite) return@LaunchedEffect
-        snapshotFlow { ime == null || belowMessage.intValue >= ime.getBottom(density) }.collectLatest { visible ->
-            if (visible) {
-                val millis = time.millis(action != null, accessibility)
-                delay(millis)
-                data.dismiss()
-            }
-        }
+    LaunchedEffect(data, ime, density, accessibility, uptime) {
+        message?.runTimeout(
+            snapshotFlow { !held && (ime == null || belowMessage.intValue >= ime.getBottom(density)) },
+            accessibility,
+            uptime,
+            data::dismiss,
+        )
     }
     val window = LocalWindowInfo.current
     val direction = LocalLayoutDirection.current
