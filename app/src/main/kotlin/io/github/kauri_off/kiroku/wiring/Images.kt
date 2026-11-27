@@ -40,7 +40,7 @@ internal fun imageLoaderBuilder(
     ImageLoader
         .Builder(context)
         .serviceLoaderEnabled(false)
-        .apply { if (exports) enableEncodedExports() }
+        .apply { if (exports) enableEncodedExports().memoryCache { coverMemoryCache(context) } }
         .components {
             requests?.let { add(it) }
             add(OnlySchemes(schemes))

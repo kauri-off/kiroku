@@ -268,6 +268,7 @@ private fun CoverImage(
                         .Builder(context)
                         .data(url)
                         .apply { extras[captureCoverIdentity] = true }
+                        .memoryCachePolicy(if (retrying) CachePolicy.WRITE_ONLY else CachePolicy.ENABLED)
                         .diskCachePolicy(if (retrying) CachePolicy.WRITE_ONLY else CachePolicy.ENABLED)
                         .build()
                 }

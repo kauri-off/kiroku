@@ -4,10 +4,11 @@ import android.content.Context
 import coil3.ColorImage
 import coil3.Extras
 import coil3.ImageLoader
+import coil3.decode.DataSource
 import coil3.decode.Decoder
 import coil3.decode.ImageSource
 import coil3.intercept.Interceptor
-import coil3.request.CachePolicy
+import coil3.memory.MemoryCache
 import coil3.request.ErrorResult
 import coil3.request.ImageRequest
 import coil3.request.ImageResult
@@ -15,6 +16,7 @@ import coil3.request.SuccessResult
 import io.github.kauri_off.kiroku.notShown
 import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.asContextElement
 import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.ensureActive
@@ -46,6 +48,8 @@ internal fun encodedImageReader(calls: Call.Factory?): Interceptor = Interceptor
 
 internal val captureCoverIdentity = Extras.Key(false)
 private val coverIdentity = Extras.Key<CoverIdentity?>(null)
+private val cacheIdentity = ThreadLocal<CoverIdentity?>()
+private val fingerprintExtra = notShown("kiroku.coverFingerprint")
 internal const val MAX_ENCODED_IMAGE_BYTES = 64L * 1024 * 1024
 
 internal fun SuccessResult.coverSource(url: String): LoadedImageSource =
@@ -60,7 +64,6 @@ internal fun captureEncodedIdentity() =
             val request =
                 chain.request
                     .newBuilder()
-                    .memoryCachePolicy(CachePolicy.DISABLED)
                     .apply { extras[coverIdentity] = identity }
                     .decoderFactory { result, _, _ ->
                         Decoder {
@@ -68,13 +71,47 @@ internal fun captureEncodedIdentity() =
                             null
                         }
                     }.build()
-            chain.withRequest(request).proceed()
+            try {
+                val result = withContext(cacheIdentity.asContextElement(identity)) { chain.withRequest(request).proceed() }
+                if (result is SuccessResult && result.dataSource == DataSource.MEMORY_CACHE) {
+                    val (key, value) = identity.cacheRead ?: (null to null)
+                    identity.fingerprint =
+                        value?.takeIf { key == result.memoryCacheKey && it.image === result.image }?.extras?.get(
+                            fingerprintExtra,
+                        ) as? String
+                }
+                result
+            } finally {
+                identity.cacheRead = null
+            }
         }
     }
 
 private class CoverIdentity(
     var fingerprint: String? = null,
+    var cacheRead: Pair<MemoryCache.Key, MemoryCache.Value>? = null,
 )
+
+internal fun coverMemoryCache(context: Context): MemoryCache =
+    CoverMemoryCache(MemoryCache.Builder().maxSizePercent(context.applicationContext).build())
+
+private class CoverMemoryCache(
+    private val cache: MemoryCache,
+) : MemoryCache by cache {
+    override fun get(key: MemoryCache.Key): MemoryCache.Value? {
+        val value = cache[key]
+        cacheIdentity.get()?.cacheRead = value?.let { key to it }
+        return value
+    }
+
+    override fun set(
+        key: MemoryCache.Key,
+        value: MemoryCache.Value,
+    ) {
+        val fingerprint = cacheIdentity.get()?.fingerprint
+        cache[key] = if (fingerprint == null) value else value.copy(extras = value.extras + (fingerprintExtra to fingerprint))
+    }
+}
 
 internal suspend fun ImageRequest.recordSyntheticCover(bytes: () -> ByteArray) {
     val identity = extras[coverIdentity] ?: return

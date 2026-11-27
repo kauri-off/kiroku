@@ -88,6 +88,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.runBlocking
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Protocol
@@ -348,6 +349,51 @@ class TitleCoverTest {
         storage.rejectPublish = false
         saveAndShare(cover, storage)
         assertEquals(listOf(LARGE, LARGE, LARGE, LARGE), urls.requested.toList())
+    }
+
+    @Test
+    fun warmMemoryReopensOfflineAndKeepsTheOriginalExportIdentity() {
+        val original = jpeg(Color.RED)
+        val replacement = jpeg(Color.BLUE)
+        val storage = registerStorage()
+        val changed = AtomicBoolean(false)
+        val urls = CoverResponses { if (changed.get()) replacement else original }
+        val open = mutableStateOf(true)
+        show(urls.loader) {
+            if (open.value) TitleCoverDialog("Sample", REGULAR, LARGE) { open.value = false }
+        }
+        waitForCover("Sample")
+        compose.onNodeWithContentDescription("Close cover").performClick()
+        compose.onNode(isDialog()).assertDoesNotExist()
+        assertTrue(checkNotNull(urls.loader.diskCache).remove(LARGE))
+        urls.online = false
+
+        compose.runOnIdle { open.value = true }
+        waitForCover("Sample")
+        assertEquals(listOf(LARGE), urls.requested.toList())
+
+        urls.online = true
+        saveAndShare(original, storage)
+        changed.set(true)
+        compose.onNodeWithContentDescription("Share image").performClick()
+        waitForMessage("Could not share the image")
+        assertNull(shadowOf(compose.activity).nextStartedActivity)
+        assertEquals(listOf(LARGE, LARGE, LARGE, LARGE), urls.requested.toList())
+    }
+
+    @Test
+    fun aWarmEntryFromAnOrdinaryImageRequestDisplaysButCannotExport() {
+        val original = jpeg(Color.RED)
+        val urls = CoverResponses { original }
+        val request = ImageRequest.Builder(compose.activity).data(LARGE).build()
+        runBlocking { assertTrue(urls.loader.execute(request) is SuccessResult) }
+
+        show(urls.loader) { TitleCoverDialog("Sample", REGULAR, LARGE) {} }
+        waitForCover("Sample")
+        compose.onNodeWithContentDescription("Share image").performClick()
+        waitForMessage("Could not share the image")
+        assertNull(shadowOf(compose.activity).nextStartedActivity)
+        assertEquals(listOf(LARGE), urls.requested.toList())
     }
 
     @Test
