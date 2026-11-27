@@ -212,10 +212,12 @@ private class GalleryButtonScroll(
 
     fun identify(pictures: List<TitlePicture>): List<GalleryPage> {
         val keysBySource = shown.flatMap { page -> page.picture.sources().map { it to page.key } }.toMap()
+        val keysByMedium = shown.mapNotNull { page -> page.picture.medium?.let { it to page.key } }.toMap()
         val assigned = mutableSetOf<Long>()
+        val mediumKeys = pictures.map { keysByMedium[it.medium]?.takeIf(assigned::add) }
         var key = nextKey
-        return pictures.map { picture ->
-            val previous = picture.sources().firstNotNullOfOrNull { keysBySource[it]?.takeIf(assigned::add) }
+        return pictures.mapIndexed { index, picture ->
+            val previous = mediumKeys[index] ?: picture.sources().firstNotNullOfOrNull { keysBySource[it]?.takeIf(assigned::add) }
             GalleryPage(previous ?: key++, picture)
         }
     }

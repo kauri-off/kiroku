@@ -202,6 +202,20 @@ class TitleGalleryMotionTest {
         }
     }
 
+    @Test
+    fun nextKeepsTheMediumIdentityWhenALargeSourceMovesBetweenPictures() {
+        val pages = mutableStateOf(listOf(COVER, FIRST, SECOND, THIRD.copy(large = SECOND_LARGE)))
+        val requested = CopyOnWriteArrayList<Any>()
+        val pager = gallery(pages, requested, initialPage = 1, highlightedSource = SECOND_LARGE)
+        startNextAtZeroOffset(pager, targetPage = 2)
+        compose.runOnIdle { pages.value = listOf(COVER, FIRST, SECOND.copy(large = SECOND_LARGE), THIRD) }
+
+        clock.advanceTimeBy(2 * MotionBounds.ENTER)
+        clock.autoAdvance = true
+        assertPictureDisplayed("Image\u00A03\u00A0of\u00A04\u00A0for Sample", HIGHLIGHT)
+        assertTrue(SECOND_LARGE in requested)
+    }
+
     private fun startNextAtZeroOffset(
         pager: PagerState,
         targetPage: Int = 1,
