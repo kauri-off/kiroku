@@ -15,12 +15,14 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.MotionScheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableIntStateOf
@@ -56,6 +58,8 @@ import io.github.kauri_off.kiroku.design.component.routeImageLoader
 import io.github.kauri_off.kiroku.design.theme.DialogSystemBarAppearance
 import io.github.kauri_off.kiroku.design.theme.Sizes
 import io.github.kauri_off.kiroku.design.theme.Spacing
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 
 internal fun hasTitleCover(
@@ -157,27 +161,16 @@ internal fun CoverGallery(
     pager: PagerState,
 ) {
     val scope = rememberCoroutineScope()
+    val buttonScroll = remember(pager, scope) { GalleryButtonScroll(pager, scope) }
     val motion = MaterialTheme.motionScheme
-    val position = pager.targetPage.coerceIn(pages.indices)
-
-    fun moveTo(page: Int) {
-        scope.launch {
-            if (pager.currentPage == page && pager.currentPageOffsetFraction == 0f) {
-                pager.scrollToPage(page)
-            } else {
-                pager.animateScrollToPage(page, animationSpec = motion.defaultEffectsSpec())
-            }
-        }
-    }
+    val position = buttonScroll.position(pages)
+    SideEffect { buttonScroll.update(pages, motion) }
 
     Column(Modifier.fillMaxSize(), horizontalAlignment = Alignment.CenterHorizontally) {
         HorizontalPager(
             state = pager,
             modifier = Modifier.fillMaxWidth().weight(1f),
-            key = { index ->
-                val picture = pages[index]
-                picture.medium?.takeIf(String::isNotBlank) ?: checkNotNull(picture.large)
-            },
+            key = { pages[it].galleryKey },
         ) { index ->
             val description =
                 if (index == 0) {
@@ -191,7 +184,7 @@ internal fun CoverGallery(
         }
         Row(verticalAlignment = Alignment.CenterVertically) {
             TextButton(
-                onClick = { moveTo(position - 1) },
+                onClick = { buttonScroll.moveTo(pages, position - 1, motion) },
                 enabled = position > 0,
             ) { Text(stringResource(R.string.title_gallery_previous)) }
             Text(
@@ -200,10 +193,76 @@ internal fun CoverGallery(
                 style = MaterialTheme.typography.labelLarge,
             )
             TextButton(
-                onClick = { moveTo(position + 1) },
+                onClick = { buttonScroll.moveTo(pages, position + 1, motion) },
                 enabled = position < pages.lastIndex,
             ) { Text(stringResource(R.string.title_gallery_next)) }
         }
+    }
+}
+
+private val TitlePicture.galleryKey: String
+    get() = medium?.takeIf(String::isNotBlank) ?: checkNotNull(large)
+
+private class GalleryButtonScroll(
+    private val pager: PagerState,
+    private val scope: CoroutineScope,
+) {
+    private var pending by mutableStateOf<GalleryMove?>(null)
+    private var animation: Job? = null
+
+    fun position(pages: List<TitlePicture>): Int = pending?.resolve(pages)?.page ?: pager.targetPage.coerceIn(pages.indices)
+
+    fun moveTo(
+        pages: List<TitlePicture>,
+        page: Int,
+        motion: MotionScheme,
+    ) {
+        val origin = pending?.origin ?: pages[pager.settledPage.coerceIn(pages.indices)].galleryKey
+        scroll(GalleryMove(pages[page].galleryKey, origin, page), motion)
+    }
+
+    fun update(
+        pages: List<TitlePicture>,
+        motion: MotionScheme,
+    ) {
+        val current = pending ?: return
+        scroll(current.resolve(pages), motion)
+    }
+
+    private fun scroll(
+        destination: GalleryMove,
+        motion: MotionScheme,
+    ) {
+        if (destination == pending) return
+        pending = destination
+        animation?.cancel()
+        animation =
+            scope.launch {
+                val page = destination.page
+                try {
+                    if (destination.returning || (pager.currentPage == page && pager.currentPageOffsetFraction == 0f)) {
+                        pager.scrollToPage(page)
+                    } else {
+                        pager.animateScrollToPage(page, animationSpec = motion.defaultEffectsSpec())
+                    }
+                } finally {
+                    if (pending === destination) pending = null
+                }
+            }
+    }
+}
+
+private data class GalleryMove(
+    val picture: String,
+    val origin: String,
+    val page: Int,
+    val returning: Boolean = false,
+) {
+    fun resolve(pages: List<TitlePicture>): GalleryMove {
+        val target = pages.indexOfFirst { it.galleryKey == picture }
+        if (target >= 0) return copy(page = target, returning = false)
+        val fallback = pages.indexOfFirst { it.galleryKey == origin }.coerceAtLeast(0)
+        return copy(page = fallback, returning = true)
     }
 }
 
