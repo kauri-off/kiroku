@@ -12,6 +12,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableIntStateOf
@@ -30,6 +31,9 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import coil3.compose.AsyncImage
+import coil3.compose.LocalPlatformContext
+import coil3.request.CachePolicy
+import coil3.request.ImageRequest
 import io.github.kauri_off.kiroku.R
 import io.github.kauri_off.kiroku.design.component.BarTitle
 import io.github.kauri_off.kiroku.design.component.Poster
@@ -73,7 +77,10 @@ internal fun TitleCoverDialog(
     onClose: () -> Unit,
 ) {
     val sources = remember(url, large) { listOfNotNull(large, url).filterNot(String::isBlank).distinct() }
-    if (sources.isEmpty()) return
+    if (sources.isEmpty()) {
+        LaunchedEffect(Unit) { onClose() }
+        return
+    }
     Dialog(
         onDismissRequest = onClose,
         properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false),
@@ -103,14 +110,29 @@ private fun CoverImage(
     sources: List<String>,
 ) {
     var source by remember(sources) { mutableIntStateOf(0) }
+    var retrying by remember(sources) { mutableStateOf(false) }
     val url = sources.getOrNull(source)
     if (url == null) {
-        ScreenState(ScreenState.Error(stringResource(R.string.title_cover_failed)) { source = 0 })
+        ScreenState(
+            ScreenState.Error(stringResource(R.string.title_cover_failed)) {
+                retrying = true
+                source = 0
+            },
+        )
     } else {
         key(sources, source) {
             var loaded by remember { mutableStateOf(false) }
+            val context = LocalPlatformContext.current
+            val request =
+                remember(context, url, retrying) {
+                    ImageRequest
+                        .Builder(context)
+                        .data(url)
+                        .diskCachePolicy(if (retrying) CachePolicy.WRITE_ONLY else CachePolicy.ENABLED)
+                        .build()
+                }
             AsyncImage(
-                model = url,
+                model = request,
                 contentDescription = if (loaded) stringResource(R.string.title_cover_image, title) else null,
                 imageLoader = routeImageLoader(),
                 modifier = Modifier.widthIn(max = Sizes.contentMaxWidth).fillMaxSize(),

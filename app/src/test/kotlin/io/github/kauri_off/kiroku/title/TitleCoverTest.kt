@@ -3,6 +3,7 @@ package io.github.kauri_off.kiroku.title
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.SemanticsMatcher
@@ -19,6 +20,7 @@ import coil3.ColorImage
 import coil3.ImageLoader
 import coil3.decode.DataSource
 import coil3.intercept.Interceptor
+import coil3.request.CachePolicy
 import coil3.request.ErrorResult
 import coil3.request.ImageRequest
 import coil3.request.SuccessResult
@@ -143,24 +145,38 @@ class TitleCoverTest {
     @Test
     fun anErrorOffersRetryAndDoesNotRequestADuplicateUrl() {
         val first = CompletableDeferred<Unit>()
-        val requested = CopyOnWriteArrayList<Any>()
+        val requested = CopyOnWriteArrayList<Pair<Any, CachePolicy>>()
         val loader =
             ImageLoader
                 .Builder(compose.activity)
                 .components {
                     add(
                         Interceptor { chain ->
-                            requested += chain.request.data
+                            requested += chain.request.data to chain.request.diskCachePolicy
                             if (first.complete(Unit)) ErrorResult(null, chain.request, IOException()) else coverResult(chain.request)
                         },
                     )
                 }.build()
         show(loader) { TitleCoverDialog("Sample", LARGE, LARGE) {} }
         compose.waitUntil { compose.onAllNodes(hasText("Could not load the cover")).fetchSemanticsNodes().isNotEmpty() }
-        assertEquals(listOf(LARGE), requested.toList())
+        assertEquals(listOf(LARGE to CachePolicy.ENABLED), requested.toList())
         compose.onNode(hasText("Retry")).performClick()
         waitForCover("Sample")
-        assertEquals(listOf(LARGE, LARGE), requested.toList())
+        assertEquals(listOf(LARGE to CachePolicy.ENABLED, LARGE to CachePolicy.WRITE_ONLY), requested.toList())
+    }
+
+    @Test
+    fun aCoverThatDisappearsStaysClosedWhenItReturns() {
+        val url = mutableStateOf<String?>(LARGE)
+        val open = mutableStateOf(true)
+        show {
+            if (open.value) TitleCoverDialog("Sample", url.value, null) { open.value = false }
+        }
+        waitForCover("Sample")
+        compose.runOnIdle { url.value = null }
+        compose.onNode(isDialog()).assertDoesNotExist()
+        compose.runOnIdle { url.value = LARGE }
+        compose.onNode(isDialog()).assertDoesNotExist()
     }
 
     @Test
