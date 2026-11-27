@@ -19,6 +19,7 @@ import io.github.kauri_off.kiroku.data.db.execute
 import io.github.kauri_off.kiroku.data.network.AnotherTitleAnswer
 import io.github.kauri_off.kiroku.data.network.NetworkFixture
 import io.github.kauri_off.kiroku.data.network.NetworkFixture.Companion.answer
+import io.github.kauri_off.kiroku.data.network.RepairedAnswer
 import io.github.kauri_off.kiroku.data.network.UnusableAnswer
 import io.github.kauri_off.kiroku.data.network.received
 import io.github.kauri_off.kiroku.data.preferences.StoredPreferences
@@ -121,6 +122,31 @@ class MalAnimeRepositoryTest {
             assertTrue("an airing title's details are stale after six hours", detailsStale(anime, at, network.clock.now))
             assertEquals(1, network.api.requestCount)
             assertTrue(network.unexpected.isEmpty())
+        }
+
+    @Test
+    fun `the recorded anime gallery excludes the JPG copy of the WebP cover and keeps provider order in Room`() =
+        runTest {
+            val subject = subject()
+            serve("title_pictures")
+            val id = AnimeId(1)
+            assertEquals(Outcome.Success(Unit), subject.titles.refresh(id))
+            assertTrue(
+                network.api
+                    .received()
+                    .url
+                    .queryParameter("fields")
+                    .orEmpty()
+                    .split(',')
+                    .contains("pictures"),
+            )
+            val pictures = checkNotNull(subject.titles.observeDetails(id).first()).pictures
+            val recorded = recordedJson("title_pictures")["pictures"] as JsonArray
+            val extras = recorded.filterIndexed { index, _ -> index != 2 }
+            assertEquals(extras.map { ((it as JsonObject)["medium"] as JsonPrimitive).content }, pictures.map { it.medium })
+            assertEquals(extras.map { ((it as JsonObject)["large"] as JsonPrimitive).content }, pictures.map { it.large })
+            assertEquals(setOf("status"), (network.unexpected.single() as RepairedAnswer).fields)
+            assertTrue(airing.details.pictures.isEmpty())
         }
 
     // The recorded relations of two pages: an airing third season between its prequel and its sequel, and a second

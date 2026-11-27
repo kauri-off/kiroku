@@ -33,6 +33,8 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
+import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import okhttp3.Dispatcher
 import org.junit.After
@@ -116,6 +118,7 @@ class MalMangaRepositoryTest {
             assertTrue(synopsis.orEmpty().contains("Tenma"))
             assertNotNull(posterUrl)
             assertNotNull(largePosterUrl)
+            assertTrue(pictures.isEmpty())
         }
 
         KirokuDatabase.open(context, dbName).withDatabase { db ->
@@ -131,6 +134,34 @@ class MalMangaRepositoryTest {
                         ?.titles
                         ?.romaji,
                 )
+            }
+        }
+        assertTrue(network.unexpected.isEmpty())
+    }
+
+    @Test
+    fun `the recorded manga gallery excludes the repeated cover and survives reopening in provider order`() {
+        serve("manga_pictures")
+        val id = MangaId(1)
+        KirokuDatabase.open(context, dbName).withDatabase { db ->
+            runBlocking { assertTrue(repository(db).refresh(id) is Outcome.Success) }
+        }
+
+        val request = network.api.received()
+        assertTrue(
+            request.url
+                .queryParameter("fields")
+                .orEmpty()
+                .split(',')
+                .contains("pictures"),
+        )
+        val extras = (recordedJson("manga_pictures")["pictures"] as JsonArray).drop(1)
+        KirokuDatabase.open(context, dbName).withDatabase { db ->
+            runBlocking {
+                val stored = (repository(db).stored(id) as Outcome.Success).value
+                val pictures = checkNotNull(stored).details.pictures
+                assertEquals(extras.map { ((it as JsonObject)["medium"] as JsonPrimitive).content }, pictures.map { it.medium })
+                assertEquals(extras.map { ((it as JsonObject)["large"] as JsonPrimitive).content }, pictures.map { it.large })
             }
         }
         assertTrue(network.unexpected.isEmpty())

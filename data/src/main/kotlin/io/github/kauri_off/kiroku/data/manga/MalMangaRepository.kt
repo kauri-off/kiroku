@@ -8,20 +8,26 @@ import io.github.kauri_off.kiroku.core.model.MangaFormat
 import io.github.kauri_off.kiroku.core.model.MangaId
 import io.github.kauri_off.kiroku.core.model.MangaPublication
 import io.github.kauri_off.kiroku.core.model.SessionOwner
+import io.github.kauri_off.kiroku.core.model.TitlePicture
 import io.github.kauri_off.kiroku.core.model.Titles
 import io.github.kauri_off.kiroku.core.repository.MangaRepository
 import io.github.kauri_off.kiroku.core.repository.StoredManga
 import io.github.kauri_off.kiroku.data.db.KirokuDatabase
 import io.github.kauri_off.kiroku.data.db.MangaRow
 import io.github.kauri_off.kiroku.data.db.instantOf
+import io.github.kauri_off.kiroku.data.db.picturesOf
+import io.github.kauri_off.kiroku.data.db.picturesToColumn
+import io.github.kauri_off.kiroku.data.db.readable
 import io.github.kauri_off.kiroku.data.db.toColumn
 import io.github.kauri_off.kiroku.data.db.transaction
 import io.github.kauri_off.kiroku.data.network.MalFields
+import io.github.kauri_off.kiroku.data.network.MalFields.PICTURES
 import io.github.kauri_off.kiroku.data.network.MalHttp
 import io.github.kauri_off.kiroku.data.network.ReadAdmission
 import io.github.kauri_off.kiroku.data.network.ReadDeferred
 import io.github.kauri_off.kiroku.data.network.RepairedAnswer
 import io.github.kauri_off.kiroku.data.network.clientIdOutcome
+import io.github.kauri_off.kiroku.data.network.titlePictures
 import io.github.kauri_off.kiroku.data.session.MalSession
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.currentCoroutineContext
@@ -56,7 +62,7 @@ class MalMangaRepository(
     ): Outcome<StoredManga?> =
         storage {
             awaitList()
-            inSettledOwner(owner) { it.manga().read(id.value)?.toStored() }
+            inSettledOwner(owner) { it.manga().read(id.value)?.toStored(http.unexpected) }
         }
 
     override suspend fun refresh(
@@ -95,8 +101,9 @@ class MalMangaRepository(
         return storage {
             inSettledOwner(owner) { db ->
                 val dao = db.manga()
-                dao.save(row)
-                checkNotNull(dao.read(id.value)).toStored()
+                val storedPictures = if (PICTURES in repaired && row.pictures == null) dao.read(id.value)?.pictures else null
+                dao.save(row.copy(pictures = row.pictures ?: storedPictures))
+                checkNotNull(dao.read(id.value)).toStored(http.unexpected)
             }
         }
     }
@@ -166,11 +173,17 @@ internal fun JsonObject.toManga(
     val name =
         main ?: english ?: japanese
             ?: (alternatives?.get("synonyms") as? JsonArray)?.firstNotNullOfOrNull { stringValue(it)?.takeUnless(String::isBlank) }
+    val cover =
+        TitlePicture(
+            picture?.let { field("medium", it, "main_picture.medium", ::stringValue) }?.takeUnless(String::isBlank),
+            picture?.let { field("large", it, "main_picture.large", ::stringValue) }?.takeUnless(String::isBlank),
+        )
     return MangaDetails(
         id = id,
         titles = Titles(requireNotNull(name), english, japanese),
-        posterUrl = picture?.let { field("medium", it, "main_picture.medium", ::stringValue) }?.takeUnless(String::isBlank),
-        largePosterUrl = picture?.let { field("large", it, "main_picture.large", ::stringValue) }?.takeUnless(String::isBlank),
+        posterUrl = cover.medium,
+        largePosterUrl = cover.large,
+        pictures = get(PICTURES).titlePictures(cover) { repaired += PICTURES },
         synopsis = text("synopsis")?.trim()?.takeUnless(String::isEmpty),
         format = formatOf(text("media_type")?.takeUnless(String::isBlank)),
         publication = publicationOf(text("status")?.takeUnless(String::isBlank)),
@@ -199,11 +212,12 @@ internal fun MangaDetails.toRow(fetchedAt: Long): MangaRow =
         fetchedAt,
         rank,
         members,
+        picturesToColumn(pictures),
     )
 
 private fun stringValue(value: JsonElement): String? = (value as? JsonPrimitive)?.takeIf { it.isString }?.content
 
-internal fun MangaRow.toStored(): StoredManga =
+private fun MangaRow.toStored(unexpected: (Throwable) -> Unit): StoredManga =
     StoredManga(
         MangaDetails(
             MangaId(id),
@@ -218,6 +232,7 @@ internal fun MangaRow.toStored(): StoredManga =
             meanScore,
             rank,
             members,
+            readable(unexpected) { picturesOf(pictures) }.orEmpty(),
         ),
         instantOf(fetchedAt),
     )

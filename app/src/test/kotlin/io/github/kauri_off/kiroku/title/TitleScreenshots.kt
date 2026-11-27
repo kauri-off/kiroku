@@ -1,7 +1,10 @@
 package io.github.kauri_off.kiroku.title
 
+import androidx.compose.foundation.pager.rememberPagerState
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
 import coil3.SingletonImageLoader
 import coil3.asImage
@@ -27,6 +30,7 @@ import io.github.kauri_off.kiroku.core.model.RelatedAnime
 import io.github.kauri_off.kiroku.core.model.RelationType
 import io.github.kauri_off.kiroku.core.model.Session
 import io.github.kauri_off.kiroku.core.model.TitleLanguage
+import io.github.kauri_off.kiroku.core.model.TitlePicture
 import io.github.kauri_off.kiroku.core.model.Titles
 import io.github.kauri_off.kiroku.core.repository.ListWrite
 import io.github.kauri_off.kiroku.design.MotionBounds
@@ -98,6 +102,14 @@ class TitleScreenshots : ScreenshotRegistry() {
             case("paired-owned", largeText = true) { Screen(TitleFixtures.pairedOwned) },
             case("paired-owned-wide", window = WindowSize(840, 600)) { Screen(TitleFixtures.pairedOwned) },
             case("cover-open", largeText = true) { Screen(TitleFixtures.of(FixtureAnime.exactToWatch).copy(coverOpen = true)) },
+            case("gallery-open", largeText = true) {
+                val anime = FixtureAnime.exactToWatch
+                val details = checkNotNull(Fixtures.reference.details[anime.id]).copy(pictures = galleryPictures)
+                Screen(TitleFixtures.of(anime, details = details).copy(coverOpen = true))
+            },
+            case("gallery-extra") { GalleryFrame(initialPage = 1) },
+            case("gallery-failed", largeText = true) { GalleryFrame(initialPage = 2) },
+            case("gallery-cover") { GalleryFrame(initialPage = 0) },
             case("cover-open-wide", window = WindowSize(840, 600)) {
                 Screen(TitleFixtures.of(FixtureAnime.exactToWatch).copy(coverOpen = true))
             },
@@ -124,6 +136,7 @@ class TitleScreenshots : ScreenshotRegistry() {
     // The header's large picture fades in over the row's on the fast effects spring, which does most of its way early.
     override val transitions =
         listOf(
+            galleryTransition(),
             // The film the walk found joins the watch order between the seasons, and the indicator leaves.
             Transition(
                 "chain-of-four-tall",
@@ -143,6 +156,40 @@ class TitleScreenshots : ScreenshotRegistry() {
             },
         )
 }
+
+internal val galleryPictures =
+    listOf(
+        TitlePicture(FixtureAnime.prequel.posterUrl, FixtureAnime.prequel.largePosterUrl),
+        TitlePicture(RemoteImages.UNAVAILABLE, null),
+    )
+
+@Composable
+private fun GalleryFrame(
+    initialPage: Int,
+    advancing: Boolean = false,
+) {
+    val anime = FixtureAnime.exactToWatch
+    val pages = listOf(TitlePicture(anime.posterUrl, anime.largePosterUrl)).plus(galleryPictures).map(TitlePicture::sources)
+    val pager = rememberPagerState(initialPage) { pages.size }
+    val motion = MaterialTheme.motionScheme
+    LaunchedEffect(advancing) {
+        if (advancing) pager.animateScrollToPage(1, animationSpec = motion.defaultEffectsSpec())
+    }
+    TitleCoverWindow(anime.titles.romaji, gallery = true, onClose = {}) {
+        CoverGallery(pages, anime.titles.romaji, pager)
+    }
+}
+
+private fun galleryTransition() =
+    Transition(
+        "gallery-extra",
+        start = "gallery-cover",
+        name = "gallery-page-turn",
+        millis = MotionBounds.ENTER,
+        at = listOf(FRAME, 3 * FRAME, 6 * FRAME, MotionBounds.ENTER),
+    ) { advancing ->
+        GalleryFrame(initialPage = 0, advancing = advancing)
+    }
 
 // The header with the row's picture in memory and the large one on its way, there at once, or arriving now.
 @Composable

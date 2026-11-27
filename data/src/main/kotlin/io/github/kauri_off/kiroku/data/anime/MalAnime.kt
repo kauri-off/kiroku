@@ -10,6 +10,7 @@ import io.github.kauri_off.kiroku.core.model.Genre
 import io.github.kauri_off.kiroku.core.model.PartialDate
 import io.github.kauri_off.kiroku.core.model.RelatedAnime
 import io.github.kauri_off.kiroku.core.model.StatusCounts
+import io.github.kauri_off.kiroku.core.model.TitlePicture
 import io.github.kauri_off.kiroku.core.model.TitleStatistics
 import io.github.kauri_off.kiroku.core.model.Titles
 import io.github.kauri_off.kiroku.data.db.Unread
@@ -20,7 +21,9 @@ import io.github.kauri_off.kiroku.data.db.partialDateOf
 import io.github.kauri_off.kiroku.data.db.relationTypes
 import io.github.kauri_off.kiroku.data.db.seasons
 import io.github.kauri_off.kiroku.data.db.sources
+import io.github.kauri_off.kiroku.data.network.MalFields.PICTURES
 import io.github.kauri_off.kiroku.data.network.MalJson
+import io.github.kauri_off.kiroku.data.network.titlePictures
 import kotlinx.serialization.KSerializer
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
@@ -128,7 +131,9 @@ private class Recommendation(
 
 internal fun JsonObject.toTitle(repairs: Repairs): MalTitle {
     val anime = MalJson.decodeFromJsonElement(AnimeNode.serializer(), this).toAnime(repairs)
-    return MalTitle(anime, MalJson.decodeFromJsonElement(PageNode.serializer(), this).toDetails(anime.id, repairs))
+    val pictures = get(PICTURES).titlePictures(TitlePicture(anime.posterUrl, anime.largePosterUrl)) { repairs.note(PICTURES) }
+    val details = MalJson.decodeFromJsonElement(PageNode.serializer(), this).toDetails(anime.id, repairs)
+    return MalTitle(anime, details.copy(pictures = pictures))
 }
 
 // MAL's fields that held a value the mapper could not read and left out or filled in; a related title's under its list's name.
@@ -173,6 +178,7 @@ private val unreadFields =
         Unread.Studios to "studios",
         Unread.Related to "related_anime",
         Unread.Recommendations to "recommendations",
+        Unread.Pictures to PICTURES,
     )
 
 // MAL's own empty values are absent; an unreadable value is left out or filled in, and noted in [repairs].

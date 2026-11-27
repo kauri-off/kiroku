@@ -169,7 +169,7 @@ internal fun MangaTitleScreen(
     )
     if (content is MangaTitleContent.Shown && state.coverOpen) {
         val details = content.details
-        TitleCoverDialog(content.title, details.posterUrl, details.largePosterUrl) { onEvent(MangaTitleEvent.CloseCover) }
+        TitleCoverDialog(content.title, details.posterUrl, details.largePosterUrl, details.pictures) { onEvent(MangaTitleEvent.CloseCover) }
     }
 }
 

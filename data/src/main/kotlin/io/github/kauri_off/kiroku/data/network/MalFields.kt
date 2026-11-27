@@ -9,12 +9,14 @@ object MalFields {
 
     const val SUGGESTIONS = "$SUMMARY,nsfw"
 
+    internal const val PICTURES = "pictures"
+
     const val DETAILS =
-        "$SUMMARY,end_date,synopsis,start_season,source,studios,rating,statistics," +
+        "$SUMMARY,$PICTURES,end_date,synopsis,start_season,source,studios,rating,statistics," +
             "related_anime{$SUMMARY},recommendations{$SUMMARY}"
 
     const val MANGA_SUMMARY = "id,title,alternative_titles,main_picture,media_type,status,num_volumes,num_chapters,mean"
-    const val MANGA_DETAILS = "$MANGA_SUMMARY,synopsis,rank,num_list_users"
+    const val MANGA_DETAILS = "$MANGA_SUMMARY,$PICTURES,synopsis,rank,num_list_users"
 
     internal const val LIST_VALUES = "status,score,num_episodes_watched,start_date,finish_date,updated_at,num_times_rewatched"
 

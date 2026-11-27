@@ -60,4 +60,10 @@
     <string name="title_cover_close">Закрыть обложку</string>
     <string name="title_cover_image">Обложка тайтла «%1$s»</string>
     <string name="title_cover_failed">Не удалось загрузить обложку</string>
+    <string name="title_gallery_close">Закрыть галерею</string>
+    <string name="title_gallery_previous">Назад</string>
+    <string name="title_gallery_next">Далее</string>
+    <string name="title_gallery_position">%1$d\u00A0/\u00A0%2$d</string>
+    <string name="title_gallery_image">Изображение\u00A0%1$d\u00A0из\u00A0%2$d\u00A0для тайтла «%3$s»</string>
+    <string name="title_gallery_failed">Не удалось загрузить изображение</string>
 </resources>

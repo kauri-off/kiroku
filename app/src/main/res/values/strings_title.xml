@@ -55,4 +55,10 @@
     <string name="title_cover_close">Close cover</string>
     <string name="title_cover_image">Cover of %1$s</string>
     <string name="title_cover_failed">Could not load the cover</string>
+    <string name="title_gallery_close">Close gallery</string>
+    <string name="title_gallery_previous">Previous</string>
+    <string name="title_gallery_next">Next</string>
+    <string name="title_gallery_position">%1$d\u00A0/\u00A0%2$d</string>
+    <string name="title_gallery_image">Image\u00A0%1$d\u00A0of\u00A0%2$d\u00A0for %3$s</string>
+    <string name="title_gallery_failed">Could not load this image</string>
 </resources>

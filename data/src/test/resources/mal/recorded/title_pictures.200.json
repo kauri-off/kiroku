@@ -1,0 +1,66 @@
+{
+    "id": 1,
+    "title": "Cowboy Bebop",
+    "main_picture": {
+        "medium": "https://cdn.myanimelist.net/images/anime/4/19644.webp",
+        "large": "https://cdn.myanimelist.net/images/anime/4/19644l.webp"
+    },
+    "pictures": [
+        {
+            "medium": "https://cdn.myanimelist.net/images/anime/7/3791.jpg",
+            "large": "https://cdn.myanimelist.net/images/anime/7/3791l.jpg"
+        },
+        {
+            "medium": "https://cdn.myanimelist.net/images/anime/12/19609.jpg",
+            "large": "https://cdn.myanimelist.net/images/anime/12/19609l.jpg"
+        },
+        {
+            "medium": "https://cdn.myanimelist.net/images/anime/4/19644.jpg",
+            "large": "https://cdn.myanimelist.net/images/anime/4/19644l.jpg"
+        },
+        {
+            "medium": "https://cdn.myanimelist.net/images/anime/4/22882.jpg",
+            "large": "https://cdn.myanimelist.net/images/anime/4/22882l.jpg"
+        },
+        {
+            "medium": "https://cdn.myanimelist.net/images/anime/12/22883.jpg",
+            "large": "https://cdn.myanimelist.net/images/anime/12/22883l.jpg"
+        },
+        {
+            "medium": "https://cdn.myanimelist.net/images/anime/6/22885.jpg",
+            "large": "https://cdn.myanimelist.net/images/anime/6/22885l.jpg"
+        },
+        {
+            "medium": "https://cdn.myanimelist.net/images/anime/11/53939.jpg",
+            "large": "https://cdn.myanimelist.net/images/anime/11/53939l.jpg"
+        },
+        {
+            "medium": "https://cdn.myanimelist.net/images/anime/2/78836.jpg",
+            "large": "https://cdn.myanimelist.net/images/anime/2/78836l.jpg"
+        },
+        {
+            "medium": "https://cdn.myanimelist.net/images/anime/12/81920.jpg",
+            "large": "https://cdn.myanimelist.net/images/anime/12/81920l.jpg"
+        },
+        {
+            "medium": "https://cdn.myanimelist.net/images/anime/1519/91488.jpg",
+            "large": "https://cdn.myanimelist.net/images/anime/1519/91488l.jpg"
+        },
+        {
+            "medium": "https://cdn.myanimelist.net/images/anime/1764/109632.jpg",
+            "large": "https://cdn.myanimelist.net/images/anime/1764/109632l.jpg"
+        },
+        {
+            "medium": "https://cdn.myanimelist.net/images/anime/1952/121242.jpg",
+            "large": "https://cdn.myanimelist.net/images/anime/1952/121242l.jpg"
+        },
+        {
+            "medium": "https://cdn.myanimelist.net/images/anime/1623/122582.jpg",
+            "large": "https://cdn.myanimelist.net/images/anime/1623/122582l.jpg"
+        },
+        {
+            "medium": "https://cdn.myanimelist.net/images/anime/1608/139122.jpg",
+            "large": "https://cdn.myanimelist.net/images/anime/1608/139122l.jpg"
+        }
+    ]
+}

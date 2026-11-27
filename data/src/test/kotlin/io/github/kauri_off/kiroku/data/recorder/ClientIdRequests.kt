@@ -49,6 +49,8 @@ internal val ClientIdRequests: List<Ask> =
         Ask("title_adult_nsfw_true", "anime/368?fields=$DETAILS&nsfw=true"),
         Ask("title_adult_nsfw_false", "anime/368?fields=$DETAILS&nsfw=false"),
         Ask("title_adult_nsfw_unset", "anime/368?fields=$DETAILS"),
+        Ask("title_pictures", "anime/1?fields=main_picture,pictures"),
+        Ask("manga_pictures", "manga/1?fields=main_picture,pictures"),
         Ask("title_unknown", "anime/2?fields=$DETAILS"),
         Ask("manga_completed", "manga/1?fields=$MANGA_DETAILS"),
         Ask("manga_publishing", "manga/13?fields=$MANGA_DETAILS"),
