@@ -386,6 +386,10 @@ class KirokuDatabaseTest {
                     assertEquals(null, title["rank"])
                     assertEquals(null, title["members"])
                 }
+                if (version < 12) {
+                    assertTrue(connection.named("title_details").all { it.containsKey("pictures") && it["pictures"] == null })
+                    assertTrue(connection.named("manga").all { it.containsKey("pictures") && it["pictures"] == null })
+                }
                 if (version < 7) {
                     assertTrue(connection.named("title_details").all { it["recommendations_include_adult"] == 0L })
                 }
@@ -661,6 +665,7 @@ class KirokuDatabaseTest {
                 9 to "81a82b9f70d2c5bbe7b24416c50468a9",
                 10 to "26326b4eacb144dad9d1cdf2a8b9bce9",
                 11 to "562cc18b9d5918f02e80e21dd3848f6e",
+                12 to "9dde67be800e8ad34b046ebfd4594f6b",
             )
     }
 }

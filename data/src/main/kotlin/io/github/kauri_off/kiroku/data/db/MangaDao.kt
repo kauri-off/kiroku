@@ -24,6 +24,7 @@ internal data class MangaRow(
     @ColumnInfo(name = "fetched_at") val fetchedAt: Long,
     val rank: Int?,
     val members: Int?,
+    val pictures: String? = null,
 )
 
 @Dao

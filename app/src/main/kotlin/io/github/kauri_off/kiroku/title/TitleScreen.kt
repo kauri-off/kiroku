@@ -136,7 +136,9 @@ fun TitleScreen(
     }
     if (state is TitleState.Shown && state.coverOpen) {
         val page = state.page
-        TitleCoverDialog(page.title, page.anime.posterUrl, page.anime.largePosterUrl) { onEvent(TitleEvent.CloseCover) }
+        TitleCoverDialog(page.title, page.anime.posterUrl, page.anime.largePosterUrl, page.details?.pictures.orEmpty()) {
+            onEvent(TitleEvent.CloseCover)
+        }
     }
 }
 

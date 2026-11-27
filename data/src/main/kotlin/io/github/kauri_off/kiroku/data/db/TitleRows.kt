@@ -144,6 +144,7 @@ internal data class TitleDetailsRow(
     @Embedded(prefix = "statistics_") val statistics: StatisticsColumns?,
     @ColumnInfo(name = "fetched_at") val fetchedAt: Long,
     @ColumnInfo(name = "recommendations_include_adult", defaultValue = "0") val recommendationsIncludeAdult: Boolean? = false,
+    val pictures: String? = null,
 ) {
     // The same rule as a summary's; the season's year and name are one value.
     fun mergedWith(
@@ -151,6 +152,7 @@ internal data class TitleDetailsRow(
         unread: Set<Unread> = emptySet(),
     ): TitleDetailsRow =
         newer.copy(
+            pictures = if (Unread.Pictures in unread) pictures ?: newer.pictures else newer.pictures,
             studios = if (Unread.Studios in unread) studios else newer.studios,
             synopsis = newer.synopsis ?: synopsis,
             endDate = newer.endDate ?: endDate,
@@ -181,6 +183,7 @@ internal fun AnimeDetails.toRow(fetchedAt: Instant): TitleDetailsRow =
             },
         fetchedAt = fetchedAt.toColumn(),
         recommendationsIncludeAdult = recommendationsIncludeAdult,
+        pictures = picturesToColumn(pictures),
     )
 
 // One related title of a title, in the place MAL gave it. A title that is named here cannot be deleted by itself.
@@ -239,6 +242,7 @@ internal data class DetailsWithTitles(
         AnimeDetails(
             id = AnimeId(details.titleId),
             synopsis = details.synopsis,
+            pictures = readable(unexpected) { picturesOf(details.pictures) }.orEmpty(),
             endDate = details.endDate?.let(::partialDateOf),
             season = details.seasonYear?.let { year -> details.season?.let { AnimeSeason(year, seasons.of(it)) } },
             source = details.source?.let(sources::of),

@@ -113,7 +113,7 @@ object SandboxTitles {
     ): JsonObject {
         val id = node.id
         return JsonObject(
-            node.mapValues { (key, value) ->
+            node.filterKeys { it != "pictures" }.mapValues { (key, value) ->
                 when {
                     key == "main_picture" && id != null ->
                         JsonObject(

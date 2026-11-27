@@ -49,7 +49,7 @@ abstract class KirokuDatabase : RoomDatabase() {
 
     companion object {
         const val NAME = "kiroku.db"
-        const val VERSION = 11
+        const val VERSION = 12
 
         val migrations: List<Migration> =
             listOf(
@@ -134,6 +134,10 @@ abstract class KirokuDatabase : RoomDatabase() {
                 migration(10, 11) {
                     execSQL("ALTER TABLE `manga` ADD COLUMN `rank` INTEGER")
                     execSQL("ALTER TABLE `manga` ADD COLUMN `members` INTEGER")
+                },
+                migration(11, 12) {
+                    execSQL("ALTER TABLE `title_details` ADD COLUMN `pictures` TEXT")
+                    execSQL("ALTER TABLE `manga` ADD COLUMN `pictures` TEXT")
                 },
             )
 

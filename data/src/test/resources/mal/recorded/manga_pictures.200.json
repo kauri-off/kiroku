@@ -1,0 +1,50 @@
+{
+    "id": 1,
+    "title": "Monster",
+    "main_picture": {
+        "medium": "https://cdn.myanimelist.net/images/manga/3/258224.jpg",
+        "large": "https://cdn.myanimelist.net/images/manga/3/258224l.jpg"
+    },
+    "pictures": [
+        {
+            "medium": "https://cdn.myanimelist.net/images/manga/3/258224.jpg",
+            "large": "https://cdn.myanimelist.net/images/manga/3/258224l.jpg"
+        },
+        {
+            "medium": "https://cdn.myanimelist.net/images/manga/2/305472.jpg",
+            "large": "https://cdn.myanimelist.net/images/manga/2/305472l.jpg"
+        },
+        {
+            "medium": "https://cdn.myanimelist.net/images/manga/1/305473.jpg",
+            "large": "https://cdn.myanimelist.net/images/manga/1/305473l.jpg"
+        },
+        {
+            "medium": "https://cdn.myanimelist.net/images/manga/1/305474.jpg",
+            "large": "https://cdn.myanimelist.net/images/manga/1/305474l.jpg"
+        },
+        {
+            "medium": "https://cdn.myanimelist.net/images/manga/1/305475.jpg",
+            "large": "https://cdn.myanimelist.net/images/manga/1/305475l.jpg"
+        },
+        {
+            "medium": "https://cdn.myanimelist.net/images/manga/2/305476.jpg",
+            "large": "https://cdn.myanimelist.net/images/manga/2/305476l.jpg"
+        },
+        {
+            "medium": "https://cdn.myanimelist.net/images/manga/3/305477.jpg",
+            "large": "https://cdn.myanimelist.net/images/manga/3/305477l.jpg"
+        },
+        {
+            "medium": "https://cdn.myanimelist.net/images/manga/2/305478.jpg",
+            "large": "https://cdn.myanimelist.net/images/manga/2/305478l.jpg"
+        },
+        {
+            "medium": "https://cdn.myanimelist.net/images/manga/1/305479.jpg",
+            "large": "https://cdn.myanimelist.net/images/manga/1/305479l.jpg"
+        },
+        {
+            "medium": "https://cdn.myanimelist.net/images/manga/3/305480.jpg",
+            "large": "https://cdn.myanimelist.net/images/manga/3/305480l.jpg"
+        }
+    ]
+}

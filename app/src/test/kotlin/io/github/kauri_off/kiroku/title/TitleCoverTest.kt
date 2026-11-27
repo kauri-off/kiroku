@@ -10,13 +10,17 @@ import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.hasContentDescription
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.isDialog
 import androidx.compose.ui.test.isHeading
 import androidx.compose.ui.test.onNodeWithContentDescription
+import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performSemanticsAction
+import androidx.compose.ui.test.performTouchInput
+import androidx.compose.ui.test.swipeLeft
 import androidx.core.view.WindowCompat
 import androidx.test.espresso.Espresso
 import coil3.ColorImage
@@ -30,10 +34,13 @@ import coil3.request.SuccessResult
 import io.github.kauri_off.kiroku.core.error.Outcome
 import io.github.kauri_off.kiroku.core.fixtures.FixtureAnime
 import io.github.kauri_off.kiroku.core.link.Link
+import io.github.kauri_off.kiroku.core.model.AnimeId
 import io.github.kauri_off.kiroku.core.model.MangaId
 import io.github.kauri_off.kiroku.core.model.SessionOwner
 import io.github.kauri_off.kiroku.core.model.TitleLanguage
+import io.github.kauri_off.kiroku.core.model.TitlePicture
 import io.github.kauri_off.kiroku.core.model.owner
+import io.github.kauri_off.kiroku.core.repository.AnimeRepository
 import io.github.kauri_off.kiroku.core.repository.MangaRepository
 import io.github.kauri_off.kiroku.core.repository.StoredManga
 import io.github.kauri_off.kiroku.design.component.LocalOnTop
@@ -84,7 +91,15 @@ class TitleCoverTest {
 
     @Test
     fun animeReturnsToTheSameScrollPositionAfterCloseAndBack() {
-        val graph = TestGraph.over(scope)
+        val demo = TestGraph.over(scope)
+        val graph =
+            object : AppGraph by demo {
+                override val anime =
+                    object : AnimeRepository by demo.anime {
+                        override fun observeDetails(id: AnimeId) =
+                            demo.anime.observeDetails(id).map { it?.copy(pictures = listOf(TitlePicture(EXTRA, null))) }
+                    }
+            }
         val anime = FixtureAnime.exactToWatch
         val links = TitleLinks({ error("Left the title") }, { _, _ -> }, { _, _ -> }, { _, _ -> }, {}, { _, _ -> }, {})
         val messages = ShellMessages(scope, graph.list)
@@ -97,7 +112,11 @@ class TitleCoverTest {
     @Test
     fun mangaReturnsToTheSameScrollPositionAfterCloseAndBack() {
         val demo = TestGraph.over(scope)
-        val details = mangaFixture.copy(synopsis = checkNotNull(mangaFixture.synopsis).repeat(3))
+        val details =
+            mangaFixture.copy(
+                synopsis = checkNotNull(mangaFixture.synopsis).repeat(3),
+                pictures = listOf(TitlePicture(EXTRA, null)),
+            )
         val graph =
             object : AppGraph by demo {
                 override val manga =
@@ -122,6 +141,82 @@ class TitleCoverTest {
             MangaTitleRoute(key, graph, messages, SnackbarHostState(), onBack = { error("Left the title") }, onSignIn = {})
         }
         assertReturnsToTitle(details.titles.romaji)
+    }
+
+    @Test
+    fun swipeAndButtonsBrowseInOrderAndRetryOnlyTheFailedPage() {
+        val requested = CopyOnWriteArrayList<Pair<Any, CachePolicy>>()
+        val loader =
+            ImageLoader
+                .Builder(compose.activity)
+                .components {
+                    add(
+                        Interceptor { chain ->
+                            val request = chain.request
+                            requested += request.data to request.diskCachePolicy
+                            if (request.data == EXTRA_LARGE || request.data == EXTRA && request.diskCachePolicy == CachePolicy.ENABLED) {
+                                ErrorResult(null, request, IOException())
+                            } else {
+                                coverResult(request)
+                            }
+                        },
+                    )
+                }.build()
+        val pictures = listOf(TitlePicture(EXTRA, EXTRA_LARGE), TitlePicture(LAST, null))
+        show(loader) { TitleCoverDialog("Sample", REGULAR, LARGE, pictures) {} }
+        waitForCover("Sample")
+        compose.onNodeWithText("Previous").assertIsNotEnabled()
+        compose.onNodeWithContentDescription("Cover of Sample").performTouchInput { swipeLeft() }
+        compose.onNodeWithText("2\u00A0/\u00A03").assertIsDisplayed()
+        val error = hasText("Could not load this image")
+        compose.waitUntil { compose.onAllNodes(error).fetchSemanticsNodes().isNotEmpty() }
+        compose.onNodeWithText("Retry").performClick()
+        val extra = hasContentDescription("Image\u00A02\u00A0of\u00A03\u00A0for Sample")
+        compose.waitUntil { compose.onAllNodes(extra).fetchSemanticsNodes().isNotEmpty() }
+        compose.onNode(extra).assertIsDisplayed()
+        assertTrue((EXTRA_LARGE to CachePolicy.ENABLED) in requested)
+        assertTrue((EXTRA to CachePolicy.ENABLED) in requested)
+        assertTrue((EXTRA to CachePolicy.WRITE_ONLY) in requested)
+        assertTrue(requested.none { (url, policy) -> url == LARGE && policy == CachePolicy.WRITE_ONLY })
+
+        compose.onNodeWithText("Next").performClick()
+        compose.onNodeWithText("3\u00A0/\u00A03").assertIsDisplayed()
+        compose.onNodeWithText("Next").assertIsNotEnabled()
+        compose.onNodeWithText("Previous").performClick()
+        compose.onNodeWithText("2\u00A0/\u00A03").assertIsDisplayed()
+    }
+
+    @Test
+    fun anExtraStaysSelectedWhenItMovesAndGainsALargeSource() {
+        val pictures = mutableStateOf(listOf(TitlePicture(EXTRA, null), TitlePicture(LAST, null)))
+        val releaseLarge = CompletableDeferred<Unit>()
+        val requested = CopyOnWriteArrayList<Any>()
+        val loader =
+            ImageLoader
+                .Builder(compose.activity)
+                .components {
+                    add(
+                        Interceptor { chain ->
+                            requested += chain.request.data
+                            if (chain.request.data == EXTRA_LARGE) releaseLarge.await()
+                            coverResult(chain.request)
+                        },
+                    )
+                }.build()
+        show(loader) { TitleCoverDialog("Sample", REGULAR, LARGE, pictures.value) {} }
+        compose.onNodeWithText("Next").performClick()
+        val before = hasContentDescription("Image\u00A02\u00A0of\u00A03\u00A0for Sample")
+        compose.waitUntil { compose.onAllNodes(before).fetchSemanticsNodes().isNotEmpty() }
+
+        compose.runOnIdle { pictures.value = listOf(TitlePicture(LAST, null), TitlePicture(EXTRA, EXTRA_LARGE)) }
+        compose.onNodeWithText("3\u00A0/\u00A03").assertIsDisplayed()
+        compose.waitUntil { EXTRA_LARGE in requested }
+        val after = hasContentDescription("Image\u00A03\u00A0of\u00A03\u00A0for Sample")
+        compose.onNode(after).assertDoesNotExist()
+        releaseLarge.complete(Unit)
+        compose.waitUntil { compose.onAllNodes(after).fetchSemanticsNodes().isNotEmpty() }
+        compose.onNode(after).assertIsDisplayed()
+        assertTrue(EXTRA in requested)
     }
 
     @Test
@@ -287,7 +382,11 @@ class TitleCoverTest {
             waitForCover(title)
             val image = compose.onNodeWithContentDescription("Cover of $title")
             assertTrue(image.fetchSemanticsNode().size.height > heroHeight)
-            if (opening == 0) compose.onNodeWithContentDescription("Close cover").performClick() else Espresso.pressBack()
+            val next = hasText("Next")
+            compose.waitUntil { compose.onAllNodes(next).fetchSemanticsNodes().isNotEmpty() }
+            compose.onNode(next).performClick()
+            compose.onNodeWithText("2\u00A0/\u00A02").assertIsDisplayed()
+            if (opening == 0) compose.onNodeWithContentDescription("Close gallery").performClick() else Espresso.pressBack()
             compose.onNode(isDialog()).assertDoesNotExist()
             pageTitle.assertIsDisplayed()
             assertEquals(position, pageTitle.fetchSemanticsNode().positionInRoot)
@@ -324,6 +423,9 @@ class TitleCoverTest {
         )
 
     private companion object {
+        const val EXTRA = "https://example.invalid/cover/extra.jpg"
+        const val EXTRA_LARGE = "https://example.invalid/cover/extra-large.jpg"
+        const val LAST = "https://example.invalid/cover/last.jpg"
         const val REGULAR = "https://example.invalid/cover/regular.jpg"
         const val LARGE = "https://example.invalid/cover/large.jpg"
     }

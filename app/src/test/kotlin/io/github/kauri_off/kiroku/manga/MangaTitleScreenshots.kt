@@ -25,6 +25,7 @@ import io.github.kauri_off.kiroku.screenshots.shown
 import io.github.kauri_off.kiroku.shell.MangaChange
 import io.github.kauri_off.kiroku.shell.ShellMessage
 import io.github.kauri_off.kiroku.shell.rememberHostShowing
+import io.github.kauri_off.kiroku.title.galleryPictures
 
 class MangaTitleScreenshots : ScreenshotRegistry() {
     override val content = contentCase { Screen(mangaFixture.shown()) }
@@ -47,6 +48,9 @@ class MangaTitleScreenshots : ScreenshotRegistry() {
             case("opened-with-summary-offline") { Screen(openingSummary.copy(detailsError = DataError.NoConnection)) },
             case("unavailable") { Screen(MangaTitleContent.Failed(MangaTitleProblem.Unavailable)) },
             case("cover-open", largeText = true) { Screen(mangaFixture.shown(), coverOpen = true) },
+            case("gallery-open", largeText = true) {
+                Screen(mangaFixture.copy(pictures = galleryPictures).shown(), coverOpen = true)
+            },
             case("cover-open-landscape", window = WindowSize(760, 360)) {
                 Screen(mangaFixture.shown(), coverOpen = true)
             },

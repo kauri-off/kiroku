@@ -18,7 +18,7 @@ data class StoredDetails(
 )
 
 // A value of MAL's page that the mapper could read only in part: a stored value of it stands.
-enum class Unread { BroadcastTime, Genres, Studios, Related, Recommendations }
+enum class Unread { BroadcastTime, Genres, Studios, Related, Recommendations, Pictures }
 
 // Whose list the database held when a refresh began: its answer is not stored once the list is another's (S9).
 @JvmInline
