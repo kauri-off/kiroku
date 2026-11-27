@@ -607,7 +607,13 @@ class SandboxAppTest {
         assertEquals(emptyList<URI>(), connections.asked)
     }
 
-    private fun profileTab() = compose.onNode(hasText("Profile") and hasClickAction()).performClick()
+    private fun profileTab() {
+        val tab = hasText("Profile") and hasClickAction()
+        meanwhile {
+            compose.onAllNodes(tab).fetchSemanticsNodes().size == 1 && graph.signIn.step.value == SignInStep.None
+        }
+        compose.onNode(tab).performClick()
+    }
 
     // Another user's profile by name, as the person opens it on the Profile shown.
     private fun openProfile(name: String) {
