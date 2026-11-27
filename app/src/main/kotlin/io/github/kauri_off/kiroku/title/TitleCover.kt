@@ -8,7 +8,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.pager.HorizontalPager
-import androidx.compose.foundation.pager.PagerState
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -29,6 +28,7 @@ import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -42,12 +42,10 @@ import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
-import coil3.Image
 import coil3.compose.AsyncImage
 import coil3.compose.LocalPlatformContext
 import coil3.request.CachePolicy
 import coil3.request.ImageRequest
-import coil3.request.allowHardware
 import io.github.kauri_off.kiroku.R
 import io.github.kauri_off.kiroku.core.model.TitlePicture
 import io.github.kauri_off.kiroku.design.component.BarTitle
@@ -60,6 +58,8 @@ import io.github.kauri_off.kiroku.design.component.routeImageLoader
 import io.github.kauri_off.kiroku.design.theme.DialogSystemBarAppearance
 import io.github.kauri_off.kiroku.design.theme.Sizes
 import io.github.kauri_off.kiroku.design.theme.Spacing
+import io.github.kauri_off.kiroku.wiring.LoadedImageSource
+import kotlinx.coroutines.flow.first
 
 internal fun hasTitleCover(
     url: String?,
@@ -109,7 +109,7 @@ internal fun TitleCoverDialog(
                     picture.takeIf { candidates.isNotEmpty() && candidates.none(seen::contains) }?.also { seen.addAll(candidates) }
                 }
         }
-    CoverViewer(title, pages, rememberPagerState { pages.size }, onClose)
+    CoverViewer(title, pages, onClose = onClose)
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -117,20 +117,26 @@ internal fun TitleCoverDialog(
 internal fun CoverViewer(
     title: String,
     pictures: List<TitlePicture>,
-    pager: PagerState,
+    initialPage: Int = 0,
     onClose: () -> Unit,
 ) {
     val identity = remember { GalleryIdentity() }
-    val pages = remember(identity, pictures) { identity.identify(pictures) }
+    var displayed by remember { mutableStateOf(pictures) }
+    val pager = rememberPagerState(initialPage) { displayed.size }
+    LaunchedEffect(pager, pictures) {
+        snapshotFlow { pager.isScrollInProgress }.first { !it }
+        displayed = pictures
+    }
+    val pages = remember(identity, displayed) { identity.identify(displayed) }
     SideEffect { identity.update(pages) }
 
     val loader = routeImageLoader()
-    val loaded = remember(loader) { mutableStateMapOf<GalleryPage, Image>() }
+    val loaded = remember(loader) { mutableStateMapOf<GalleryPage, LoadedImageSource>() }
     val gallery = pages.size > 1
     val snackbars = remember { SnackbarHostState() }
 
-    fun selectedImage(): Image? {
-        if (pager.isScrollInProgress) return null
+    fun selectedImage(): LoadedImageSource? {
+        if (pager.isScrollInProgress || displayed != pictures) return null
         val page = pages.getOrNull(pager.settledPage) ?: return null
         if (pager.layoutInfo.visiblePagesInfo.none { it.index == pager.settledPage && it.key == page.key }) return null
         return loaded[page]
@@ -154,7 +160,7 @@ internal fun CoverViewer(
                             )
                         }
                     },
-                    actions = { key(loader) { CoverExportActions(title, snackbars, ::selectedImage) } },
+                    actions = { key(loader) { CoverExportActions(title, loader, snackbars, ::selectedImage) } },
                 )
             },
         ) { padding ->
@@ -231,7 +237,7 @@ private fun CoverImage(
     sources: List<String>,
     failure: Int,
     description: String,
-    onLoaded: @Composable (Image) -> Unit,
+    onLoaded: @Composable (LoadedImageSource) -> Unit,
 ) {
     var source by remember(sources) { mutableIntStateOf(0) }
     var retrying by remember(sources) { mutableStateOf(false) }
@@ -245,7 +251,7 @@ private fun CoverImage(
         )
     } else {
         key(sources, source) {
-            var loaded by remember { mutableStateOf<Image?>(null) }
+            var loaded by remember { mutableStateOf<LoadedImageSource?>(null) }
             val attempt = source
             val context = LocalPlatformContext.current
             val request =
@@ -253,7 +259,6 @@ private fun CoverImage(
                     ImageRequest
                         .Builder(context)
                         .data(url)
-                        .allowHardware(false)
                         .diskCachePolicy(if (retrying) CachePolicy.WRITE_ONLY else CachePolicy.ENABLED)
                         .build()
                 }
@@ -263,7 +268,7 @@ private fun CoverImage(
                 imageLoader = routeImageLoader(),
                 modifier = Modifier.widthIn(max = Sizes.contentMaxWidth).fillMaxSize(),
                 contentScale = ContentScale.Fit,
-                onSuccess = { loaded = it.result.image },
+                onSuccess = { loaded = LoadedImageSource(url, it.result.diskCacheKey) },
                 onError = { if (source == attempt) source = attempt + 1 },
             )
             val image = loaded

@@ -6,7 +6,7 @@ import android.content.ContentValues
 import android.content.Intent
 import android.content.pm.ProviderInfo
 import android.database.Cursor
-import android.graphics.BitmapFactory
+import android.graphics.Bitmap
 import android.graphics.Color
 import android.net.Uri
 import android.os.Build
@@ -14,10 +14,12 @@ import android.os.Bundle
 import android.os.ParcelFileDescriptor
 import android.provider.DocumentsContract
 import android.provider.MediaStore
+import androidx.activity.compose.setContent
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.SemanticsMatcher
@@ -27,6 +29,7 @@ import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.hasContentDescription
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.isDialog
+import androidx.compose.ui.test.isEnabled
 import androidx.compose.ui.test.isHeading
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
@@ -35,16 +38,17 @@ import androidx.compose.ui.test.performSemanticsAction
 import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.test.swipeLeft
 import androidx.compose.ui.test.swipeRight
+import androidx.compose.ui.test.swipeWithVelocity
 import androidx.core.view.WindowCompat
 import androidx.test.espresso.Espresso
 import coil3.ColorImage
 import coil3.ImageLoader
 import coil3.decode.DataSource
+import coil3.imageDecoderEnabled
 import coil3.intercept.Interceptor
 import coil3.request.CachePolicy
 import coil3.request.ErrorResult
 import coil3.request.ImageRequest
-import coil3.request.ImageResult
 import coil3.request.SuccessResult
 import io.github.kauri_off.kiroku.core.error.Outcome
 import io.github.kauri_off.kiroku.core.fixtures.FixtureAnime
@@ -52,6 +56,7 @@ import io.github.kauri_off.kiroku.core.link.Link
 import io.github.kauri_off.kiroku.core.model.AnimeId
 import io.github.kauri_off.kiroku.core.model.MangaId
 import io.github.kauri_off.kiroku.core.model.SessionOwner
+import io.github.kauri_off.kiroku.core.model.SignInId
 import io.github.kauri_off.kiroku.core.model.TitleLanguage
 import io.github.kauri_off.kiroku.core.model.TitlePicture
 import io.github.kauri_off.kiroku.core.model.owner
@@ -75,6 +80,7 @@ import io.github.kauri_off.kiroku.shell.linkedPage
 import io.github.kauri_off.kiroku.shell.openLink
 import io.github.kauri_off.kiroku.shell.rememberShellNavigator
 import io.github.kauri_off.kiroku.wiring.AppGraph
+import io.github.kauri_off.kiroku.wiring.LiveImages
 import io.github.kauri_off.kiroku.wiring.TestGraph
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
@@ -82,6 +88,13 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.map
+import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.OkHttpClient
+import okhttp3.Protocol
+import okhttp3.Response
+import okhttp3.ResponseBody.Companion.toResponseBody
+import okio.FileSystem
+import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
@@ -94,10 +107,15 @@ import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
 import org.robolectric.shadows.ShadowContentResolver
 import org.robolectric.shadows.ShadowDialog
+import java.io.ByteArrayOutputStream
 import java.io.File
 import java.io.FileNotFoundException
 import java.io.IOException
+import java.io.RandomAccessFile
 import java.util.concurrent.CopyOnWriteArrayList
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicBoolean
 
 @RunWith(RobolectricTestRunner::class)
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
@@ -245,107 +263,284 @@ class TitleCoverTest {
     }
 
     @Test
-    fun downloadAndShareUseTheSettledLoadedImageEvenAfterASwipeAndFallback() {
+    fun downloadAndShareUseExactCachedBytesForTheSettledPhotoAndFallbackWhenOffline() {
         val storage = registerStorage()
-        val releaseLarge = CompletableDeferred<Unit>()
-        val requested = CopyOnWriteArrayList<Any>()
-        val loader =
-            exportLoader { request ->
-                requested += request.data
-                when (request.data) {
+        val cover = jpeg(Color.RED)
+        val extra = jpeg(Color.GREEN)
+        val releaseLarge = CountDownLatch(1)
+        val urls =
+            CoverResponses { url ->
+                when (url) {
+                    LARGE -> cover
                     EXTRA_LARGE -> {
-                        releaseLarge.await()
-                        ErrorResult(null, request, IOException())
+                        check(releaseLarge.await(5, TimeUnit.SECONDS))
+                        null
                     }
-                    EXTRA -> coverResult(request, Color.GREEN)
-                    else -> coverResult(request, Color.RED)
+                    EXTRA -> extra
+                    else -> error(url)
                 }
             }
-        show(loader) { TitleCoverDialog("Sample", REGULAR, LARGE, listOf(TitlePicture(EXTRA, EXTRA_LARGE))) {} }
+        show(urls.loader) { TitleCoverDialog("Sample", REGULAR, LARGE, listOf(TitlePicture(EXTRA, EXTRA_LARGE))) {} }
         waitForCover("Sample")
-        saveAndShare(Color.RED, storage)
+        urls.online = false
+        saveAndShare(cover, storage)
 
+        urls.online = true
         compose.onNodeWithContentDescription("Cover of Sample").performTouchInput { swipeLeft() }
         compose.onNodeWithText("2\u00A0/\u00A02").assertIsDisplayed()
         compose.onNodeWithContentDescription("Download image").assertIsNotEnabled()
         compose.onNodeWithContentDescription("Share image").assertIsNotEnabled()
-        releaseLarge.complete(Unit)
-        val extra = hasContentDescription("Image\u00A02\u00A0of\u00A02\u00A0for Sample")
-        compose.waitUntil { compose.onAllNodes(extra).fetchSemanticsNodes().isNotEmpty() }
-        saveAndShare(Color.GREEN, storage)
-        assertEquals(listOf(LARGE, EXTRA_LARGE, EXTRA), requested.toList())
+        releaseLarge.countDown()
+        waitForPhoto(2, 2)
+        urls.online = false
+        saveAndShare(extra, storage)
+        assertEquals(listOf(LARGE, EXTRA_LARGE, EXTRA), urls.requested.toList())
     }
 
     @Test
-    fun singleCoverShowsAFailedSaveAndCanBeSavedAgain() {
+    fun aFastSwipeKeepsItsDestinationWhenPicturesReorderDuringTheSnap() {
         val storage = registerStorage()
-        storage.rejectPublish = true
-        show { TitleCoverDialog("Sample", REGULAR, LARGE) {} }
+        val extra = jpeg(Color.GREEN)
+        val urls = CoverResponses { url -> if (url == EXTRA) extra else jpeg(Color.RED) }
+        val pictures = mutableStateOf(listOf(TitlePicture(EXTRA, null), TitlePicture(LAST, null)))
+        show(urls.loader) { TitleCoverDialog("Sample", REGULAR, LARGE, pictures.value) {} }
         waitForCover("Sample")
+        compose.mainClock.autoAdvance = false
+        try {
+            compose.onNodeWithContentDescription("Cover of Sample").performTouchInput {
+                swipeWithVelocity(
+                    Offset(width * 0.8f, centerY),
+                    Offset(width * 0.56f, centerY),
+                    endVelocity = 4000f,
+                    durationMillis = 64L,
+                )
+            }
+            compose.mainClock.advanceTimeByFrame()
+            compose.onNodeWithText("1\u00A0/\u00A03").assertIsDisplayed()
+            compose.onNodeWithContentDescription("Share image").assertIsNotEnabled()
+            compose.runOnUiThread { pictures.value = pictures.value.reversed() }
+            compose.mainClock.advanceTimeByFrame()
+            compose.onNodeWithText("1\u00A0/\u00A03").assertIsDisplayed()
+        } finally {
+            compose.mainClock.autoAdvance = true
+        }
+        waitForPhoto(3, 3)
+        saveAndShare(extra, storage)
+    }
+
+    @Test
+    fun aMissingCacheEntryRefetchesTheDisplayedSourceAndSaveFailureRollsBack() {
+        val storage = registerStorage()
+        val cover = jpeg(Color.RED)
+        val urls = CoverResponses { cover }
+        storage.rejectPublish = true
+        show(urls.loader) { TitleCoverDialog("Sample", REGULAR, LARGE) {} }
+        waitForCover("Sample")
+        assertTrue(checkNotNull(urls.loader.diskCache).remove(LARGE))
         compose.onNodeWithContentDescription("Download image").performClick()
         waitForMessage("Could not save the image")
         assertEquals(1, storage.deletions)
         assertTrue(!storage.file.exists())
         storage.rejectPublish = false
-        saveAndShare(RemoteImages.BLOCK, storage)
+        saveAndShare(cover, storage)
+        assertEquals(listOf(LARGE, LARGE, LARGE, LARGE), urls.requested.toList())
     }
 
     @Test
-    fun failedShareShowsFeedbackAndReenablesTheActions() {
-        val path = File(compose.activity.cacheDir, "cover-shares")
-        path.writeText("Unavailable")
-        show { TitleCoverDialog("Sample", REGULAR, LARGE) {} }
+    fun retiringTheLoaderCancelsAnExportWaitingForItsSource() {
+        val storage = registerStorage()
+        val cover = jpeg(Color.RED)
+        val first = AtomicBoolean(true)
+        val release = CountDownLatch(1)
+        val urls =
+            CoverResponses {
+                if (!first.getAndSet(false)) check(release.await(5, TimeUnit.SECONDS))
+                cover
+            }
+        show(urls.loader) { TitleCoverDialog("Sample", REGULAR, LARGE) {} }
+        waitForCover("Sample")
+        assertTrue(checkNotNull(urls.loader.diskCache).remove(LARGE))
+        try {
+            compose.onNodeWithContentDescription("Download image").performClick()
+            compose.waitUntil(5000) { urls.requested.size == 2 }
+            urls.retire()
+        } finally {
+            release.countDown()
+        }
+        waitForDownloadReady()
+        assertNull(storage.name)
+    }
+
+    @Test
+    fun shareRespectsTheRemainingByteBudgetWithoutRemovingRecentFiles() {
+        val cover = jpeg(Color.BLUE)
+        val urls = CoverResponses { cover }
+        val directory = File(compose.activity.cacheDir, "cover-shares").apply { mkdirs() }
+        val recent = File(directory, "recent.jpg")
+        RandomAccessFile(recent, "rw").use { it.setLength(64L * 1024 * 1024 - 1) }
+        show(urls.loader) { TitleCoverDialog("Sample", REGULAR, LARGE) {} }
         waitForCover("Sample")
         val share = compose.onNodeWithContentDescription("Share image")
         share.performClick()
         waitForMessage("Could not share the image")
         share.assertIsEnabled()
+        assertEquals(listOf(recent), checkNotNull(directory.listFiles()).toList())
         assertNull(shadowOf(compose.activity).nextStartedActivity)
+        assertTrue(recent.setLastModified(1L))
+        assertShare(cover)
+        assertTrue(!recent.exists())
     }
 
     @Test
     @Config(sdk = [28])
-    fun legacyDownloadUsesTheChosenFolderAndCreatesNothingWhenCancelled() {
+    fun legacyDownloadRestoresTheFolderResultAcrossActivityRecreation() {
         val storage = registerStorage(authority = "test.documents")
-        show { TitleCoverDialog("Sample", REGULAR, LARGE) {} }
+        val cover = jpeg(Color.RED)
+        val urls = CoverResponses { cover }
+        attachCover(urls.loader)
         waitForCover("Sample")
         val download = compose.onNodeWithContentDescription("Download image")
         val activity = shadowOf(compose.activity)
         download.performClick()
-        val cancelled = activity.nextStartedActivityForResult.intent
-        assertEquals(Intent.ACTION_OPEN_DOCUMENT_TREE, cancelled.action)
-        compose.runOnIdle { activity.receiveResult(cancelled, Activity.RESULT_CANCELED, null) }
+        val cancelled = activity.nextStartedActivityForResult
+        assertEquals(Intent.ACTION_OPEN_DOCUMENT_TREE, cancelled.intent.action)
+        deliverFolder(cancelled.requestCode, Activity.RESULT_CANCELED, null)
         download.assertIsEnabled()
         assertNull(storage.name)
 
         download.performClick()
-        val picker = activity.nextStartedActivityForResult.intent
-        val tree = DocumentsContract.buildTreeDocumentUri("test.documents", "Pictures")
-        compose.runOnIdle { activity.receiveResult(picker, Activity.RESULT_OK, Intent().setData(tree)) }
+        val picker = activity.nextStartedActivityForResult
+        assertNull(storage.name)
+        compose.activityRule.scenario.recreate()
+        attachCover(urls.loader)
+        waitForCover("Sample")
+        download.assertIsNotEnabled()
+        deliverFolder(picker.requestCode)
         waitForMessage("Image saved")
-        assertEquals("image/png", storage.mime)
-        assertTrue(checkNotNull(storage.name).endsWith(".png"))
-        assertEquals(RemoteImages.BLOCK, BitmapFactory.decodeFile(storage.file.path).getPixel(0, 0))
+        assertSavedJpeg(cover, storage)
+        assertEquals(listOf(LARGE), urls.requested.toList())
+    }
+
+    @Test
+    @Config(sdk = [28])
+    fun aRestoredFolderResultCannotSaveThroughARetiredLoader() {
+        val storage = registerStorage(authority = "test.documents")
+        val cover = jpeg(Color.RED)
+        val urls = CoverResponses { cover }
+        attachCover(urls.loader)
+        waitForCover("Sample")
+        compose.onNodeWithContentDescription("Download image").performClick()
+        val picker = shadowOf(compose.activity).nextStartedActivityForResult
+        compose.activityRule.scenario.recreate()
+        attachCover(urls.loader)
+        waitForCover("Sample")
+        urls.retire()
+        deliverFolder(picker.requestCode)
+        waitForDownloadReady()
+        assertNull(storage.name)
+        assertEquals(listOf(LARGE), urls.requested.toList())
+    }
+
+    @Test
+    @Config(sdk = [28])
+    fun aFailedSourceCreatesNoLegacyOutput() {
+        val storage = registerStorage(authority = "test.documents")
+        val cover = jpeg(Color.RED)
+        val urls = CoverResponses { cover }
+        show(urls.loader) { TitleCoverDialog("Sample", REGULAR, LARGE) {} }
+        waitForCover("Sample")
+        assertTrue(checkNotNull(urls.loader.diskCache).remove(LARGE))
+        urls.online = false
+        compose.onNodeWithContentDescription("Download image").performClick()
+        val picker = shadowOf(compose.activity).nextStartedActivityForResult
+        deliverFolder(picker.requestCode)
+        waitForMessage("Could not save the image")
+        assertNull(storage.name)
+        assertTrue(!storage.file.exists())
+    }
+
+    @Test
+    @Config(sdk = [28])
+    fun failedLegacySaveWarnsWhenThePartialFileCouldNotBeRemoved() {
+        val storage = registerStorage(authority = "test.documents")
+        storage.rejectWrite = true
+        storage.rejectDelete = true
+        val urls = CoverResponses { jpeg(Color.RED) }
+        show(urls.loader) { TitleCoverDialog("Sample", REGULAR, LARGE) {} }
+        waitForCover("Sample")
+        compose.onNodeWithContentDescription("Download image").performClick()
+        val picker = shadowOf(compose.activity).nextStartedActivityForResult
+        deliverFolder(picker.requestCode)
+        waitForMessage("Could not finish saving the image. Check the destination for a partial file")
+        assertEquals(1, storage.deletions)
+        assertTrue(storage.file.exists())
+    }
+
+    private fun attachCover(loader: ImageLoader) {
+        compose.activityRule.scenario.onActivity { activity ->
+            activity.setContent {
+                KirokuTheme(dark = false, dynamicColor = false) {
+                    CompositionLocalProvider(LocalRouteImages provides loader) {
+                        TitleCoverDialog("Sample", REGULAR, LARGE) {}
+                    }
+                }
+            }
+        }
+    }
+
+    @Suppress("DEPRECATION")
+    private fun deliverFolder(
+        request: Int,
+        result: Int = Activity.RESULT_OK,
+        data: Intent? = Intent().setData(DocumentsContract.buildTreeDocumentUri("test.documents", "Pictures")),
+    ) {
+        compose.runOnIdle { shadowOf(compose.activity).callOnActivityResult(request, result, data) }
+    }
+
+    private fun waitForDownloadReady() {
+        val download = hasContentDescription("Download image") and isEnabled()
+        compose.waitUntil(5000) { compose.onAllNodes(download).fetchSemanticsNodes().isNotEmpty() }
+    }
+
+    private fun waitForPhoto(
+        page: Int,
+        total: Int,
+    ) {
+        val description = hasContentDescription("Image\u00A0$page\u00A0of\u00A0$total\u00A0for Sample")
+        compose.waitUntil(5000) { compose.onAllNodes(description).fetchSemanticsNodes().isNotEmpty() }
     }
 
     private fun saveAndShare(
-        color: Int,
+        bytes: ByteArray,
         storage: CoverStorage,
     ) {
         val savedBefore = storage.saved
-        compose.onNodeWithContentDescription("Download image").performClick()
-        compose.waitUntil { storage.saved > savedBefore }
+        val download = compose.onNodeWithContentDescription("Download image")
+        download.performClick()
+        compose.waitUntil(5000) { storage.saved > savedBefore }
         waitForMessage("Image saved")
-        assertEquals("image/png", storage.mime)
-        assertTrue(checkNotNull(storage.name).endsWith(".png"))
+        assertSavedJpeg(bytes, storage)
         assertEquals("Pictures/Kiroku", storage.path)
         assertEquals(0, storage.pending)
-        assertEquals(color, BitmapFactory.decodeFile(storage.file.path).getPixel(0, 0))
+        waitForDownloadReady()
+        assertShare(bytes)
+    }
+
+    private fun assertSavedJpeg(
+        bytes: ByteArray,
+        storage: CoverStorage,
+    ) {
+        assertEquals("image/jpeg", storage.mime)
+        assertTrue(checkNotNull(storage.name).endsWith(".jpg") || checkNotNull(storage.name).endsWith(".jpeg"))
+        assertArrayEquals(bytes, storage.file.readBytes())
+    }
+
+    private fun assertShare(bytes: ByteArray) {
         val authority = "${compose.activity.packageName}.cover-shares"
         checkNotNull(ShadowContentResolver.getProvider(Uri.parse("content://$authority")))
         compose.onNodeWithContentDescription("Share image").performClick()
         val activity = shadowOf(compose.activity)
-        compose.waitUntil { compose.runOnIdle { activity.peekNextStartedActivity() != null } }
+        compose.waitUntil(5000) { compose.runOnIdle { activity.peekNextStartedActivity() != null } }
         val chooser = checkNotNull(activity.nextStartedActivity)
         assertEquals(Intent.ACTION_CHOOSER, chooser.action)
         @Suppress("DEPRECATION")
@@ -354,8 +549,9 @@ class TitleCoverTest {
         @Suppress("DEPRECATION")
         val uri = checkNotNull(send.getParcelableExtra<Uri>(Intent.EXTRA_STREAM))
         assertEquals(Intent.ACTION_SEND, send.action)
-        assertEquals("image/png", send.type)
+        assertEquals("image/jpeg", send.type)
         assertEquals("content", uri.scheme)
+        assertEquals("image/jpeg", compose.activity.contentResolver.getType(uri))
         assertEquals(uri, checkNotNull(send.clipData).getItemAt(0).uri)
         assertEquals(uri, checkNotNull(chooser.clipData).getItemAt(0).uri)
         assertTrue(send.flags and Intent.FLAG_GRANT_READ_URI_PERMISSION != 0)
@@ -363,12 +559,59 @@ class TitleCoverTest {
         assertTrue(chooser.flags and Intent.FLAG_GRANT_READ_URI_PERMISSION != 0)
         assertNull(send.getStringExtra(Intent.EXTRA_TEXT))
         checkNotNull(compose.activity.contentResolver.openInputStream(uri)).use {
-            assertEquals(color, BitmapFactory.decodeStream(it).getPixel(0, 0))
+            assertArrayEquals(bytes, it.readBytes())
         }
     }
 
+    private fun jpeg(color: Int): ByteArray =
+        ByteArrayOutputStream().use { bytes ->
+            val bitmap = Bitmap.createBitmap(240, 360, Bitmap.Config.ARGB_8888)
+            bitmap.eraseColor(color)
+            check(bitmap.compress(Bitmap.CompressFormat.JPEG, 84, bytes))
+            bytes.toByteArray()
+        }
+
+    private inner class CoverResponses(
+        answer: (String) -> ByteArray?,
+    ) {
+        val requested = CopyOnWriteArrayList<String>()
+
+        @Volatile
+        var online = true
+
+        private val owner = SignInId("image-export-owner")
+        private val context = compose.activity.applicationContext
+        private val calls =
+            OkHttpClient
+                .Builder()
+                .addInterceptor { chain ->
+                    val request = chain.request()
+                    requested += request.url.toString()
+                    if (!online) throw IOException("Offline fixture")
+                    val bytes = answer(request.url.toString())
+                    Response
+                        .Builder()
+                        .request(request)
+                        .protocol(Protocol.HTTP_1_1)
+                        .code(if (bytes != null) 200 else 404)
+                        .message("Fixture")
+                        .body((bytes ?: byteArrayOf()).toResponseBody("image/jpeg".toMediaType()))
+                        .build()
+                }.build()
+        private val images =
+            LiveImages(context, "test-cover", { File(context.cacheDir, "retired") }, calls, scope, FileSystem.SYSTEM) { it == owner }
+        val loader =
+            images
+                .loader(owner)
+                .newBuilder()
+                .imageDecoderEnabled(false)
+                .build()
+
+        fun retire() = images.retire(owner)
+    }
+
     private fun waitForMessage(text: String) {
-        compose.waitUntil { compose.onAllNodes(hasText(text)).fetchSemanticsNodes().isNotEmpty() }
+        compose.waitUntil(5000) { compose.onAllNodes(hasText(text)).fetchSemanticsNodes().isNotEmpty() }
     }
 
     private fun registerStorage(authority: String = "media"): CoverStorage {
@@ -379,12 +622,6 @@ class TitleCoverTest {
             ShadowContentResolver.registerProviderInternal(authority, it)
         }
     }
-
-    private fun exportLoader(load: suspend (ImageRequest) -> ImageResult) =
-        ImageLoader
-            .Builder(compose.activity)
-            .components { add(Interceptor { chain -> load(chain.request) }) }
-            .build()
 
     @Test
     fun theLargeImageLoadsFirstAndFallsBackToTheRegularImage() {
@@ -561,7 +798,7 @@ class TitleCoverTest {
 
     private fun waitForCover(title: String) {
         val description = hasContentDescription("Cover of $title")
-        compose.waitUntil { compose.onAllNodes(description).fetchSemanticsNodes().isNotEmpty() }
+        compose.waitUntil(5000) { compose.onAllNodes(description).fetchSemanticsNodes().isNotEmpty() }
         compose.onNode(description).assertIsDisplayed()
     }
 
@@ -603,6 +840,8 @@ private class CoverStorage(
     private val imageUri: Uri,
 ) : ContentProvider() {
     var rejectPublish = false
+    var rejectWrite = false
+    var rejectDelete = false
     var deletions = 0
     var name: String? = null
     var mime: String? = null
@@ -647,14 +886,14 @@ private class CoverStorage(
         selectionArgs: Array<out String>?,
     ): Int {
         deletions++
-        return if (file.delete()) 1 else 0
+        return if (!rejectDelete && file.delete()) 1 else 0
     }
 
     override fun openFile(
         uri: Uri,
         mode: String,
     ): ParcelFileDescriptor {
-        if (uri != imageUri) throw FileNotFoundException()
+        if (uri != imageUri || rejectWrite) throw FileNotFoundException()
         return ParcelFileDescriptor.open(
             file,
             ParcelFileDescriptor.MODE_CREATE or ParcelFileDescriptor.MODE_WRITE_ONLY or ParcelFileDescriptor.MODE_TRUNCATE,
@@ -666,10 +905,16 @@ private class CoverStorage(
         arg: String?,
         extras: Bundle?,
     ): Bundle {
+        if (method == "android:deleteDocument") {
+            deletions++
+            if (rejectDelete || !file.delete()) throw FileNotFoundException()
+            return Bundle()
+        }
         assertEquals("android:createDocument", method)
         val values = checkNotNull(extras)
         mime = values.getString("mime_type")
         name = values.getString("_display_name")
+        file.createNewFile()
         return Bundle().apply { putParcelable("uri", imageUri) }
     }
 

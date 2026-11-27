@@ -1,6 +1,5 @@
 package io.github.kauri_off.kiroku.title
 
-import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
@@ -164,7 +163,7 @@ internal val galleryPictures =
 private fun GalleryFrame(initialPage: Int) {
     val anime = FixtureAnime.exactToWatch
     val pages = listOf(TitlePicture(anime.posterUrl, anime.largePosterUrl)) + galleryPictures
-    CoverViewer(anime.titles.romaji, pages, rememberPagerState(initialPage) { pages.size }, onClose = {})
+    CoverViewer(anime.titles.romaji, pages, initialPage, onClose = {})
 }
 
 // The header with the row's picture in memory and the large one on its way, there at once, or arriving now.

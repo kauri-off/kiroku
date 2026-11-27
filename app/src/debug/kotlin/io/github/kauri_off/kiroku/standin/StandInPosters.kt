@@ -13,6 +13,9 @@ import coil3.intercept.Interceptor
 import coil3.request.ImageResult
 import coil3.request.SuccessResult
 import io.github.kauri_off.kiroku.core.fixtures.FixtureAnime
+import io.github.kauri_off.kiroku.wiring.encodedImageExport
+import java.io.ByteArrayOutputStream
+import java.io.IOException
 import kotlin.random.Random
 
 // Answers a fixture title's poster address with art drawn from its id; every other request goes on to the loader.
@@ -22,7 +25,12 @@ object StandInPosters : Interceptor {
 
     override suspend fun intercept(chain: Interceptor.Chain): ImageResult {
         val id = FixtureAnime.posterId(chain.request.data.toString()) ?: return chain.proceed()
-        return SuccessResult(draw(id).asImage(), chain.request, DataSource.MEMORY)
+        val art = draw(id)
+        val export = chain.request.extras[encodedImageExport] ?: return SuccessResult(art.asImage(), chain.request, DataSource.MEMORY)
+        val encoded = ByteArrayOutputStream()
+        if (!art.compress(Bitmap.CompressFormat.PNG, 100, encoded)) throw IOException()
+        encoded.toByteArray().inputStream().use { export.stage(it) }
+        return export.finish(chain.request)
     }
 
     // A sky in two hues, a disc and a ridge, all chosen by the id, so each title is told apart at a glance.

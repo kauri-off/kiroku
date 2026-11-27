@@ -60,6 +60,7 @@
     <string name="title_image_share">Share image</string>
     <string name="title_image_saved">Image saved</string>
     <string name="title_image_save_failed">Could not save the image</string>
+    <string name="title_image_save_incomplete">Could not finish saving the image. Check the destination for a partial file</string>
     <string name="title_image_share_failed">Could not share the image</string>
     <string name="title_gallery_position">%1$d\u00A0/\u00A0%2$d</string>
     <string name="title_gallery_image">Image\u00A0%1$d\u00A0of\u00A0%2$d\u00A0for %3$s</string>
