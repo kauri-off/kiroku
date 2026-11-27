@@ -14,6 +14,7 @@ import io.github.kauri_off.kiroku.list.ListFixtureStates
 import io.github.kauri_off.kiroku.list.ListScreen
 import io.github.kauri_off.kiroku.screenshots.ScreenshotRegistry
 import io.github.kauri_off.kiroku.screenshots.Transition
+import io.github.kauri_off.kiroku.screenshots.Variant
 import io.github.kauri_off.kiroku.screenshots.WindowSize
 import io.github.kauri_off.kiroku.screenshots.case
 import io.github.kauri_off.kiroku.screenshots.contentCase
@@ -34,7 +35,7 @@ class ShellScreenshots : ScreenshotRegistry() {
             case("snackbar") { Shell(ShellState(Destination.List), snackbar = true) },
             case("session-banner") { Shell(ShellState(Destination.List), sessionExpired = true) },
             case("wide", window = WindowSize(widthDp = 840, heightDp = 600)) { Shell(ShellState(Destination.List)) },
-            case("list") { Screens(remember { navigatorOf() }) },
+            case("list", additionalVariants = listOf(Variant.EnBlack)) { Screens(remember { navigatorOf() }) },
             case("title") { Screens(remember { navigatorOf(TITLE) }) },
             case("search") { Screens(remember { navigatorOf(selected = Destination.Search) }) },
         )

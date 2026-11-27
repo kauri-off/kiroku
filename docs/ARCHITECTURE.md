@@ -160,7 +160,7 @@ The session is **signed out**, **signed in** or **expired**, and every part of t
   whose sign-in cannot be read either means signed out. A file that cannot be read at all signs nobody out: the
   session has no value until it is read.
 - **S9.** Signing out removes the tokens and everything stored about the user. Signing out closes every screen and
-  leaves the app where a start without a session does; a session that expires does not (S6).
+  returns to the List; a session that expires does not (S6).
 
 ### 3.3 The client id
 
@@ -375,8 +375,8 @@ one emulator run shows a notification posted in Doze and the alarm restored afte
 - Back from the root of Search or Profile goes to List; Back from the root of List leaves the app.
 - A notification or a title's link builds the stack List → Title, and a profile's link List, then Profile → that
   profile, so Back never leaves the app unexpectedly.
-- The app opens on List, tab Watching. Signed out, the List offers sign-in, and browsing without an account goes
-  to Search.
+- The startup tab applies on a fresh launch without an incoming link or restored navigation. Signed out, the List
+  offers sign-in, and browsing without an account goes to Search.
 - Predictive back is on.
 - Deep links, from Android 12 once the user has allowed the app's links in the system's settings: anime and manga
   title pages and user profiles on `[www.]myanimelist.net`; and the OAuth redirect.

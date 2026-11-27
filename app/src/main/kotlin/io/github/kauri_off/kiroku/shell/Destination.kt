@@ -4,6 +4,7 @@ import androidx.annotation.DrawableRes
 import androidx.annotation.StringRes
 import androidx.navigation3.runtime.NavKey
 import io.github.kauri_off.kiroku.R
+import io.github.kauri_off.kiroku.core.model.StartupTab
 import kotlinx.serialization.Serializable
 
 // The top-level destinations of 1.0, in the order of the bar and the rail.
@@ -17,6 +18,14 @@ enum class Destination(
     Search(R.string.shell_search, R.drawable.ic_search, R.drawable.ic_search, SearchRoot),
     Profile(R.string.shell_profile, R.drawable.ic_person_outline, R.drawable.ic_person, ProfileRoot),
 }
+
+internal val StartupTab.destination: Destination
+    get() =
+        when (this) {
+            StartupTab.List -> Destination.List
+            StartupTab.Search -> Destination.Search
+            StartupTab.Profile -> Destination.Profile
+        }
 
 @Serializable
 data object ListRoot : NavKey

@@ -22,7 +22,8 @@ class RegistriesTest {
         assertTrue(Variant.RuLarge !in standard)
         assertEquals((standard + Variant.RuLarge).toSet(), Variant.forCase(isContent = false, largeText = true).toSet())
         assertTrue(Variant.EnAlt !in Variant.forCase(isContent = false, largeText = true))
-        assertEquals(Variant.entries.toList(), Variant.forCase(isContent = true))
+        assertEquals(Variant.entries.toList() - Variant.EnBlack, Variant.forCase(isContent = true))
+        assertTrue(Variant.EnBlack !in standard)
         assertTrue(case("x", largeText = true) {}.largeText)
     }
 

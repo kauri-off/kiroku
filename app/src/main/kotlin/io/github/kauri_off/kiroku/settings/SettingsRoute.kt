@@ -32,11 +32,12 @@ fun SettingsRoute(
 ) {
     val language by remember(graph) { graph.titleLanguage }.collectAsScreenState(initial = null)
     val adult by remember(graph) { graph.showAdultInSearch }.collectAsScreenState(initial = null)
+    val display by remember(graph) { graph.preferences.observeDisplayPreferences() }.collectAsScreenState(initial = null)
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val appLanguageAvailable = Build.VERSION.SDK_INT >= 33
     SettingsScreen(
-        SettingsState(language, adult, appLanguageAvailable),
+        SettingsState(language, adult, appLanguageAvailable, display),
         onEvent = { event ->
             when (event) {
                 SettingsEvent.Back -> onBack()
@@ -50,6 +51,14 @@ fun SettingsRoute(
                         } catch (_: ActivityNotFoundException) {
                             context.startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, packageUri))
                         }
+                    }
+                is SettingsEvent.SetTheme ->
+                    scope.launch {
+                        save(messages) { graph.preferences.setTheme(event.mode) }
+                    }
+                is SettingsEvent.SetStartupTab ->
+                    scope.launch {
+                        save(messages) { graph.preferences.setStartupTab(event.tab) }
                     }
                 is SettingsEvent.SetTitleLanguage ->
                     scope.launch {

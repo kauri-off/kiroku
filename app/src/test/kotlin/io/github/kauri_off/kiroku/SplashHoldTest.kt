@@ -81,6 +81,18 @@ class SplashHoldTest {
     }
 
     @Test
+    fun `startup and the first screen can hand off a hold before the first draw`() {
+        val view = view()
+        val splash = SplashHold(view, atMost = 1.hours)
+        splash.hold()
+        splash.release()
+        splash.hold()
+        assertTrue(view.viewTreeObserver.dispatchOnPreDraw())
+        splash.release()
+        assertFalse(view.viewTreeObserver.dispatchOnPreDraw())
+    }
+
+    @Test
     fun `once the window has drawn nothing holds it again`() {
         val view = view()
         val splash = SplashHold(view, atMost = 1.hours)

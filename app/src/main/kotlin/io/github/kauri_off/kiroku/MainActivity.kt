@@ -5,13 +5,21 @@ import android.os.Bundle
 import android.view.View
 import androidx.activity.ComponentActivity
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import io.github.kauri_off.kiroku.core.link.Link
+import io.github.kauri_off.kiroku.core.model.StartupTab
 import io.github.kauri_off.kiroku.design.theme.setKirokuContent
 import io.github.kauri_off.kiroku.link.appLinks
 import io.github.kauri_off.kiroku.notify.tappedTitle
 import io.github.kauri_off.kiroku.notifysettings.AskForNotifications
 import io.github.kauri_off.kiroku.shell.ActivityNavigation
 import io.github.kauri_off.kiroku.shell.AppRoute
+import io.github.kauri_off.kiroku.shell.Destination
+import io.github.kauri_off.kiroku.shell.destination
 import io.github.kauri_off.kiroku.shell.discardUnreadableComposeState
 import io.github.kauri_off.kiroku.shell.linkedPage
 import io.github.kauri_off.kiroku.shell.rememberShellNavigator
@@ -34,10 +42,25 @@ class MainActivity : ComponentActivity() {
         // A start by a link or a notification opens on its page, so the List never shows first; a restored window keeps its stacks.
         val start = if (savedInstanceState == null) links?.take() else null
         val navigation = ActivityNavigation(savedStateRegistry)
-        setKirokuContent {
+        val graph = appGraph
+        setKirokuContent(graph.preferences.observeDisplayPreferences()) { display ->
             CompositionLocalProvider(LocalSplashHold provides hold) {
-                AppRoute(appGraph, rememberShellNavigator(start?.let { linkedPage(it.link) }, navigation), links = links)
-                AskForNotifications(appGraph.session)
+                var launchLink by remember { mutableStateOf(start) }
+                var startup by remember { mutableStateOf<StartupTab?>(null) }
+                if (navigation.restored == null && launchLink == null && startup == null) {
+                    KeepSplash()
+                    val pending = links?.link?.collectAsScreenState()?.value
+                    val tab = display?.startupTab
+                    LaunchedEffect(tab, pending) {
+                        launchLink = links?.take()
+                        if (launchLink == null) startup = tab
+                    }
+                } else {
+                    val destination = startup?.destination ?: Destination.List
+                    val navigator = rememberShellNavigator(launchLink?.let { linkedPage(it.link) }, navigation, destination)
+                    AppRoute(graph, navigator, links = links)
+                    AskForNotifications(graph.session)
+                }
             }
         }
     }

@@ -20,9 +20,12 @@ import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.LinearWavyProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
@@ -115,12 +118,41 @@ class ScreenshotHarnessTest {
                     }
                 }.use { }
             read[variant] = roles(checkNotNull(scheme))
-            assertEquals(variant.id, roles(variant.seed.scheme(variant.dark)), read[variant])
+            val base = variant.seed.scheme(variant.dark)
+            val expected =
+                if (variant == Variant.EnBlack) {
+                    base.copy(
+                        background = Color.Black,
+                        surface = Color.Black,
+                        surfaceDim = Color.Black,
+                        surfaceContainerLowest = Color.Black,
+                    )
+                } else {
+                    base
+                }
+            assertEquals(variant.id, roles(expected), read[variant])
             assertEquals(variant.id, checkNotNull(appTheme), theme)
         }
         assertEquals(Seed.Amber, Variant.EnAlt.seed)
         assertTrue(Variant.entries.filter { it != Variant.EnAlt }.all { it.seed == Seed.Teal })
         assertEquals(3, listOf(Variant.EnLight, Variant.EnDark, Variant.EnAlt).map { read[it] }.distinct().size)
+    }
+
+    @Test
+    fun pureBlackKeepsReadableTextAndColoredAccentsOnBaseAndLayeredSurfaces() {
+        Shot
+            .launch(Variant.EnBlack) {
+                val colors = MaterialTheme.colorScheme
+                SideEffect {
+                    for (surface in listOf(colors.surface, colors.surfaceContainer, colors.surfaceContainerHigh)) {
+                        for (text in listOf(colors.onSurface, colors.onSurfaceVariant, colors.primary)) {
+                            assertTrue((text.luminance() + 0.05f) / (surface.luminance() + 0.05f) >= 4.5f)
+                        }
+                    }
+                    assertTrue(colors.surfaceContainer.luminance() > colors.surface.luminance())
+                    assertTrue(colors.surfaceContainerHigh.luminance() > colors.surfaceContainer.luminance())
+                }
+            }.use { }
     }
 
     private fun roles(scheme: ColorScheme): Map<String, String> =

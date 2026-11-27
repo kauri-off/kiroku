@@ -10,4 +10,10 @@
     <string name="settings_japanese">Японский</string>
     <string name="settings_adult_in_search">Показывать контент для взрослых в поиске</string>
     <string name="settings_cancel">Отмена</string>
+    <string name="settings_theme">Тема</string>
+    <string name="settings_theme_system">Системная</string>
+    <string name="settings_theme_light">Светлая</string>
+    <string name="settings_theme_dark">Тёмная</string>
+    <string name="settings_theme_pure_black">Чёрная</string>
+    <string name="settings_startup_tab">Вкладка при запуске</string>
 </resources>

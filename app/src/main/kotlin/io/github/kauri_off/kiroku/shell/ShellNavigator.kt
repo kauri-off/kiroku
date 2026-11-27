@@ -98,7 +98,6 @@ class ShellNavigator internal constructor(
         stacks.getValue(destination).popTo(1)
     }
 
-    // Where a start without a session leaves the app: the List shown, every stack at its root, no screen's state kept.
     fun restart() {
         way = Way.Across
         selected.value = Destination.List
@@ -153,6 +152,7 @@ fun rememberShellNavigator(start: OpenedPage? = null): ShellNavigator = remember
 internal fun rememberShellNavigator(
     start: OpenedPage?,
     activityNavigation: ActivityNavigation?,
+    startup: Destination = Destination.List,
 ): ShellNavigator {
     fun initial(destination: Destination) =
         NavBackStack(destination.root, *listOfNotNull(start?.takeIf { it.destination == destination }?.key).toTypedArray())
@@ -163,7 +163,7 @@ internal fun rememberShellNavigator(
     val search = rememberSaveable(saver = stackSaver(SearchRoot, saveWithCompose, restored)) { initial(Destination.Search) }
     val profile = rememberSaveable(saver = stackSaver(ProfileRoot, saveWithCompose, restored)) { initial(Destination.Profile) }
     val selected =
-        rememberSaveable(saver = destinationSaver(saveWithCompose)) { mutableStateOf(start?.destination ?: Destination.List) }
+        rememberSaveable(saver = destinationSaver(saveWithCompose)) { mutableStateOf(start?.destination ?: startup) }
     val restarts = rememberSaveable(saver = restartSaver(saveWithCompose)) { mutableIntStateOf(0) }
     val mode = rememberSaveable(saver = listModeSaver(saveWithCompose)) { mutableStateOf(ListMode.Anime) }
     val navigator =

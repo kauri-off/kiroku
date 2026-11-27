@@ -27,10 +27,13 @@ import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.window.DialogWindowProvider
 import androidx.core.view.WindowCompat
+import io.github.kauri_off.kiroku.collectAsScreenState
+import io.github.kauri_off.kiroku.core.model.DisplayPreferences
+import io.github.kauri_off.kiroku.core.model.ThemeMode
+import kotlinx.coroutines.flow.Flow
+import androidx.compose.ui.graphics.Color as ComposeColor
 
 private val LocalDarkTheme = staticCompositionLocalOf { false }
-
-enum class ThemeMode { System, Light, Dark }
 
 data class ThemeSettings(
     val mode: ThemeMode = ThemeMode.System,
@@ -42,7 +45,7 @@ fun ThemeSettings.isDark(): Boolean =
     when (mode) {
         ThemeMode.System -> isSystemInDarkTheme()
         ThemeMode.Light -> false
-        ThemeMode.Dark -> true
+        ThemeMode.Dark, ThemeMode.PureBlack -> true
     }
 
 @Composable
@@ -50,12 +53,25 @@ fun kirokuColorScheme(
     dark: Boolean,
     dynamicColor: Boolean,
     seed: Seed = Seed.Teal,
+    pureBlack: Boolean = false,
 ): ColorScheme {
-    if (dynamicColor && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-        val context = LocalContext.current
-        return if (dark) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
+    val scheme =
+        if (dynamicColor && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            val context = LocalContext.current
+            if (dark) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
+        } else {
+            seed.scheme(dark)
+        }
+    return if (pureBlack) {
+        scheme.copy(
+            background = ComposeColor.Black,
+            surface = ComposeColor.Black,
+            surfaceDim = ComposeColor.Black,
+            surfaceContainerLowest = ComposeColor.Black,
+        )
+    } else {
+        scheme
     }
-    return seed.scheme(dark)
 }
 
 // The Material 3 Expressive theme with its own typography, shapes and motion scheme; only the colours are Kiroku's.
@@ -64,11 +80,12 @@ fun KirokuTheme(
     dark: Boolean,
     dynamicColor: Boolean,
     seed: Seed = Seed.Teal,
+    pureBlack: Boolean = false,
     content: @Composable () -> Unit,
 ) {
     CompositionLocalProvider(LocalDarkTheme provides dark) {
         MaterialExpressiveTheme(
-            colorScheme = kirokuColorScheme(dark, dynamicColor, seed),
+            colorScheme = kirokuColorScheme(dark, dynamicColor, seed, pureBlack),
             typography = ExpressiveTypography,
             content = content,
         )
@@ -86,22 +103,40 @@ fun ComponentActivity.setKirokuContent(
     content: @Composable () -> Unit,
 ) {
     enableEdgeToEdge()
+    setContent { KirokuWindow(settings, seed, content) }
+}
+
+internal fun ComponentActivity.setKirokuContent(
+    preferences: Flow<DisplayPreferences>,
+    content: @Composable (DisplayPreferences?) -> Unit,
+) {
+    enableEdgeToEdge()
     setContent {
-        val dark = settings.isDark()
-        KirokuTheme(dark, settings.dynamicColor, seed) {
-            val scrim =
-                MaterialTheme.colorScheme.surfaceContainer
-                    .copy(alpha = NAVIGATION_SCRIM_ALPHA)
-                    .toArgb()
-            DisposableEffect(dark, scrim) {
-                enableEdgeToEdge(
-                    statusBarStyle = SystemBarStyle.auto(Color.TRANSPARENT, Color.TRANSPARENT) { dark },
-                    navigationBarStyle = SystemBarStyle.auto(scrim, scrim) { dark },
-                )
-                onDispose {}
-            }
-            Surface(modifier = Modifier.fillMaxSize(), content = content)
+        val display = preferences.collectAsScreenState(initial = null).value
+        KirokuWindow(ThemeSettings(mode = display?.theme ?: ThemeMode.System), Seed.Teal) { content(display) }
+    }
+}
+
+@Composable
+private fun ComponentActivity.KirokuWindow(
+    settings: ThemeSettings,
+    seed: Seed,
+    content: @Composable () -> Unit,
+) {
+    val dark = settings.isDark()
+    KirokuTheme(dark, settings.dynamicColor, seed, pureBlack = settings.mode == ThemeMode.PureBlack) {
+        val scrim =
+            MaterialTheme.colorScheme.surfaceContainer
+                .copy(alpha = NAVIGATION_SCRIM_ALPHA)
+                .toArgb()
+        DisposableEffect(dark, scrim) {
+            enableEdgeToEdge(
+                statusBarStyle = SystemBarStyle.auto(Color.TRANSPARENT, Color.TRANSPARENT) { dark },
+                navigationBarStyle = SystemBarStyle.auto(scrim, scrim) { dark },
+            )
+            onDispose {}
         }
+        Surface(modifier = Modifier.fillMaxSize(), content = content)
     }
 }
 

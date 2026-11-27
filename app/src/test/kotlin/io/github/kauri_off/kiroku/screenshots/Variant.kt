@@ -1,5 +1,6 @@
 package io.github.kauri_off.kiroku.screenshots
 
+import io.github.kauri_off.kiroku.core.model.ThemeMode
 import io.github.kauri_off.kiroku.design.theme.Seed
 import io.github.kauri_off.kiroku.design.theme.ThemeSettings
 
@@ -12,6 +13,7 @@ enum class Variant(
     val fontScale: Float,
     val altSeed: Boolean = false,
     val contentOnly: Boolean = false,
+    val mode: ThemeMode = ThemeMode.System,
 ) {
     EnLight("en-light", "en", dark = false, widthDp = 411, heightDp = 891, fontScale = 1.0f),
     EnDark("en-dark", "en", dark = true, widthDp = 411, heightDp = 891, fontScale = 1.0f),
@@ -20,10 +22,11 @@ enum class Variant(
     RuStress("ru-stress", "ru", dark = false, widthDp = 360, heightDp = 640, fontScale = 1.3f),
     RuLarge("ru-large", "ru", dark = false, widthDp = 411, heightDp = 891, fontScale = 2.0f, contentOnly = true),
     EnAlt("en-alt", "en", dark = false, widthDp = 411, heightDp = 891, fontScale = 1.0f, altSeed = true, contentOnly = true),
+    EnBlack("en-black", "en", dark = true, widthDp = 411, heightDp = 891, fontScale = 1.0f, mode = ThemeMode.PureBlack),
     ;
 
     // The app's own theme settings with dynamic colour off; light or dark comes from the device, as in the app.
-    val themeSettings: ThemeSettings get() = ThemeSettings(dynamicColor = false)
+    val themeSettings: ThemeSettings get() = ThemeSettings(mode, dynamicColor = false)
 
     val seed: Seed get() = if (altSeed) Seed.Amber else Seed.Teal
 
@@ -36,6 +39,6 @@ enum class Variant(
         fun forCase(
             isContent: Boolean,
             largeText: Boolean = isContent,
-        ): List<Variant> = entries.filter { isContent || !it.contentOnly || (largeText && it == RuLarge) }
+        ): List<Variant> = entries.filter { it.mode == ThemeMode.System && (isContent || !it.contentOnly || (largeText && it == RuLarge)) }
     }
 }

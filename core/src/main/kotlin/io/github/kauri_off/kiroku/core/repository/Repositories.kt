@@ -8,6 +8,7 @@ import io.github.kauri_off.kiroku.core.list.TabSort
 import io.github.kauri_off.kiroku.core.model.Anime
 import io.github.kauri_off.kiroku.core.model.AnimeDetails
 import io.github.kauri_off.kiroku.core.model.AnimeId
+import io.github.kauri_off.kiroku.core.model.DisplayPreferences
 import io.github.kauri_off.kiroku.core.model.EntryStatus
 import io.github.kauri_off.kiroku.core.model.ListEntry
 import io.github.kauri_off.kiroku.core.model.ListField
@@ -16,6 +17,8 @@ import io.github.kauri_off.kiroku.core.model.ListValues
 import io.github.kauri_off.kiroku.core.model.MangaReadingStatus
 import io.github.kauri_off.kiroku.core.model.Session
 import io.github.kauri_off.kiroku.core.model.SignInId
+import io.github.kauri_off.kiroku.core.model.StartupTab
+import io.github.kauri_off.kiroku.core.model.ThemeMode
 import io.github.kauri_off.kiroku.core.model.TitleLanguage
 import io.github.kauri_off.kiroku.core.model.UserProfile
 import io.github.kauri_off.kiroku.core.model.over
@@ -408,6 +411,12 @@ data class AdultSearchChoice(
 )
 
 interface PreferencesRepository {
+    fun observeDisplayPreferences(): Flow<DisplayPreferences>
+
+    suspend fun setTheme(mode: ThemeMode): Outcome<Unit>
+
+    suspend fun setStartupTab(tab: StartupTab): Outcome<Unit>
+
     fun observeTitleLanguage(): Flow<TitleLanguage>
 
     fun observeAdultInSearch(): Flow<Boolean> = observeAdultSearchChoice().map { it.enabled }.distinctUntilChanged()
