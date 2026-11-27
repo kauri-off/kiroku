@@ -61,15 +61,18 @@ data class StateAction(
 fun ScreenState(
     state: ScreenState,
     modifier: Modifier = Modifier,
+    delayLoading: Boolean = true,
 ) {
     Box(modifier.fillMaxSize().padding(horizontal = Spacing.l, vertical = Spacing.xl), contentAlignment = Alignment.Center) {
         when (state) {
             ScreenState.Loading -> {
                 // Named and in its place at once; drawn once the wait outlasts the patience, timed on the main looper.
-                var waited by remember { mutableStateOf(false) }
-                LaunchedEffect(Unit) {
-                    withContext(Dispatchers.Main) { delay(PATIENCE) }
-                    waited = true
+                var waited by remember(delayLoading) { mutableStateOf(!delayLoading) }
+                if (!waited) {
+                    LaunchedEffect(Unit) {
+                        withContext(Dispatchers.Main) { delay(PATIENCE) }
+                        waited = true
+                    }
                 }
                 val loading = stringResource(R.string.design_loading)
                 WaitIndicator(Modifier.semantics { contentDescription = loading }, shown = waited)

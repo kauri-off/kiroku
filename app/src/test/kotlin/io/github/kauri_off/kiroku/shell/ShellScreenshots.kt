@@ -10,6 +10,7 @@ import androidx.navigation3.runtime.NavKey
 import io.github.kauri_off.kiroku.R
 import io.github.kauri_off.kiroku.core.fixtures.FixtureAnime
 import io.github.kauri_off.kiroku.design.MotionBounds
+import io.github.kauri_off.kiroku.design.component.ScreenState
 import io.github.kauri_off.kiroku.list.ListFixtureStates
 import io.github.kauri_off.kiroku.list.ListScreen
 import io.github.kauri_off.kiroku.screenshots.ScreenshotRegistry
@@ -19,6 +20,7 @@ import io.github.kauri_off.kiroku.screenshots.WindowSize
 import io.github.kauri_off.kiroku.screenshots.case
 import io.github.kauri_off.kiroku.screenshots.contentCase
 import io.github.kauri_off.kiroku.screenshots.notShown
+import io.github.kauri_off.kiroku.screenshots.shown
 import io.github.kauri_off.kiroku.title.TitleFixtures
 import io.github.kauri_off.kiroku.title.TitleKey
 import io.github.kauri_off.kiroku.title.TitleScreen
@@ -26,7 +28,7 @@ import io.github.kauri_off.kiroku.title.TitleScreen
 class ShellScreenshots : ScreenshotRegistry() {
     override val content = contentCase("list-selected") { Shell(ShellState(Destination.List)) }
 
-    override val loading = notShown("The shell loads nothing itself; each destination's screen shows its own loading state")
+    override val loading = shown { ScreenState(ScreenState.Loading, delayLoading = false) }
     override val empty = notShown("The shell is never empty: its placeholders are the destinations' empty states")
     override val error = notShown("The shell has no request that can fail; each destination's screen shows its own errors")
 

@@ -4,7 +4,6 @@ import android.content.Context
 import io.github.kauri_off.kiroku.core.link.Link
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.getAndUpdate
 import java.util.concurrent.atomic.AtomicLong
 
 // One link handed over; two links to one page are two of these.
@@ -24,8 +23,6 @@ class AppLinks {
     fun opened(link: Link) {
         pending.value = OpenedLink(link, serials.incrementAndGet())
     }
-
-    fun take(): OpenedLink? = pending.getAndUpdate { null }
 
     fun taken(link: OpenedLink) {
         pending.compareAndSet(link, null)

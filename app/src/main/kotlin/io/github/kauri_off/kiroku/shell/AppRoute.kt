@@ -184,7 +184,7 @@ private fun LinkTurns(
 ) {
     val link by links.link.collectAsScreenState()
     LaunchedEffect(link) {
-        link?.let {
+        link?.takeIf { it == links.link.value }?.let {
             beforeOpening()
             navigator.openLink(it.link)
             links.taken(it)

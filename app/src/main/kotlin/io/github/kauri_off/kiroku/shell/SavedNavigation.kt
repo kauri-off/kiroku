@@ -2,8 +2,10 @@ package io.github.kauri_off.kiroku.shell
 
 import android.os.Bundle
 import android.os.Parcelable
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.navigation3.runtime.NavBackStack
 import androidx.navigation3.runtime.NavKey
 import androidx.navigation3.runtime.serialization.NavBackStackSerializer
@@ -79,7 +81,7 @@ internal class ActivityNavigation(
             }
         }
 
-    var navigator: ShellNavigator? = restored
+    var navigator by mutableStateOf(restored)
 
     init {
         registry.registerSavedStateProvider(navigationKey) {

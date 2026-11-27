@@ -19,6 +19,10 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.SideEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.toArgb
@@ -113,7 +117,12 @@ internal fun ComponentActivity.setKirokuContent(
     enableEdgeToEdge()
     setContent {
         val display = preferences.collectAsScreenState(initial = null).value
-        KirokuWindow(ThemeSettings(mode = display?.theme ?: ThemeMode.System), Seed.Teal) { content(display) }
+        var savedTheme by rememberSaveable { mutableStateOf<String?>(null) }
+        val mode = display?.theme ?: ThemeMode.entries.firstOrNull { it.name == savedTheme } ?: ThemeMode.System
+        SideEffect {
+            if (display != null) savedTheme = display.theme.name
+        }
+        KirokuWindow(ThemeSettings(mode = mode), Seed.Teal) { content(display) }
     }
 }
 

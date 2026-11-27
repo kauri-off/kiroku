@@ -77,8 +77,10 @@ class LinkActivityTest {
     fun `a link to a title or a profile hands what it names to the app once and brings the app's screen up`() {
         for ((address, link) in Links.opened) {
             arrive(view(address))
-            assertEquals(address, link, links.take()?.link)
-            assertNull(links.take())
+            val pending = checkNotNull(links.link.value)
+            assertEquals(address, link, pending.link)
+            links.taken(pending)
+            assertNull(links.link.value)
         }
     }
 
