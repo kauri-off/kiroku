@@ -36,10 +36,12 @@ import coil3.request.CachePolicy
 import coil3.request.ImageRequest
 import io.github.kauri_off.kiroku.R
 import io.github.kauri_off.kiroku.design.component.BarTitle
+import io.github.kauri_off.kiroku.design.component.LocalOnTop
 import io.github.kauri_off.kiroku.design.component.Poster
 import io.github.kauri_off.kiroku.design.component.PosterSize
 import io.github.kauri_off.kiroku.design.component.ScreenState
 import io.github.kauri_off.kiroku.design.component.routeImageLoader
+import io.github.kauri_off.kiroku.design.theme.DialogSystemBarAppearance
 import io.github.kauri_off.kiroku.design.theme.Sizes
 import io.github.kauri_off.kiroku.design.theme.Spacing
 
@@ -77,7 +79,7 @@ internal fun TitleCoverDialog(
     onClose: () -> Unit,
 ) {
     val sources = remember(url, large) { listOfNotNull(large, url).filterNot(String::isBlank).distinct() }
-    if (sources.isEmpty()) {
+    if (sources.isEmpty() || !LocalOnTop.current) {
         LaunchedEffect(Unit) { onClose() }
         return
     }
@@ -85,6 +87,7 @@ internal fun TitleCoverDialog(
         onDismissRequest = onClose,
         properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false),
     ) {
+        DialogSystemBarAppearance()
         Scaffold(
             topBar = {
                 TopAppBar(

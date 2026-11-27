@@ -343,6 +343,10 @@ Not to forget:
 
 ---
 
+## Completed enhancements
+
+- [x] Open anime and manga covers full-screen.
+
 ## After 1.0
 
 This section accounts for every other dailyAL feature: it is planned, or it is not built, with the reason. A
@@ -351,7 +355,7 @@ P1 to P5. The sources other than MAL are unchecked (ARCHITECTURE section 13, ite
 
 | Milestone | Goal | Features | Sources |
 |---|---|---|---|
-| P1 | Manga and a fuller list | Manga statistics; related manga on anime pages; rewatching, tags, comments and priority in the edit sheet; more list sorts; an offline write queue with a visible pending state; the cover opened full-screen, with the title's other pictures to swipe through; opening and ending themes | MAL only |
+| P1 | Manga and a fuller list | Manga statistics; related manga on anime pages; rewatching, tags, comments and priority in the edit sheet; more list sorts; an offline write queue with a visible pending state; a swipeable gallery of the title's other pictures; opening and ending themes | MAL only |
 | P2 | A deeper title page | Characters, voice actors and their pages; where to watch; trailers; the whole franchise in watch order, beyond the chain of sequels; search filters, also from a title's genres; other users' avatar, "about" and favourites; more statistics charts | AniList, MAL, one not chosen yet |
 | P3 | Schedule and discovery | A weekly schedule of the user's airing titles; a season browser; more rankings; recently viewed titles; a per-title notification mute | Stored airing data, MAL |
 | P4 | Community, read-only | Forum boards, topics and posts; a title's discussions; users' reviews of a title | MAL, one not chosen yet |

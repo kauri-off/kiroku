@@ -16,11 +16,19 @@ import androidx.compose.material3.Typography
 import androidx.compose.material3.dynamicDarkColorScheme
 import androidx.compose.material3.dynamicLightColorScheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.SideEffect
+import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.window.DialogWindowProvider
+import androidx.core.view.WindowCompat
+
+private val LocalDarkTheme = staticCompositionLocalOf { false }
 
 enum class ThemeMode { System, Light, Dark }
 
@@ -58,7 +66,13 @@ fun KirokuTheme(
     seed: Seed = Seed.Teal,
     content: @Composable () -> Unit,
 ) {
-    MaterialExpressiveTheme(colorScheme = kirokuColorScheme(dark, dynamicColor, seed), typography = ExpressiveTypography, content = content)
+    CompositionLocalProvider(LocalDarkTheme provides dark) {
+        MaterialExpressiveTheme(
+            colorScheme = kirokuColorScheme(dark, dynamicColor, seed),
+            typography = ExpressiveTypography,
+            content = content,
+        )
+    }
 }
 
 // Typography() copies the plain roles into the emphasised ones; naming one, at its Expressive value, takes the scale's.
@@ -87,6 +101,19 @@ fun ComponentActivity.setKirokuContent(
                 onDispose {}
             }
             Surface(modifier = Modifier.fillMaxSize(), content = content)
+        }
+    }
+}
+
+@Composable
+internal fun DialogSystemBarAppearance() {
+    val view = LocalView.current
+    val window = (view.parent as? DialogWindowProvider)?.window ?: return
+    val dark = LocalDarkTheme.current
+    SideEffect {
+        WindowCompat.getInsetsController(window, view).apply {
+            isAppearanceLightStatusBars = !dark
+            isAppearanceLightNavigationBars = !dark
         }
     }
 }

@@ -98,6 +98,9 @@ class TitleScreenshots : ScreenshotRegistry() {
             case("paired-owned", largeText = true) { Screen(TitleFixtures.pairedOwned) },
             case("paired-owned-wide", window = WindowSize(840, 600)) { Screen(TitleFixtures.pairedOwned) },
             case("cover-open", largeText = true) { Screen(TitleFixtures.of(FixtureAnime.exactToWatch).copy(coverOpen = true)) },
+            case("cover-open-wide", window = WindowSize(840, 600)) {
+                Screen(TitleFixtures.of(FixtureAnime.exactToWatch).copy(coverOpen = true))
+            },
             case("cover-loading") {
                 ArrivingPoster.inMemory = false
                 ArrivingPoster.arrived.tryEmit(false)

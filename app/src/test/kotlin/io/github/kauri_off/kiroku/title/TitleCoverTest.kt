@@ -15,6 +15,7 @@ import androidx.compose.ui.test.isHeading
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performSemanticsAction
+import androidx.core.view.WindowCompat
 import androidx.test.espresso.Espresso
 import coil3.ColorImage
 import coil3.ImageLoader
@@ -32,6 +33,7 @@ import io.github.kauri_off.kiroku.core.model.TitleLanguage
 import io.github.kauri_off.kiroku.core.model.owner
 import io.github.kauri_off.kiroku.core.repository.MangaRepository
 import io.github.kauri_off.kiroku.core.repository.StoredManga
+import io.github.kauri_off.kiroku.design.component.LocalOnTop
 import io.github.kauri_off.kiroku.design.component.LocalRouteImages
 import io.github.kauri_off.kiroku.design.composeRule
 import io.github.kauri_off.kiroku.design.registered
@@ -58,6 +60,7 @@ import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
+import org.robolectric.shadows.ShadowDialog
 import java.io.IOException
 import java.util.concurrent.CopyOnWriteArrayList
 
@@ -177,6 +180,46 @@ class TitleCoverTest {
         compose.onNode(isDialog()).assertDoesNotExist()
         compose.runOnIdle { url.value = LARGE }
         compose.onNode(isDialog()).assertDoesNotExist()
+    }
+
+    @Test
+    fun leavingTheTopEntryDismissesTheWindowAndClearsOpenState() {
+        val onTop = mutableStateOf(true)
+        val open = mutableStateOf(true)
+        show {
+            CompositionLocalProvider(LocalOnTop provides onTop.value) {
+                if (open.value) TitleCoverDialog("Sample", LARGE, null) { open.value = false }
+            }
+        }
+        waitForCover("Sample")
+        compose.runOnIdle { onTop.value = false }
+        compose.onNode(isDialog()).assertDoesNotExist()
+        compose.runOnIdle { onTop.value = true }
+        compose.onNode(isDialog()).assertDoesNotExist()
+    }
+
+    @Test
+    @Config(sdk = [35])
+    fun theDialogSystemBarIconsFollowTheAppTheme() {
+        val dark = mutableStateOf(false)
+        show {
+            KirokuTheme(dark = dark.value, dynamicColor = false) {
+                TitleCoverDialog("Sample", LARGE, null) {}
+            }
+        }
+        waitForCover("Sample")
+
+        fun assertLightAppearance(expected: Boolean) {
+            compose.runOnIdle {
+                val window = checkNotNull(ShadowDialog.getLatestDialog()?.window)
+                val controller = WindowCompat.getInsetsController(window, window.decorView)
+                assertEquals(expected, controller.isAppearanceLightStatusBars)
+                assertEquals(expected, controller.isAppearanceLightNavigationBars)
+            }
+        }
+        assertLightAppearance(true)
+        compose.runOnIdle { dark.value = true }
+        assertLightAppearance(false)
     }
 
     @Test
