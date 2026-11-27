@@ -136,7 +136,7 @@ internal class LiveGraph(
     ownProfile: (LiveParts, MalSession) -> MalOwnProfile = ::ownProfileOf,
     notificationStore: (LiveParts, StoredPreferences) -> NotificationStore = ::liveNotificationStore,
     imageFiles: FileSystem = FileSystem.SYSTEM,
-    publicMangaSource: RemoteMangaLists = MalPublicMangaLists(parts.http),
+    private val publicMangaSource: RemoteMangaLists = MalPublicMangaLists(parts.http),
     airingOf: AiringOf = ::listAiring,
 ) : AppGraph,
     SignInOwner {
@@ -148,8 +148,10 @@ internal class LiveGraph(
         LiveImages(parts.context, parts.source.name, { parts.file(notShown("retired-images")) }, images, parts.scope, imageFiles) { owner ->
             account.currentSession()?.let { it.owner == owner } == true
         }
-    private val publicManga = lazy { MangaListKeeper(publicMangaSource, parts.scope, parts.unexpected) }
-    override val publicMangaLists: PublicMangaLists by publicManga
+
+    @Volatile
+    private var publicManga = MangaListKeeper(publicMangaSource, parts.scope, parts.unexpected)
+    override val publicMangaLists: PublicMangaLists get() = publicManga
     private val sessionWithCleanup by lazy {
         SignOutForgets(
             account,
@@ -162,7 +164,9 @@ internal class LiveGraph(
             runLog,
             forgetMangaSorts = { preferences.forgetMangaListSorts(it) },
             forgetManga = {
-                if (publicManga.isInitialized()) publicManga.value.forget()
+                val old = publicManga
+                publicManga = MangaListKeeper(publicMangaSource, parts.scope, parts.unexpected)
+                old.forget()
                 withContext(Dispatchers.IO) {
                     forgetMangaCaptures(this@LiveGraph)
                     !hasDatabase() || mangaList.forgetBeforeSignOut() is Outcome.Success
