@@ -179,6 +179,11 @@ class MalSession internal constructor(
             emitAll(owners.filterNotNull())
         }
 
+    internal suspend fun currentOwner(): SessionOwner? {
+        read.await()
+        return owners.value
+    }
+
     internal fun isCurrentOwner(owner: SessionOwner): Boolean = owners.value === owner
 
     internal suspend fun <T : Any> withOwner(

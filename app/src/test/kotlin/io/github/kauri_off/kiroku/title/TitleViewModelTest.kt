@@ -17,10 +17,13 @@ import io.github.kauri_off.kiroku.core.fixtures.Fixtures
 import io.github.kauri_off.kiroku.core.model.Anime
 import io.github.kauri_off.kiroku.core.model.AnimeId
 import io.github.kauri_off.kiroku.core.model.ListStatus
+import io.github.kauri_off.kiroku.core.model.Session
+import io.github.kauri_off.kiroku.core.model.SignInId
 import io.github.kauri_off.kiroku.core.model.TitleLanguage
 import io.github.kauri_off.kiroku.core.repository.AiringRepository
 import io.github.kauri_off.kiroku.core.repository.AnimeRepository
 import io.github.kauri_off.kiroku.core.repository.ListWrite
+import io.github.kauri_off.kiroku.core.repository.SessionRepository
 import io.github.kauri_off.kiroku.list.ListViewModel
 import io.github.kauri_off.kiroku.shell.ShellMessage
 import io.github.kauri_off.kiroku.shell.ShellMessages
@@ -1136,6 +1139,96 @@ class TitleViewModelTest {
             assertEquals(13, s.watched())
             assertTrue(s.graph.readers > 0)
         }
+
+    @Test
+    fun `a search title shown again during sign-in reads details for the new session once`() {
+        for ((retireWhileShown, replaced) in listOf(true to true, true to false, false to true)) {
+            runTest(dispatcher) {
+                val scope = foregroundScope()
+                val graph = TestGraph.over(scope).apply { titlesUnstored.value = true }
+                val sessions = MutableStateFlow<Session>(Session.SignedOut)
+                val session =
+                    object : SessionRepository by graph.session {
+                        override fun observeSession() = sessions
+                    }
+                val anime = FixtureAnime.exactToWatch
+                val retired = CompletableDeferred<Unit>()
+                val replacement = CompletableDeferred<Unit>()
+                val owners = mutableListOf<Session>()
+                val repository =
+                    object : AnimeRepository by graph.anime {
+                        override suspend fun refresh(id: AnimeId): Outcome<Unit> {
+                            if (id != anime.id) return graph.anime.refresh(id)
+                            owners += sessions.value
+                            if (owners.size == 1) {
+                                retired.await()
+                                return Outcome.Failure(DataError.ListEnded)
+                            }
+                            check(owners.size == 2)
+                            replacement.await()
+                            return if (replaced) {
+                                graph.anime.refresh(id).also { graph.titlesUnstored.value = false }
+                            } else {
+                                Outcome.Failure(DataError.ListEnded)
+                            }
+                        }
+                    }
+                val messages = ShellMessages(scope, graph.list)
+                val title =
+                    TitleViewModel(
+                        anime.id,
+                        repository,
+                        graph.list,
+                        graph.airing,
+                        session,
+                        graph.connection,
+                        graph.clock,
+                        graph.titleLanguage,
+                        SavedStateHandle(),
+                        messages,
+                        TitleSummary(anime, null, null, Session.SignedOut),
+                    )
+                val screen = showing(title.state, title.shown)
+                runCurrent()
+                assertEquals(listOf(Session.SignedOut), owners)
+
+                screen.cancel()
+                runCurrent()
+                val signedIn = Session.SignedIn(SignInId("new-sign-in"))
+                sessions.value = signedIn
+                if (!retireWhileShown) {
+                    retired.complete(Unit)
+                    runCurrent()
+                    assertEquals(listOf(Session.SignedOut), owners)
+                    assertNull(messages.current.value)
+                }
+                showing(title.state, title.shown)
+                runCurrent()
+
+                if (retireWhileShown) {
+                    assertEquals(listOf(Session.SignedOut), owners)
+                    retired.complete(Unit)
+                    runCurrent()
+                }
+                assertEquals(listOf(Session.SignedOut, signedIn), owners)
+                assertNull(messages.current.value)
+                assertEquals(DetailsWait.Brief, (title.state.value as TitleState.Shown).detailsWait)
+
+                replacement.complete(Unit)
+                advanceUntilIdle()
+                val shown = title.state.value as TitleState.Shown
+                assertEquals(signedIn, shown.session)
+                assertEquals(2, owners.size)
+                if (replaced) {
+                    assertEquals(FixtureDetails.full, shown.page.details)
+                    assertNull(messages.current.value)
+                } else {
+                    assertEquals(DetailsWait.Failed(DataError.ListEnded), shown.detailsWait)
+                }
+                scope.cancel()
+            }
+        }
+    }
 
     @Test
     fun `the details are refreshed once, not again when the page is shown again while they are fresh`() =

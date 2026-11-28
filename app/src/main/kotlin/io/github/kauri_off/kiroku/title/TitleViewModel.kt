@@ -357,7 +357,10 @@ class TitleViewModel(
     }
 
     // Whether the details were loaded.
-    private suspend fun loadDetails(asked: Asked): Boolean =
+    private suspend fun loadDetails(
+        asked: Asked,
+        retryRetiredOwner: Boolean = owner == null,
+    ): Boolean =
         coroutineScope {
             val wait =
                 if (asked == Asked.Shown) {
@@ -372,6 +375,14 @@ class TitleViewModel(
             val result = anime.refresh(id)
             wait?.cancel()
             val error = (result as? Outcome.Failure)?.error
+            if (error == DataError.ListEnded && retryRetiredOwner) {
+                currentCoroutineContext().ensureActive()
+                if (loads.isShowing) return@coroutineScope loadDetails(asked, retryRetiredOwner = false)
+                waitShown.value = false
+                refreshing.value = false
+                replaceObsolete = true
+                return@coroutineScope false
+            }
             val obsoleteBeforeRead = adultSearchChoice.first() != choice
             val shown =
                 error != null &&

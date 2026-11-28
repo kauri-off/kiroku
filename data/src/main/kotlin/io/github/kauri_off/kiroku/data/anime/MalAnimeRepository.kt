@@ -21,7 +21,6 @@ import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.distinctUntilChanged
-import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.withContext
 import java.time.Clock
@@ -64,7 +63,7 @@ class MalAnimeRepository(
 
     // An answer that comes after a sign-out cleared the store is not stored: its list has ended.
     override suspend fun refresh(id: AnimeId): Outcome<Unit> {
-        val owner = session.observeOwner().first()
+        val owner = session.currentOwner() ?: return Outcome.Failure(DataError.StorageError)
         val begun =
             when (val held = stored { store.holder() }) {
                 is Outcome.Failure -> return held

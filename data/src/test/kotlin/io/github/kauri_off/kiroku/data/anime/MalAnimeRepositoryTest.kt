@@ -29,8 +29,11 @@ import io.github.kauri_off.kiroku.data.network.UnusableAnswer
 import io.github.kauri_off.kiroku.data.network.received
 import io.github.kauri_off.kiroku.data.preferences.StoredPreferences
 import io.github.kauri_off.kiroku.data.recorder.RecordedAnswers
+import io.github.kauri_off.kiroku.data.session.FailingDisk
+import io.github.kauri_off.kiroku.data.session.MalSession
 import io.github.kauri_off.kiroku.data.session.SessionFixture
 import io.github.kauri_off.kiroku.data.session.TokenGrant
+import io.github.kauri_off.kiroku.data.session.TokensNotRead
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -43,6 +46,7 @@ import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeout
+import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
@@ -96,7 +100,10 @@ class MalAnimeRepositoryTest {
         val preferences: StoredPreferences,
     )
 
-    private fun TestScope.subject(clock: Clock = network.clock): Subject {
+    private fun TestScope.subject(
+        clock: Clock = network.clock,
+        session: MalSession = this@MalAnimeRepositoryTest.session,
+    ): Subject {
         val database = databases.open(this)
         val store = TitleStore(database, dispatcher, network.unexpected::add)
         val preferences = StoredPreferences(File(folder.newFolder(), "title.preferences_pb"), backgroundScope, network.unexpected::add)
@@ -657,6 +664,31 @@ class MalAnimeRepositoryTest {
             }
         }
     }
+
+    @Test
+    fun `an unread token file fails the refresh until the session can read it`() =
+        runTest {
+            assertEquals(Outcome.Success(Unit), session.signIn(TokenGrant("access", "refresh")))
+            val signedIn = session.currentSession()
+            sessions.close()
+            val disk = FailingDisk(sessions.format())
+            val recovering = sessions.open(format = disk, retryAfter = { Duration.ofMillis(10) })
+            val s = subject(session = recovering)
+            assertNull(recovering.currentSession())
+
+            assertEquals(Outcome.Failure(DataError.StorageError), withTimeoutOrNull(1_000) { s.titles.refresh(id) })
+            assertEquals(0, network.api.requestCount)
+            assertEquals(Triple(null, null, null), s.stored())
+            assertTrue(sessions.unexpected.single() is TokensNotRead)
+
+            disk.failing = false
+            val recovered = withContext(Dispatchers.IO) { withTimeout(5_000) { recovering.observeSession().first() } }
+            assertEquals(signedIn, recovered)
+            serve("title_airing")
+            assertEquals(Outcome.Success(Unit), s.titles.refresh(id))
+            assertEquals(Triple(airing.anime, airing.details, network.clock.now), s.stored())
+            assertEquals(1, network.api.requestCount)
+        }
 
     @Test
     fun `a guest page request cannot repopulate the cache after signing in and out`() =
