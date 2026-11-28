@@ -9,6 +9,8 @@ import coil3.decode.Decoder
 import coil3.decode.ImageSource
 import coil3.intercept.Interceptor
 import coil3.memory.MemoryCache
+import coil3.network.okhttp.OkHttpNetworkFetcherFactory
+import coil3.request.CachePolicy
 import coil3.request.ErrorResult
 import coil3.request.ImageRequest
 import coil3.request.ImageResult
@@ -50,42 +52,55 @@ internal val captureCoverIdentity = Extras.Key(false)
 private val coverIdentity = Extras.Key<CoverIdentity?>(null)
 private val cacheIdentity = ThreadLocal<CoverIdentity?>()
 private val fingerprintExtra = notShown("kiroku.coverFingerprint")
+private val diskOnlyCoverFetcher = OkHttpNetworkFetcherFactory(callFactory = Call.Factory { throw IOException() })
 internal const val MAX_ENCODED_IMAGE_BYTES = 64L * 1024 * 1024
 
-internal fun SuccessResult.coverSource(url: String): LoadedImageSource =
-    LoadedImageSource(url, diskCacheKey, request.extras[coverIdentity]?.fingerprint)
+private val SuccessResult.fingerprint: String? get() = request.extras[coverIdentity]?.fingerprint
+
+internal fun SuccessResult.coverSource(url: String): LoadedImageSource = LoadedImageSource(url, diskCacheKey, fingerprint)
 
 internal fun captureEncodedIdentity() =
     Interceptor { chain ->
-        if (chain.request.extras[captureCoverIdentity] != true) {
-            chain.proceed()
-        } else {
-            val identity = CoverIdentity()
-            val request =
-                chain.request
-                    .newBuilder()
-                    .apply { extras[coverIdentity] = identity }
-                    .decoderFactory { result, _, _ ->
-                        Decoder {
-                            identity.fingerprint = result.source.fingerprint()
-                            null
-                        }
-                    }.build()
-            try {
-                val result = withContext(cacheIdentity.asContextElement(identity)) { chain.withRequest(request).proceed() }
-                if (result is SuccessResult && result.dataSource == DataSource.MEMORY_CACHE) {
-                    val (key, value) = identity.cacheRead ?: (null to null)
-                    identity.fingerprint =
-                        value?.takeIf { key == result.memoryCacheKey && it.image === result.image }?.extras?.get(
-                            fingerprintExtra,
-                        ) as? String
-                }
-                result
-            } finally {
-                identity.cacheRead = null
-            }
+        if (chain.request.extras[captureCoverIdentity] != true) return@Interceptor chain.proceed()
+        val result = chain.proceedWithCoverIdentity()
+        if (result !is SuccessResult || result.dataSource != DataSource.MEMORY_CACHE || result.fingerprint != null) {
+            return@Interceptor result
         }
+        val memoryPolicy = if (chain.request.memoryCachePolicy.writeEnabled) CachePolicy.WRITE_ONLY else CachePolicy.DISABLED
+        val request =
+            chain.request
+                .newBuilder()
+                .memoryCachePolicy(memoryPolicy)
+                .fetcherFactory(diskOnlyCoverFetcher)
+                .build()
+        val decoded = chain.withRequest(request).proceedWithCoverIdentity()
+        decoded.takeIf { it is SuccessResult && it.fingerprint != null } ?: result
     }
+
+private suspend fun Interceptor.Chain.proceedWithCoverIdentity(): ImageResult {
+    val identity = CoverIdentity()
+    val verifiedRequest =
+        request
+            .newBuilder()
+            .apply { extras[coverIdentity] = identity }
+            .decoderFactory { result, _, _ ->
+                Decoder {
+                    identity.fingerprint = result.source.fingerprint()
+                    null
+                }
+            }.build()
+    try {
+        val result = withContext(cacheIdentity.asContextElement(identity)) { withRequest(verifiedRequest).proceed() }
+        if (result is SuccessResult && result.dataSource == DataSource.MEMORY_CACHE) {
+            val (key, value) = identity.cacheRead ?: (null to null)
+            identity.fingerprint =
+                value?.takeIf { key == result.memoryCacheKey && it.image === result.image }?.extras?.get(fingerprintExtra) as? String
+        }
+        return result
+    } finally {
+        identity.cacheRead = null
+    }
+}
 
 private class CoverIdentity(
     var fingerprint: String? = null,
