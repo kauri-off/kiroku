@@ -1,5 +1,6 @@
 package io.github.kauri_off.kiroku.search
 
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.semantics.SemanticsProperties
@@ -42,6 +43,9 @@ import io.github.kauri_off.kiroku.core.repository.Page
 import io.github.kauri_off.kiroku.core.repository.Ranked
 import io.github.kauri_off.kiroku.core.repository.RecentTitle
 import io.github.kauri_off.kiroku.core.repository.RecentTitleId
+import io.github.kauri_off.kiroku.core.repository.RecentTitleRemoval
+import io.github.kauri_off.kiroku.core.repository.RecentTitleRemovalResult
+import io.github.kauri_off.kiroku.core.repository.RecentTitles
 import io.github.kauri_off.kiroku.core.repository.StoredManga
 import io.github.kauri_off.kiroku.design.composeRule
 import io.github.kauri_off.kiroku.design.registered
@@ -246,6 +250,48 @@ class MangaCatalogueRouteTest {
         compose.onNodeWithContentDescription("Back").performClick()
         settle()
         compose.onNodeWithText("Recently viewed").assertIsDisplayed()
+    }
+
+    @Test
+    fun `a failed Catalogue removal can be retried after returning to Search`() {
+        val history = DemoRecentTitles(demo.session)
+        val key = RecentTitleId.Manga(mangaFixture.id.value)
+        scope.launch {
+            val owner = history.observeScope().first()
+            history.record(owner, RecentTitle(key, mangaFixture.titles, true), checkNotNull(history.reserveVisit(owner)))
+        }
+        var attempts = 0
+        val release = CompletableDeferred<Unit>()
+        val source =
+            object : RecentTitles by history {
+                override suspend fun remove(removal: RecentTitleRemoval): RecentTitleRemovalResult {
+                    if (++attempts > 1) return history.remove(removal)
+                    release.await()
+                    return RecentTitleRemovalResult.Failed()
+                }
+            }
+        val snackbars = SnackbarHostState()
+        catalogue(history = source, snackbars = snackbars, openManga = false)
+        val catalogue = hasText("Manga") and hasClickAction() and !hasText(title)
+        compose.onNode(catalogue).performClick()
+        settle()
+        val row = compose.onNode(hasText(title) and hasClickAction())
+        row.performTouchInput { swipeRight() }
+        settle()
+        compose.onNode(hasText(title) and SemanticsMatcher.keyIsDefined(SemanticsActions.CustomActions)).assertDoesNotExist()
+        compose.runOnIdle {
+            assertEquals(1, attempts)
+            assertEquals(null, snackbars.currentSnackbarData)
+        }
+        release.complete(Unit)
+        settle()
+        row.assertIsDisplayed()
+        compose.onNodeWithContentDescription("Back").performClick()
+        settle()
+        compose.runOnIdle { checkNotNull(snackbars.currentSnackbarData).performAction() }
+        settle()
+        compose.runOnIdle { assertEquals(2, attempts) }
+        row.assertDoesNotExist()
     }
 
     @Test
@@ -468,7 +514,8 @@ class MangaCatalogueRouteTest {
         rememberVisits: Boolean = false,
         additionalQueries: Set<String> = emptySet(),
         list: MangaAddRouteList? = null,
-        history: DemoRecentTitles? = null,
+        history: RecentTitles? = null,
+        snackbars: SnackbarHostState = SnackbarHostState(),
     ) {
         val graph =
             object : AppGraph by demo {
@@ -529,7 +576,7 @@ class MangaCatalogueRouteTest {
                         }
                     }
             }
-        val content = @Composable { KirokuTheme(dark = false, dynamicColor = false) { AppRoute(graph) } }
+        val content = @Composable { KirokuTheme(dark = false, dynamicColor = false) { AppRoute(graph, snackbars = snackbars) } }
         if (restore == null) compose.setContent(content) else restore.setContent(content)
         settle()
         val activity = compose.activity

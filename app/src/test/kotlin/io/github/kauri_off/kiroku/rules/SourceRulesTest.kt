@@ -29,6 +29,7 @@ class SourceRulesTest {
                 "OpenedProfiles.kt",
                 "ProfileViewModel.kt",
                 "PublicMangaListViewModel.kt",
+                "RecentTitleVisitViewModel.kt",
                 "RecommendationsViewModel.kt",
                 "SearchViewModel.kt",
                 "ShellViewModel.kt",

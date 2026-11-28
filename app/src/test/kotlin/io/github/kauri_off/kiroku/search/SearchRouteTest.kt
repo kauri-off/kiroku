@@ -59,7 +59,10 @@ import io.github.kauri_off.kiroku.core.repository.Page
 import io.github.kauri_off.kiroku.core.repository.Ranked
 import io.github.kauri_off.kiroku.core.repository.RecentTitle
 import io.github.kauri_off.kiroku.core.repository.RecentTitleId
+import io.github.kauri_off.kiroku.core.repository.RecentTitleRemoval
+import io.github.kauri_off.kiroku.core.repository.RecentTitleRemovalResult
 import io.github.kauri_off.kiroku.core.repository.RecentTitleScope
+import io.github.kauri_off.kiroku.core.repository.RecentTitleVisit
 import io.github.kauri_off.kiroku.core.repository.RecentTitles
 import io.github.kauri_off.kiroku.core.repository.SearchRepository
 import io.github.kauri_off.kiroku.core.repository.SessionRepository
@@ -70,7 +73,9 @@ import io.github.kauri_off.kiroku.design.registered
 import io.github.kauri_off.kiroku.design.theme.KirokuTheme
 import io.github.kauri_off.kiroku.shell.AppRoute
 import io.github.kauri_off.kiroku.shell.ShellMessages
+import io.github.kauri_off.kiroku.shell.rememberShellNavigator
 import io.github.kauri_off.kiroku.signin.SignInOwner
+import io.github.kauri_off.kiroku.title.TitleKey
 import io.github.kauri_off.kiroku.wiring.AppGraph
 import io.github.kauri_off.kiroku.wiring.DemoRecentTitles
 import io.github.kauri_off.kiroku.wiring.MainDispatcherRule
@@ -120,8 +125,11 @@ class SearchRouteTest {
 
     private fun inView(text: String) = hasText(text) and hasAnyAncestor(isDialog())
 
-    private fun search(source: AppGraph = graph) {
-        compose.setContent { KirokuTheme(dark = false, dynamicColor = false) { AppRoute(source) } }
+    private fun search(
+        source: AppGraph = graph,
+        snackbars: SnackbarHostState = SnackbarHostState(),
+    ) {
+        compose.setContent { KirokuTheme(dark = false, dynamicColor = false) { AppRoute(source, snackbars = snackbars) } }
         settle()
         compose.onNodeWithText("Search").performClick()
         settle()
@@ -249,6 +257,73 @@ class SearchRouteTest {
     }
 
     @Test
+    fun `a retained List opening with a delayed visit cannot restore a Search dismissal`() = retainedOpening(holdBeforeReserve = false)
+
+    @Test
+    fun `a retained List opening still waiting to reserve cannot restore a Search dismissal`() = retainedOpening(holdBeforeReserve = true)
+
+    private fun retainedOpening(holdBeforeReserve: Boolean) {
+        val anime = FixtureAnime.exactToWatch
+        val title = RecentTitle(RecentTitleId.Anime(anime.id.value), anime.titles, true)
+        val history = DemoRecentTitles(graph.session)
+        val owner = runBlocking { history.observeScope().first() }
+        runBlocking { history.record(owner, title, checkNotNull(history.reserveVisit(owner))) }
+        val release = CompletableDeferred<Unit>()
+        var reservations = 0
+        val source =
+            object : AppGraph by graph {
+                override val madeUp = false
+                override val recentTitles =
+                    object : RecentTitles by history {
+                        override suspend fun reserveVisit(scope: RecentTitleScope): Long? {
+                            val held = ++reservations == 1
+                            if (held && holdBeforeReserve) release.await()
+                            val order = history.reserveVisit(scope)
+                            if (held && !holdBeforeReserve) release.await()
+                            return order
+                        }
+                    }
+            }
+        lateinit var openOnList: () -> Unit
+        compose.setContent {
+            KirokuTheme(dark = false, dynamicColor = false) {
+                val navigator = rememberShellNavigator()
+                openOnList = { navigator.open(TitleKey(anime.id.value)) }
+                AppRoute(source, navigator)
+            }
+        }
+        settle()
+        compose.runOnIdle { openOnList() }
+        settle()
+        compose.onNodeWithText(anime.titles.romaji).assertExists()
+        compose.runOnIdle { assertEquals(1, reservations) }
+
+        compose.onNodeWithText("Search").performClick()
+        settle()
+        val viewed = compose.onNode(hasText(anime.titles.romaji) and hasClickAction())
+        viewed.performTouchInput { swipeLeft() }
+        settle()
+        viewed.assertDoesNotExist()
+        release.complete(Unit)
+        settle()
+        compose.onNodeWithText("List").performClick()
+        settle()
+        compose.onNodeWithText(anime.titles.romaji).assertExists()
+        compose.onNodeWithText("Search").performClick()
+        settle()
+        viewed.assertDoesNotExist()
+
+        compose.onNodeWithText("List").performClick()
+        settle()
+        back()
+        compose.runOnIdle { openOnList() }
+        settle()
+        compose.onNodeWithText("Search").performClick()
+        settle()
+        viewed.assertExists()
+    }
+
+    @Test
     fun `a failed swipe restores the viewed row and another swipe removes it until a fresh opening`() {
         val anime = FixtureAnime.exactToWatch
         val title = RecentTitle(RecentTitleId.Anime(anime.id.value), anime.titles, true)
@@ -260,33 +335,54 @@ class SearchRouteTest {
             }
         val reserved = runBlocking { checkNotNull(history.reserveVisit(owner)) }
         val removals = mutableListOf<RecentTitleId>()
+        val release = CompletableDeferred<Unit>()
+        val snackbars = SnackbarHostState()
         val source =
             object : AppGraph by graph {
                 override val madeUp = false
                 override val recentTitles =
                     object : RecentTitles by history {
-                        override suspend fun remove(
-                            scope: RecentTitleScope,
-                            key: RecentTitleId,
-                        ): Boolean {
-                            assertEquals(owner, scope)
-                            removals += key
-                            return removals.size > 1 && history.remove(scope, key)
+                        override suspend fun remove(removal: RecentTitleRemoval): RecentTitleRemovalResult {
+                            assertEquals(owner, removal.scope)
+                            assertEquals(original, removal.order)
+                            removals += removal.key
+                            if (removals.size > 1) return history.remove(removal)
+                            release.await()
+                            return RecentTitleRemovalResult.Failed(reserved)
                         }
                     }
             }
-        search(source)
-        val row = compose.onNode(hasText(anime.titles.romaji) and hasClickAction())
+        search(source, snackbars)
+        val named = hasText(anime.titles.romaji)
+        val row = compose.onNode(named and hasClickAction())
+        val originalSemantics = row.fetchSemanticsNode().config
+        val action = originalSemantics[SemanticsActions.CustomActions].single()
+        assertEquals("Remove from recently viewed", action.label)
         row.performTouchInput { swipeRight() }
         settle()
+        compose.onNode(named and SemanticsMatcher.keyIsDefined(SemanticsActions.CustomActions)).assertDoesNotExist()
+        compose.runOnIdle {
+            action.action()
+            originalSemantics[SemanticsActions.OnClick].action?.invoke()
+        }
+        settle()
         compose.runOnIdle { assertEquals(listOf(title.key), removals) }
+        compose.onNodeWithText("Recently viewed").assertExists()
+
+        release.complete(Unit)
+        settle()
         row.assertIsDisplayed()
-        val action = row.fetchSemanticsNode().config[SemanticsActions.CustomActions].single()
-        assertEquals("Remove from recently viewed", action.label)
+        val failed = compose.runOnIdle { checkNotNull(snackbars.currentSnackbarData) }
         row.performTouchInput { swipeLeft() }
         settle()
-        compose.runOnIdle { assertEquals(listOf(title.key, title.key), removals) }
+        compose.runOnIdle {
+            assertEquals(listOf(title.key, title.key), removals)
+            assertEquals(null, snackbars.currentSnackbarData)
+            failed.performAction()
+        }
         row.assertDoesNotExist()
+        settle()
+        compose.runOnIdle { assertEquals(2, removals.size) }
 
         runBlocking {
             history.record(owner, title, original)
@@ -304,6 +400,43 @@ class SearchRouteTest {
         settle()
         compose.onNodeWithText("Recently viewed").assertDoesNotExist()
         compose.onNodeWithText(anime.titles.romaji).assertExists()
+    }
+
+    @Test
+    fun `a newer visit retires the previous removal Retry`() {
+        val anime = FixtureAnime.exactToWatch
+        val title = RecentTitle(RecentTitleId.Anime(anime.id.value), anime.titles, true)
+        val history = DemoRecentTitles(graph.session)
+        val owner = runBlocking { history.observeScope().first() }
+        runBlocking { history.record(owner, title, checkNotNull(history.reserveVisit(owner))) }
+        var attempts = 0
+        val source =
+            object : AppGraph by graph {
+                override val madeUp = false
+                override val recentTitles =
+                    object : RecentTitles by history {
+                        override suspend fun remove(removal: RecentTitleRemoval): RecentTitleRemovalResult {
+                            attempts++
+                            return RecentTitleRemovalResult.Failed()
+                        }
+                    }
+            }
+        val snackbars = SnackbarHostState()
+        search(source, snackbars)
+        val row = compose.onNode(hasText(anime.titles.romaji) and hasClickAction())
+        row.performTouchInput { swipeLeft() }
+        settle()
+        val failed = compose.runOnIdle { checkNotNull(snackbars.currentSnackbarData) }
+
+        runBlocking { history.record(owner, title, checkNotNull(history.reserveVisit(owner))) }
+        settle()
+        compose.runOnIdle {
+            assertEquals(null, snackbars.currentSnackbarData)
+            failed.performAction()
+        }
+        settle()
+        row.assertIsDisplayed()
+        compose.runOnIdle { assertEquals(1, attempts) }
     }
 
     @Test
@@ -357,7 +490,12 @@ class SearchRouteTest {
                 override val recentTitles =
                     object : RecentTitles by DemoRecentTitles(session) {
                         override fun observe(scope: RecentTitleScope) =
-                            flowOf(listOf(adult, unknown, safe).takeIf { scope.owner == owner }.orEmpty())
+                            flowOf(
+                                listOf(adult, unknown, safe)
+                                    .mapIndexed { index, title -> RecentTitleVisit(title, index + 1L) }
+                                    .takeIf { scope.owner == owner }
+                                    .orEmpty(),
+                            )
                     }
             }
         search(source)

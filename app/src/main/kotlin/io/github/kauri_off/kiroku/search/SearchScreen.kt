@@ -340,17 +340,20 @@ private fun LazyListScope.viewedRows(
         SectionHeader(stringResource(R.string.search_recent_titles), gap)
     }
     items(viewed, key = { (it.key is RecentTitleId.Manga) to it.key.value }, contentType = { VIEWED_TITLE }) { title ->
-        DismissibleHistoryRow(
-            removeLabel = stringResource(R.string.search_remove_viewed),
-            onRemove = { onEvent(SearchEvent.RemoveViewed(title.key)) },
-            onClick = { onEvent(SearchEvent.OpenRecent(title.key)) },
-            colors = rows,
-            supportingContent = {
-                Text(stringResource(if (title.key is RecentTitleId.Manga) R.string.list_mode_manga else R.string.list_mode_anime))
-            },
-            trailingContent = { Icon(painterResource(R.drawable.ic_chevron_right), contentDescription = null) },
-            content = { Text(title.title) },
-        )
+        key(title.order) {
+            DismissibleHistoryRow(
+                removeLabel = stringResource(R.string.search_remove_viewed),
+                onRemove = { restore -> onEvent(SearchEvent.RemoveViewed(title.key, title.order, restore)) },
+                onClick = { onEvent(SearchEvent.OpenRecent(title.key)) },
+                colors = rows,
+                enabled = !title.removing,
+                supportingContent = {
+                    Text(stringResource(if (title.key is RecentTitleId.Manga) R.string.list_mode_manga else R.string.list_mode_anime))
+                },
+                trailingContent = { Icon(painterResource(R.drawable.ic_chevron_right), contentDescription = null) },
+                content = { Text(title.title) },
+            )
+        }
     }
 }
 
@@ -362,7 +365,10 @@ private fun RecentSearchRow(
 ) {
     DismissibleHistoryRow(
         removeLabel = stringResource(R.string.search_remove_recent),
-        onRemove = { onEvent(SearchEvent.RemoveRecent(query)) },
+        onRemove = { restore ->
+            onEvent(SearchEvent.RemoveRecent(query))
+            restore()
+        },
         onClick = { onEvent(SearchEvent.SearchAgain(query)) },
         colors = rows,
         content = { Text(query) },
@@ -372,9 +378,10 @@ private fun RecentSearchRow(
 @Composable
 private fun DismissibleHistoryRow(
     removeLabel: String,
-    onRemove: () -> Unit,
+    onRemove: (() -> Unit) -> Unit,
     onClick: () -> Unit,
     colors: ListItemColors,
+    enabled: Boolean = true,
     supportingContent: (@Composable () -> Unit)? = null,
     trailingContent: (@Composable () -> Unit)? = null,
     content: @Composable () -> Unit,
@@ -383,17 +390,18 @@ private fun DismissibleHistoryRow(
     val swipe = remember { SwipeToDismissBoxState(SwipeToDismissBoxValue.Settled, threshold) }
     val scope = rememberCoroutineScope()
     val remove by rememberUpdatedState(onRemove)
+    val interactive by rememberUpdatedState(enabled)
     val dismiss: (SwipeToDismissBoxValue) -> Unit =
         remember(swipe, scope) {
             {
-                remove()
-                scope.launch { swipe.snapTo(SwipeToDismissBoxValue.Settled) }
+                remove { scope.launch { swipe.snapTo(SwipeToDismissBoxValue.Settled) } }
             }
         }
     SwipeToDismissBox(
         state = swipe,
         modifier = Modifier.clipToBounds(),
         onDismiss = dismiss,
+        gesturesEnabled = enabled,
         backgroundContent = {
             val direction = swipe.dismissDirection
             if (direction != SwipeToDismissBoxValue.Settled) {
@@ -410,16 +418,19 @@ private fun DismissibleHistoryRow(
         },
     ) {
         ListItem(
-            onClick = onClick,
+            onClick = { if (interactive) onClick() },
+            enabled = enabled,
             modifier =
                 Modifier.semantics {
-                    customActions =
-                        listOf(
-                            CustomAccessibilityAction(removeLabel) {
-                                onRemove()
-                                true
-                            },
-                        )
+                    if (enabled) {
+                        customActions =
+                            listOf(
+                                CustomAccessibilityAction(removeLabel) {
+                                    if (interactive) remove {}
+                                    interactive
+                                },
+                            )
+                    }
                 },
             colors = colors,
             supportingContent = supportingContent,

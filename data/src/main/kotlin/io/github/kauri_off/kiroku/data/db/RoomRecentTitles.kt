@@ -12,7 +12,10 @@ import io.github.kauri_off.kiroku.core.model.SignInId
 import io.github.kauri_off.kiroku.core.model.Titles
 import io.github.kauri_off.kiroku.core.repository.RecentTitle
 import io.github.kauri_off.kiroku.core.repository.RecentTitleId
+import io.github.kauri_off.kiroku.core.repository.RecentTitleRemoval
+import io.github.kauri_off.kiroku.core.repository.RecentTitleRemovalResult
 import io.github.kauri_off.kiroku.core.repository.RecentTitleScope
+import io.github.kauri_off.kiroku.core.repository.RecentTitleVisit
 import io.github.kauri_off.kiroku.core.repository.RecentTitles
 import io.github.kauri_off.kiroku.data.session.MalSession
 import io.github.kauri_off.kiroku.data.session.fileRetry
@@ -168,7 +171,7 @@ class RoomRecentTitles(
                 } else {
                     flowOf(emptyList())
                 }
-            }.map { rows -> rows.map(RecentTitleRow::toTitle) }
+            }.map { rows -> rows.map { RecentTitleVisit(it.toTitle(), it.visit) } }
             .catch { error ->
                 unexpected(error)
                 emit(emptyList())
@@ -186,33 +189,38 @@ class RoomRecentTitles(
 
     private suspend fun <T : Any> withScope(
         scope: RecentTitleScope,
+        stale: T? = null,
         run: suspend (KirokuDatabase) -> T,
     ): T? =
         withContext(Dispatchers.IO) {
             val owner = session.observeOwner().first()
-            if (scopeFor(owner) != scope) return@withContext null
+            if (scopeFor(owner) != scope) return@withContext stale
             stored {
                 session.withOwner(owner) {
-                    if (retired(scope.owner)) return@withOwner null
+                    if (retired(scope.owner)) return@withOwner stale
                     run(database())
-                }
+                } ?: stale
             }
         }
 
-    override suspend fun remove(
-        scope: RecentTitleScope,
-        key: RecentTitleId,
-    ): Boolean =
-        withScope(scope) { db ->
+    override suspend fun remove(removal: RecentTitleRemoval): RecentTitleRemovalResult {
+        var through = removal.through
+        return withScope<RecentTitleRemovalResult>(removal.scope, stale = RecentTitleRemovalResult.Stale) { db ->
             db.transaction {
-                val dao = db.recentTitles()
+                val owner = removal.scope.key
+                val key = removal.key
                 val manga = key is RecentTitleId.Manga
-                val cutoff = dao.lastVisit()
-                dao.saveSequence(cutoff)
-                dao.saveDismissal(RecentTitleDismissal(scope.key, manga, key.value, cutoff))
-                dao.deleteTitle(scope.key, manga, key.value)
+                val dao = db.recentTitles()
+                if (dao.read(owner, manga, key.value)?.visit != removal.order) return@transaction RecentTitleRemovalResult.Stale
+                val last = dao.lastVisit()
+                val cutoff = through ?: last.also { through = it }
+                dao.saveSequence(last)
+                dao.saveDismissal(RecentTitleDismissal(owner, manga, key.value, cutoff))
+                dao.deleteTitle(owner, manga, key.value)
+                RecentTitleRemovalResult.Removed
             }
-        } != null
+        } ?: RecentTitleRemovalResult.Failed(through)
+    }
 
     override suspend fun record(
         scope: RecentTitleScope,

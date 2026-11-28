@@ -14,12 +14,10 @@ import androidx.compose.runtime.saveable.Saver
 import androidx.compose.runtime.saveable.listSaver
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.res.stringResource
 import androidx.lifecycle.createSavedStateHandle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation3.runtime.NavKey
 import io.github.kauri_off.kiroku.CountAsShown
-import io.github.kauri_off.kiroku.R
 import io.github.kauri_off.kiroku.collectAsScreenState
 import io.github.kauri_off.kiroku.core.model.Anime
 import io.github.kauri_off.kiroku.core.model.AnimeId
@@ -31,6 +29,7 @@ import io.github.kauri_off.kiroku.core.model.SignInId
 import io.github.kauri_off.kiroku.core.model.TitleLanguage
 import io.github.kauri_off.kiroku.core.model.owner
 import io.github.kauri_off.kiroku.core.repository.BrowseList
+import io.github.kauri_off.kiroku.core.repository.RecentTitleRemoval
 import io.github.kauri_off.kiroku.design.component.LocalOnTop
 import io.github.kauri_off.kiroku.edit.EditSheetRoute
 import io.github.kauri_off.kiroku.edit.editSheetViewModel
@@ -77,8 +76,9 @@ fun SearchRoute(
     val historyScope = recentScope(graph)?.takeIf { session != null && it.owner == session?.owner }
     val visits = if (text.isEmpty()) recentTitles(graph, historyScope, adult) else emptyList()
     val scope = rememberCoroutineScope()
-    val removeFailed = stringResource(R.string.search_remove_viewed_failed)
-    val retry = stringResource(R.string.design_retry)
+    val writes = messages.viewedTitles
+    val pending by writes.pending.collectAsScreenState()
+    val viewed = historyScope?.let { owner -> visits.map { it.row(owner, language, pending) } }.orEmpty()
     val shown = results.takeIf { it.query == text && it.adult == adult }
     val linkId = search.linkId
     val content =
@@ -88,7 +88,7 @@ fun SearchRoute(
                     recent,
                     suggestions = session is Session.SignedIn,
                     mangaAvailable = graph.mangaCatalogue != null,
-                    viewed = visits.map { RecentTitleRow(it.key, it.titles.preferred(language)) },
+                    viewed = viewed,
                 )
             linkId != null -> SearchContent.AnimeLink(linkId)
             shown == null -> SearchContent.Results(text, Paged.Loading)
@@ -112,14 +112,18 @@ fun SearchRoute(
                 SearchEvent.Clear -> query.clearText()
                 is SearchEvent.RemoveRecent -> recent = recent - event.query
                 is SearchEvent.RemoveViewed -> {
-                    val viewedScope = historyScope ?: return@SearchScreen
-                    if (visits.none { it.key == event.key }) return@SearchScreen
-                    scope.launch { graph.removeViewedTitle(viewedScope, event.key, snackbars, removeFailed, retry) }
+                    val target = historyScope?.let { RecentTitleRemoval(it, event.key, event.order) }
+                    if (target == null || visits.none(target::matches)) {
+                        event.restore()
+                    } else {
+                        writes.remove(graph.recentTitles, target, event.restore)
+                    }
                 }
                 is SearchEvent.OpenRecent -> {
                     val current = session ?: return@SearchScreen
                     val openingScope = historyScope ?: return@SearchScreen
-                    val title = visits.firstOrNull { it.key == event.key } ?: return@SearchScreen
+                    if (writes.isRemoving(openingScope, event.key)) return@SearchScreen
+                    val title = visits.firstOrNull { it.key == event.key }?.title ?: return@SearchScreen
                     scope.launch { graph.openRecent(RecentTitleOpening(title, current, language, openingScope), onOpenRecent) }
                 }
                 is SearchEvent.SearchAgain -> {

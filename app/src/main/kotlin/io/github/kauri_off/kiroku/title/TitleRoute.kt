@@ -98,6 +98,8 @@ fun TitleRoute(
             ?.takeIf { recordableOwner == null || state.session?.owner == recordableOwner }
     RecordTitleVisit(
         graph,
+        messages.viewedTitles,
+        RecentTitleId.Anime(id.value),
         state.session,
         anime?.let {
             RecentTitle(RecentTitleId.Anime(id.value), it.titles, it.safeForSearch ?: key.opened?.anime?.safeForSearch)

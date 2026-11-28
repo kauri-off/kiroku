@@ -95,6 +95,8 @@ internal fun MangaTitleRoute(
     val content = state.content as? MangaTitleContent.Shown
     RecordTitleVisit(
         graph,
+        messages.viewedTitles,
+        RecentTitleId.Manga(key.id),
         state.session,
         content?.details?.let { RecentTitle(RecentTitleId.Manga(key.id), it.titles, it.safeForSearch) },
     )

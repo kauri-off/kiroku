@@ -29,15 +29,38 @@ data class RecentTitleScope(
     val key: String,
 )
 
+data class RecentTitleVisit(
+    val title: RecentTitle,
+    val order: Long,
+) {
+    val key: RecentTitleId get() = title.key
+}
+
+data class RecentTitleRemoval(
+    val scope: RecentTitleScope,
+    val key: RecentTitleId,
+    val order: Long,
+    val through: Long? = null,
+) {
+    fun matches(visit: RecentTitleVisit): Boolean = key == visit.key && order == visit.order
+}
+
+sealed interface RecentTitleRemovalResult {
+    data object Removed : RecentTitleRemovalResult
+
+    data object Stale : RecentTitleRemovalResult
+
+    data class Failed(
+        val through: Long? = null,
+    ) : RecentTitleRemovalResult
+}
+
 interface RecentTitles {
     fun observeScope(): Flow<RecentTitleScope?>
 
-    fun observe(scope: RecentTitleScope): Flow<List<RecentTitle>>
+    fun observe(scope: RecentTitleScope): Flow<List<RecentTitleVisit>>
 
-    suspend fun remove(
-        scope: RecentTitleScope,
-        key: RecentTitleId,
-    ): Boolean
+    suspend fun remove(removal: RecentTitleRemoval): RecentTitleRemovalResult
 
     suspend fun reserveVisit(scope: RecentTitleScope): Long?
 
@@ -55,12 +78,9 @@ interface RecentTitles {
 object NoRecentTitles : RecentTitles {
     override fun observeScope() = emptyFlow<RecentTitleScope?>()
 
-    override fun observe(scope: RecentTitleScope) = flowOf(emptyList<RecentTitle>())
+    override fun observe(scope: RecentTitleScope) = flowOf(emptyList<RecentTitleVisit>())
 
-    override suspend fun remove(
-        scope: RecentTitleScope,
-        key: RecentTitleId,
-    ) = false
+    override suspend fun remove(removal: RecentTitleRemoval) = RecentTitleRemovalResult.Stale
 
     override suspend fun reserveVisit(scope: RecentTitleScope): Long? = null
 
