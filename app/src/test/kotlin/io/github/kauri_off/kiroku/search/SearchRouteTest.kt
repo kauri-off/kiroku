@@ -763,6 +763,37 @@ class SearchRouteTest {
     }
 
     @Test
+    fun `signed out seasons can change from empty and open a title then return to the selected period`() {
+        runBlocking { graph.session.signOut() }
+        search()
+        compose.onNodeWithText("This season").performClick()
+        settle()
+        compose.onNodeWithContentDescription("Season, Winter").assertExists()
+        compose.onNodeWithContentDescription("Year, 2026").performClick()
+        compose.onNodeWithText("2022").performClick()
+        settle()
+        compose.onNodeWithText("This list has no titles yet").assertExists()
+        compose.onNodeWithContentDescription("Year, 2022").performClick()
+        compose.onNodeWithText("2025").performClick()
+        settle()
+        compose.onNodeWithContentDescription("Season, Winter").performClick()
+        compose.onNodeWithText("Fall").performClick()
+        settle()
+
+        val title = FixtureAnime.exactToWatch.titles.romaji
+        val row = compose.onNode(hasText(title, substring = true) and hasClickAction())
+        row.assert(SemanticsMatcher.keyNotDefined(SemanticsActions.OnLongClick))
+        row.performClick()
+        settle()
+        compose.onNodeWithText(title).assertExists()
+        compose.onNodeWithContentDescription("Back").performClick()
+        settle()
+        compose.onNodeWithContentDescription("Season, Fall").assertExists()
+        compose.onNodeWithContentDescription("Year, 2025").assertExists()
+        row.assertExists()
+    }
+
+    @Test
     fun `signed out, a browse row offers no edit`() {
         scope.launch { graph.session.signOut() }
         search()

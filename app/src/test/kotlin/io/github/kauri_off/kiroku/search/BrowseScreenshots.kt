@@ -4,8 +4,12 @@ import androidx.compose.material3.SnackbarHostState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import io.github.kauri_off.kiroku.core.error.DataError
+import io.github.kauri_off.kiroku.core.model.AnimeSeason
+import io.github.kauri_off.kiroku.core.model.Season
 import io.github.kauri_off.kiroku.core.repository.BrowseList
+import io.github.kauri_off.kiroku.design.MotionBounds
 import io.github.kauri_off.kiroku.screenshots.ScreenshotRegistry
+import io.github.kauri_off.kiroku.screenshots.Transition
 import io.github.kauri_off.kiroku.screenshots.case
 import io.github.kauri_off.kiroku.screenshots.contentCase
 import io.github.kauri_off.kiroku.screenshots.shown
@@ -18,6 +22,10 @@ class BrowseScreenshots : ScreenshotRegistry() {
     override val empty = shown(screen(SearchFixtureStates.browseEmpty))
     override val error = shown(screen(SearchFixtureStates.browseError))
 
+    private val winter = SeasonPickerState(AnimeSeason(2026, Season.Winter), latestYear = 2026)
+    private val seasonal = SearchFixtureStates.browse(BrowseList.ThisSeason).copy(season = winter)
+    private val shortSeason = seasonal.copy(rows = Paged.Shown(SearchFixtureStates.browseRows(BrowseList.ThisSeason).take(2)))
+
     override val cases =
         listOf(
             case("suggestions", largeText = true, content = screen(SearchFixtureStates.browse(BrowseList.Suggestions))),
@@ -26,10 +34,28 @@ class BrowseScreenshots : ScreenshotRegistry() {
                 largeText = true,
                 content = screen(BrowseState(BrowseList.Suggestions, Paged.Loading, sessionExpired = true, available = false)),
             ),
-            case("this-season", content = screen(SearchFixtureStates.browse(BrowseList.ThisSeason))),
+            case("this-season", content = screen(seasonal)),
+            case("season-short-list", largeText = true, content = screen(shortSeason)),
+            case("season-menu", content = screen(seasonal.copy(season = winter.copy(menu = SeasonMenu.Season)))),
+            case("year-menu", content = screen(seasonal.copy(season = winter.copy(menu = SeasonMenu.Year)))),
+            case("season-loading", content = screen(seasonal.copy(rows = Paged.Loading))),
+            case("season-empty", content = screen(seasonal.copy(rows = Paged.Shown(emptyList())))),
+            case("season-error", content = screen(seasonal.copy(rows = Paged.Failed(DataError.NoConnection)))),
             case("top-rated", content = screen(SearchFixtureStates.browse(BrowseList.TopRated))),
             case("loading-more", content = screen(SearchFixtureStates.browse(BrowseList.MostPopular, More.Loading))),
             case("more-failed", content = screen(SearchFixtureStates.browse(BrowseList.MostPopular, More.Failed(DataError.NoConnection)))),
             case("session-expired", content = screen(SearchFixtureStates.browse(BrowseList.TopAiring).copy(sessionExpired = true))),
+        )
+
+    override val transitions =
+        listOf(
+            Transition("season-menu", start = "this-season", millis = MotionBounds.SCREEN) { opened ->
+                val state = if (opened) seasonal.copy(season = winter.copy(menu = SeasonMenu.Season)) else seasonal
+                BrowseScreen(state, onEvent = {}, snackbars = remember { SnackbarHostState() })
+            },
+            Transition("year-menu", start = "this-season", millis = MotionBounds.SCREEN) { opened ->
+                val state = if (opened) seasonal.copy(season = winter.copy(menu = SeasonMenu.Year)) else seasonal
+                BrowseScreen(state, onEvent = {}, snackbars = remember { SnackbarHostState() })
+            },
         )
 }

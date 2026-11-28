@@ -22,6 +22,8 @@ import io.github.kauri_off.kiroku.core.airing.Airing
 import io.github.kauri_off.kiroku.core.airing.tracked
 import io.github.kauri_off.kiroku.core.error.DataError
 import io.github.kauri_off.kiroku.core.error.Outcome
+import io.github.kauri_off.kiroku.core.fixtures.FixtureAnime
+import io.github.kauri_off.kiroku.core.fixtures.Fixtures
 import io.github.kauri_off.kiroku.core.list.ListSort
 import io.github.kauri_off.kiroku.core.list.SortDirection
 import io.github.kauri_off.kiroku.core.list.TabSort
@@ -244,6 +246,22 @@ class SandboxAppTest {
         SQLiteDatabase.openDatabase(context.getDatabasePath(database).path, null, SQLiteDatabase.OPEN_READONLY).use {
             DatabaseUtils.queryNumEntries(it, table)
         }
+
+    @Test
+    fun `seasonal browse in Sandbox serves the selected period from fixtures without a transport request`() {
+        val id = FixtureAnime.exactToWatch.id
+        val fixtures = Fixtures.at(graph.clock)
+        val period = checkNotNull(fixtures.details[id]?.season)
+        val page = waited { graph.search.openSeason(period).load(0, includeAdult = false) } as Outcome.Success
+        assertTrue(page.value.items.any { it.item.id == id && it.position == null })
+
+        val earlier = period.copy(year = period.year - 100)
+        val empty = waited { graph.search.openSeason(earlier).load(0, includeAdult = false) } as Outcome.Success
+        assertTrue(empty.value.items.isEmpty())
+        val requests = graph.sandbox.mal.asked
+        assertTrue(requests.none { "/anime/season/" in it })
+        assertEquals(emptyList<URI>(), connections.asked)
+    }
 
     @Test
     fun `signed in, synced, written, a title refreshed, pictures and AniList asked for, no request leaves the device`() {

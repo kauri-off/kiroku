@@ -6,6 +6,8 @@ import io.github.kauri_off.kiroku.core.error.Outcome
 import io.github.kauri_off.kiroku.core.fixtures.FixtureAnime
 import io.github.kauri_off.kiroku.core.fixtures.Fixtures
 import io.github.kauri_off.kiroku.core.model.Anime
+import io.github.kauri_off.kiroku.core.model.AnimeSeason
+import io.github.kauri_off.kiroku.core.model.Season
 import io.github.kauri_off.kiroku.core.model.SignInId
 import io.github.kauri_off.kiroku.core.repository.BrowseList
 import io.github.kauri_off.kiroku.core.repository.BrowseSession
@@ -125,6 +127,59 @@ class BrowseViewModelTest {
             runCurrent()
             assertEquals(listOf(safe), model.state.value.titles)
             assertEquals(25, model.state.value.nextOffset)
+        }
+
+    @Test
+    fun `changing the period restarts at zero and retry stays in the selected period despite an old reply`() =
+        runTest(main) {
+            val demo = Demo(Fixtures.reference, backgroundScope)
+            val winter = AnimeSeason(2026, Season.Winter)
+            val fall = AnimeSeason(2025, Season.Fall)
+            val old = Ranked(null, FixtureAnime.exactCaughtUp)
+            val selected = Ranked(null, FixtureAnime.exactToWatch)
+            val stale = CompletableDeferred<Outcome<Page<Ranked<Anime>>>>()
+            val calls = mutableListOf<Pair<AnimeSeason, Int>>()
+            val fallOffsets = mutableListOf<Int>()
+            val search =
+                object : SearchRepository by demo.search {
+                    override fun openSeason(period: AnimeSeason) =
+                        BrowseSession { offset, _ ->
+                            calls += period to offset
+                            when {
+                                period == winter && offset == 0 -> Outcome.Success(Page(listOf(old), 19))
+                                period == winter -> withContext(NonCancellable) { stale.await() }
+                                offset == 0 -> Outcome.Success(Page(listOf(selected), 25))
+                                offset !in fallOffsets -> {
+                                    fallOffsets += offset
+                                    Outcome.Failure(DataError.ServerError)
+                                }
+                                else -> Outcome.Success(Page(emptyList(), null))
+                            }
+                        }
+                }
+            val model =
+                BrowseViewModel(browseRead { search.openSeason(winter) }, Anime::id, demo.connection, flowOf(false), period = winter)
+            showing(model.state, model.shown)
+            runCurrent()
+            model.loadMore()
+            runCurrent()
+
+            model.selectPeriod(fall, browseRead { search.openSeason(fall) })
+            runCurrent()
+            stale.complete(Outcome.Success(Page(listOf(old), 99)))
+            runCurrent()
+            assertEquals(fall, model.state.value.period)
+            assertEquals(listOf(selected), model.state.value.titles)
+            assertEquals(25, model.state.value.nextOffset)
+
+            model.loadMore()
+            runCurrent()
+            assertEquals(DataError.ServerError, model.state.value.error)
+            assertEquals(listOf(selected), model.state.value.titles)
+            model.retry()
+            runCurrent()
+            assertEquals(null, model.state.value.nextOffset)
+            assertEquals(listOf(winter to 0, winter to 19, fall to 0, fall to 25, fall to 25), calls)
         }
 
     @Test

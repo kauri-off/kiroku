@@ -7,10 +7,12 @@ import io.github.kauri_off.kiroku.core.airing.effective
 import io.github.kauri_off.kiroku.core.error.DataError
 import io.github.kauri_off.kiroku.core.error.Outcome
 import io.github.kauri_off.kiroku.core.fixtures.FixtureSet
+import io.github.kauri_off.kiroku.core.fixtures.animeIn
 import io.github.kauri_off.kiroku.core.model.AiringStatus
 import io.github.kauri_off.kiroku.core.model.Anime
 import io.github.kauri_off.kiroku.core.model.AnimeDetails
 import io.github.kauri_off.kiroku.core.model.AnimeId
+import io.github.kauri_off.kiroku.core.model.AnimeSeason
 import io.github.kauri_off.kiroku.core.model.Session
 import io.github.kauri_off.kiroku.core.model.SignInId
 import io.github.kauri_off.kiroku.core.model.UserProfile
@@ -203,6 +205,13 @@ internal class DemoSearchRepository(
                             .mapIndexed { index, anime -> Ranked(index + 1, anime) }
                 }
             Outcome.Success(ranked.page(offset))
+        }
+
+    override fun openSeason(period: AnimeSeason): BrowseSession =
+        BrowseSession { offset, _ ->
+            server.load(needsSignIn = false)?.let { return@BrowseSession Outcome.Failure(it) }
+            if (offset < 0) return@BrowseSession Outcome.Failure(DataError.InvalidRequest)
+            Outcome.Success(fixtures.animeIn(period).map { Ranked(null, it) }.page(offset))
         }
 
     override fun openSuggestions(owner: SignInId): BrowseSession =

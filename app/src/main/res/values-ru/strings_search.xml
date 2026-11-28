@@ -18,4 +18,11 @@
     <string name="search_loading_more">Загрузка следующих тайтлов</string>
     <string name="search_browse_empty">В этой подборке пока нет тайтлов</string>
     <string name="search_browse_failed">Не удалось загрузить подборку</string>
+    <string name="search_seasonal_anime">Аниме по сезонам</string>
+    <string name="search_season_picker">Сезон, %1$s</string>
+    <string name="search_year_picker">Год, %1$d</string>
+    <string name="search_season_winter">Зима</string>
+    <string name="search_season_spring">Весна</string>
+    <string name="search_season_summer">Лето</string>
+    <string name="search_season_fall">Осень</string>
 </resources>

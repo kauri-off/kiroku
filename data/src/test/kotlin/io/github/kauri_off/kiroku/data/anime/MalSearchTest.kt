@@ -3,6 +3,8 @@ package io.github.kauri_off.kiroku.data.anime
 import io.github.kauri_off.kiroku.core.error.DataError
 import io.github.kauri_off.kiroku.core.error.Outcome
 import io.github.kauri_off.kiroku.core.model.AnimeId
+import io.github.kauri_off.kiroku.core.model.AnimeSeason
+import io.github.kauri_off.kiroku.core.model.Season
 import io.github.kauri_off.kiroku.core.repository.BrowseList
 import io.github.kauri_off.kiroku.data.network.MalFields
 import io.github.kauri_off.kiroku.data.network.NetworkFixture
@@ -161,6 +163,43 @@ class MalSearchTest {
             assertEquals(MalFields.SUMMARY, request.url.queryParameter("fields"))
             assertEquals(nsfw, request.url.queryParameter("nsfw"))
             assertNull(request.headers["Authorization"])
+        }
+    }
+
+    @Test
+    fun `an explicitly selected season keeps its period and uses the client id for each recorded page`() {
+        network.clock.now = Instant.parse("2027-07-01T00:00:00Z")
+        enqueue("season_fall_2026")
+        enqueue("season_fall_2026_next")
+        val search = MalSearch(network.http, network.clock) { error("Public reads never use the account") }
+        val season = search.openSeason(AnimeSeason(2026, Season.Fall))
+
+        val first = (runBlocking { season.load(0, includeAdult = false) } as Outcome.Success).value
+        val second = (runBlocking { season.load(checkNotNull(first.nextOffset), includeAdult = false) } as Outcome.Success).value
+
+        assertEquals(
+            AnimeId(61469),
+            first.items
+                .first()
+                .item.id,
+        )
+        assertEquals(
+            AnimeId(61990),
+            second.items
+                .first()
+                .item.id,
+        )
+        assertEquals(20, second.nextOffset)
+        (first.items + second.items).forEach { assertNull(it.position) }
+        for (offset in listOf("0", "10")) {
+            val request = network.api.received()
+            assertEquals("/v2/anime/season/2026/fall", request.url.encodedPath)
+            assertEquals(offset, request.url.queryParameter("offset"))
+            assertEquals("10", request.url.queryParameter("limit"))
+            assertEquals(MalFields.SUMMARY, request.url.queryParameter("fields"))
+            assertNull(request.url.queryParameter("nsfw"))
+            assertNull(request.headers["Authorization"])
+            assertEquals(network.clientId, request.headers["X-MAL-CLIENT-ID"])
         }
     }
 

@@ -10,6 +10,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.Saver
+import androidx.compose.runtime.saveable.listSaver
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.createSavedStateHandle
@@ -17,8 +18,11 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation3.runtime.NavKey
 import io.github.kauri_off.kiroku.CountAsShown
 import io.github.kauri_off.kiroku.collectAsScreenState
+import io.github.kauri_off.kiroku.core.model.Anime
 import io.github.kauri_off.kiroku.core.model.AnimeId
+import io.github.kauri_off.kiroku.core.model.AnimeSeason
 import io.github.kauri_off.kiroku.core.model.ListEntry
+import io.github.kauri_off.kiroku.core.model.Season
 import io.github.kauri_off.kiroku.core.model.Session
 import io.github.kauri_off.kiroku.core.model.SignInId
 import io.github.kauri_off.kiroku.core.model.TitleLanguage
@@ -33,6 +37,7 @@ import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.map
 import kotlinx.serialization.Serializable
+import java.time.LocalDate
 
 @Serializable
 data class BrowseKey(
@@ -133,6 +138,13 @@ fun BrowseRoute(
     onOpenTitle: (AnimeId, TitleSummary?) -> Unit,
     onSignIn: () -> Unit,
 ) {
+    val currentPeriod =
+        remember(graph, key.list) {
+            if (key.list == BrowseList.ThisSeason) AnimeSeason.of(LocalDate.now(graph.clock)) else null
+        }
+    var selectedPeriod by rememberSaveable(currentPeriod, stateSaver = seasonSaver) { mutableStateOf(currentPeriod) }
+    val period = selectedPeriod
+    var seasonMenu by remember { mutableStateOf<SeasonMenu?>(null) }
     val suggestions = key.list == BrowseList.Suggestions
     val owner = key.owner?.let(::SignInId).takeIf { suggestions }
     val sessionFlow = remember(graph) { graph.session.observeSession() }
@@ -148,11 +160,21 @@ fun BrowseRoute(
                 } else {
                     graph.showAdultInSearch
                 }
-            BrowseViewModel(key.list, graph.search, graph.connection, filter, owner)
+            if (period == null) {
+                BrowseViewModel(key.list, graph.search, graph.connection, filter, owner)
+            } else {
+                BrowseViewModel(
+                    browseRead { graph.search.openSeason(period) },
+                    Anime::id,
+                    graph.connection,
+                    filter,
+                    period = period,
+                )
+            }
         }
     CountAsShown(browse.shown)
     val loaded by browse.state.collectAsScreenState()
-    val results = if (belongsToSession) loaded else BrowseResults()
+    val results = if (belongsToSession && loaded.period == period) loaded else BrowseResults()
     val listed by listedEntries(graph, owner)
     val editor = if (suggestions) null else editSheetViewModel(graph, messages)
     val language by remember(graph) { graph.titleLanguage }.collectAsScreenState(TitleLanguage.Romaji)
@@ -167,6 +189,7 @@ fun BrowseRoute(
             sessionExpired = session is Session.Expired,
             editable = !suggestions && session.hasList(),
             available = belongsToSession || session == null,
+            season = period?.let { SeasonPickerState(it, maxOf(it.year, checkNotNull(currentPeriod).year), seasonMenu) },
         ),
         onEvent = { event ->
             when (event) {
@@ -180,6 +203,11 @@ fun BrowseRoute(
                     val anime = results.titles.firstOrNull { it.item.id == event.id }?.item ?: return@BrowseScreen
                     editor.open(event.id, anime)
                 }
+                is BrowseEvent.SelectPeriod -> {
+                    selectedPeriod = event.period
+                    browse.selectPeriod(event.period, browseRead { graph.search.openSeason(event.period) })
+                }
+                is BrowseEvent.ShowSeasonMenu -> seasonMenu = event.menu
                 BrowseEvent.LoadMore -> browse.loadMore()
                 BrowseEvent.Retry -> browse.retry()
                 BrowseEvent.SignIn -> onSignIn()
@@ -213,6 +241,12 @@ private fun listedEntries(
             .map<List<ListEntry>, Map<AnimeId, ListEntry>?> { entries -> entries.associateBy { it.anime.id } }
             .catch { emit(null) }
     }.collectAsScreenState(initial = null)
+
+private val seasonSaver =
+    listSaver<AnimeSeason?, Int>(
+        save = { period -> period?.let { listOf(it.year, it.season.ordinal) }.orEmpty() },
+        restore = { values -> if (values.isEmpty()) null else AnimeSeason(values[0], Season.entries[values[1]]) },
+    )
 
 internal val recentSaver =
     Saver<MutableState<List<String>>, ArrayList<String>>(save = { ArrayList(it.value) }, restore = { mutableStateOf(it) })

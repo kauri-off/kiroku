@@ -47,4 +47,8 @@ enum class Season { Winter, Spring, Summer, Fall }
 data class AnimeSeason(
     val year: Int,
     val season: Season,
-)
+) {
+    companion object {
+        fun of(date: LocalDate): AnimeSeason = AnimeSeason(date.year, Season.entries[(date.monthValue - 1) / 3])
+    }
+}

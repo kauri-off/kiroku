@@ -2,10 +2,13 @@ package io.github.kauri_off.kiroku.sandbox
 
 import android.content.Context
 import androidx.annotation.VisibleForTesting
+import io.github.kauri_off.kiroku.core.error.DataError
 import io.github.kauri_off.kiroku.core.error.Outcome
 import io.github.kauri_off.kiroku.core.fixtures.FixtureAnime
 import io.github.kauri_off.kiroku.core.fixtures.Fixtures
+import io.github.kauri_off.kiroku.core.fixtures.animeIn
 import io.github.kauri_off.kiroku.core.model.AnimeId
+import io.github.kauri_off.kiroku.core.model.AnimeSeason
 import io.github.kauri_off.kiroku.core.model.SignInId
 import io.github.kauri_off.kiroku.core.repository.BrowseList
 import io.github.kauri_off.kiroku.core.repository.BrowseSession
@@ -98,13 +101,20 @@ class SandboxGraph private constructor(
     override val mangaListEditor: MangaListEditor get() = mangaFixtures.also { live.startMangaCleanup() }
 
     override val search: SearchRepository by lazy {
-        val fixtures = SearchFixtureStates.standIn(Fixtures.at(clock))
+        val set = Fixtures.at(clock)
+        val fixtures = SearchFixtureStates.standIn(set)
         object : SearchRepository by live.search {
             override suspend fun search(
                 query: String,
                 offset: Int,
                 includeAdult: Boolean,
             ) = Outcome.Success(Page(fixtures.search(query).drop(offset).map { it.anime }, nextOffset = null))
+
+            override fun openSeason(period: AnimeSeason): BrowseSession =
+                BrowseSession { offset, _ ->
+                    if (offset < 0) return@BrowseSession Outcome.Failure(DataError.InvalidRequest)
+                    Outcome.Success(Page(set.animeIn(period).drop(offset).map { Ranked(null, it) }, nextOffset = null))
+                }
 
             override fun openSuggestions(owner: SignInId): BrowseSession = openBrowse(BrowseList.Suggestions)
 
