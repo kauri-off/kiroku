@@ -179,6 +179,33 @@ class KirokuDatabaseTest {
     }
 
     @Test
+    fun `upgrading title history keeps the latest three mixed visits of each owner`() {
+        context.deleteDatabase(name)
+        helper.createDatabase(13).use { connection ->
+            val visits =
+                (1L..8L).map { order ->
+                    mapOf(
+                        "visit" to order,
+                        "owner" to if (order % 2 == 0L) "guest" else "owner",
+                        "manga" to if (order <= 4L) 0L else 1L,
+                        "title_id" to order,
+                        "romaji" to "Synthetic title $order",
+                    )
+                }
+            connection.insertNamed("recent_title", visits)
+            connection.insertNamed("recent_visit_sequence", listOf(mapOf("id" to 0L, "last" to 9L)))
+        }
+
+        helper.runMigrationsAndValidate(KirokuDatabase.VERSION, KirokuDatabase.migrations).use { connection ->
+            val kept = connection.named("recent_title").sortedByDescending { it["visit"] as Long }
+            val byOwner = kept.groupBy({ it["owner"] }, { it["visit"] to it["manga"] })
+            assertEquals(listOf(8L to 1L, 6L to 1L, 4L to 0L), byOwner["guest"])
+            assertEquals(listOf(7L to 1L, 5L to 1L, 3L to 0L), byOwner["owner"])
+            assertEquals(mapOf("id" to 0L, "last" to 9L, "evicted_through" to 2L), connection.named("recent_visit_sequence").single())
+        }
+    }
+
+    @Test
     fun `every version up to the current one has its exported schema, with the identity it was exported with`() {
         assertEquals((1..KirokuDatabase.VERSION).toList(), IDENTITIES.keys.toList())
         for ((version, identity) in IDENTITIES) assertEquals("$version.json", identity, exportedIdentity(version))
@@ -355,6 +382,7 @@ class KirokuDatabaseTest {
         val recent =
             mapOf(
                 "recent_title" to listOf(mapOf("visit" to 1L, "owner" to "owner", "manga" to 0L, "title_id" to 1L, "romaji" to "Recent")),
+                "recent_title_dismissal" to listOf(mapOf("owner" to "owner", "manga" to 0L, "title_id" to 2L, "visit" to 1L)),
                 "recent_visit_sequence" to listOf(mapOf("id" to 0L, "last" to 1L)),
             )
         val fixture = list + airing + profile + record + manga + recent
@@ -676,6 +704,7 @@ class KirokuDatabaseTest {
                 11 to "562cc18b9d5918f02e80e21dd3848f6e",
                 12 to "9dde67be800e8ad34b046ebfd4594f6b",
                 13 to "64cc581574f47440e6ec4264c0d5ba90",
+                14 to "676151db60cfeb4eaa65d793a80b149f",
             )
     }
 }

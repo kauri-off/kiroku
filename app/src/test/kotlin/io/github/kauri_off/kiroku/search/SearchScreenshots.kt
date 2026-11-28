@@ -24,6 +24,7 @@ import io.github.kauri_off.kiroku.R
 import io.github.kauri_off.kiroku.core.error.DataError
 import io.github.kauri_off.kiroku.core.model.AnimeId
 import io.github.kauri_off.kiroku.core.repository.RecentTitleId
+import io.github.kauri_off.kiroku.core.repository.RecentTitles
 import io.github.kauri_off.kiroku.design.MotionBounds
 import io.github.kauri_off.kiroku.manga.mangaFixture
 import io.github.kauri_off.kiroku.screenshots.ScreenshotRegistry
@@ -60,20 +61,26 @@ class SearchScreenshots : ScreenshotRegistry() {
     private val pasted = "anime/5114/Fullmetal_Al"
     private val animeLink = SearchState(TextFieldState(pasted), true, SearchContent.AnimeLink(AnimeId(5114)))
 
-    private val viewed =
+    private val allViewed =
         listOf(
             RecentTitleRow(RecentTitleId.Anime(1), "Kage no Tabi"),
             RecentTitleRow(RecentTitleId.Manga(1), mangaFixture.titles.romaji),
             RecentTitleRow(RecentTitleId.Anime(2), "Hoshi no Kiroku"),
             RecentTitleRow(RecentTitleId.Anime(3), "Hana no Michi"),
         )
+    private val viewed = allViewed.take(RecentTitles.LIMIT)
     private val withHistory =
         SearchFixtureStates.start.copy(content = SearchContent.Start(recent, viewed = viewed))
+
+    private val dismissedTitle = viewed[1]
+    private val afterTitleDismiss =
+        withHistory.copy(content = SearchContent.Start(recent, viewed = viewed - dismissedTitle))
 
     override val cases =
         listOf(
             case("start", content = screen(SearchFixtureStates.start)),
             case("recent-titles", largeText = true, content = screen(withHistory)),
+            case("viewed-dismissed", content = screen(afterTitleDismiss)),
             case("recent-titles-expanded", keyboard = true, content = screen(withHistory.copy(expanded = true))),
             case(
                 "manga-recent-titles",
@@ -141,6 +148,27 @@ class SearchScreenshots : ScreenshotRegistry() {
         }
     }
 
+    private fun dismissViewed(variant: Variant): Transition {
+        lateinit var view: View
+        return Transition(
+            "viewed-dismissed",
+            start = "recent-titles",
+            millis = MotionBounds.SCREEN,
+            variant = variant,
+            at = listOf(16, 48, 112, MotionBounds.SCREEN),
+            change = { swipeRecent(view, dismissedTitle.title) },
+        ) {
+            val root = LocalView.current
+            SideEffect { view = root }
+            var remaining by remember { mutableStateOf(viewed) }
+            SearchScreen(
+                withHistory.copy(content = SearchContent.Start(recent, viewed = remaining)),
+                onEvent = { if (it is SearchEvent.RemoveViewed) remaining = remaining.filterNot { row -> row.key == it.key } },
+                snackbars = remember { SnackbarHostState() },
+            )
+        }
+    }
+
     // A tap on the bar opens the search view and Back closes it, the stock component's own motion.
     override val transitions =
         listOf(
@@ -166,7 +194,7 @@ class SearchScreenshots : ScreenshotRegistry() {
                 }
                 LaunchedEffect(changed) { if (changed) bar.animateToExpanded() }
             },
-        ) + listOf(Variant.EnLight, Variant.RuLight).map(::dismissRecent)
+        ) + listOf(Variant.EnLight, Variant.RuLight).flatMap { listOf(dismissRecent(it), dismissViewed(it)) }
 
     // The fast spatial spring has moved the field most of the way within a tenth of a second.
     private val early get() = listOf(EARLY_MILLIS, 2 * EARLY_MILLIS, 4 * EARLY_MILLIS, MotionBounds.SCREEN)

@@ -4,6 +4,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.SemanticsMatcher
+import androidx.compose.ui.test.assert
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.getUnclippedBoundsInRoot
 import androidx.compose.ui.test.hasAnyAncestor
@@ -19,6 +20,7 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performImeAction
 import androidx.compose.ui.test.performScrollToIndex
+import androidx.compose.ui.test.performScrollToNode
 import androidx.compose.ui.test.performSemanticsAction
 import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.test.performTouchInput
@@ -244,6 +246,52 @@ class MangaCatalogueRouteTest {
         compose.onNodeWithContentDescription("Back").performClick()
         settle()
         compose.onNodeWithText("Recently viewed").assertIsDisplayed()
+    }
+
+    @Test
+    @Config(qualifiers = "ru-w411dp-h891dp")
+    fun `the viewed Manga accessibility action keeps same id Anime on Search after restoration`() {
+        val history = DemoRecentTitles(demo.session)
+        val mangaKey = RecentTitleId.Manga(mangaFixture.id.value)
+        val animeKey = RecentTitleId.Anime(mangaFixture.id.value)
+        val animeTitle = "Synthetic anime"
+        val older = RecentTitle(RecentTitleId.Anime(20001), Titles("Older anime"), true)
+        val another = RecentTitle(RecentTitleId.Anime(20002), Titles("Another anime"), true)
+        scope.launch {
+            val owner = history.observeScope().first()
+            history.record(owner, older, checkNotNull(history.reserveVisit(owner)))
+            history.record(owner, another, checkNotNull(history.reserveVisit(owner)))
+            history.record(owner, RecentTitle(animeKey, Titles(animeTitle), true), checkNotNull(history.reserveVisit(owner)))
+            history.record(owner, RecentTitle(mangaKey, mangaFixture.titles, true), checkNotNull(history.reserveVisit(owner)))
+        }
+        val restore = StateRestorationTester(compose)
+        catalogue(restore = restore, openManga = false, history = history)
+        val activity = compose.activity
+        val row = compose.onNode(hasText(title) and hasClickAction())
+        row.assertExists()
+        compose.onNodeWithText(older.titles.romaji).assertDoesNotExist()
+        val mangaCatalogue = hasText(activity.getString(R.string.manga_catalogue)) and hasClickAction() and !hasText(title)
+        compose.onNode(scrollable).performScrollToNode(mangaCatalogue)
+        compose.onNode(mangaCatalogue).performClick()
+        settle()
+        row.assert(hasText(activity.getString(R.string.list_mode_manga)))
+        compose.onNodeWithText(animeTitle).assertDoesNotExist()
+        val action = row.fetchSemanticsNode().config[SemanticsActions.CustomActions].single()
+        assertEquals("Удалить из недавно открытых", action.label)
+        compose.runOnIdle { assertTrue(action.action()) }
+        settle()
+        row.assertDoesNotExist()
+
+        restore.emulateSavedInstanceStateRestore()
+        settle()
+        row.assertDoesNotExist()
+        compose.onNodeWithContentDescription(activity.getString(R.string.common_back)).performClick()
+        settle()
+        compose.onNode(scrollable).performScrollToIndex(0)
+        compose.onNode(hasText(animeTitle) and hasClickAction()).assert(hasText(activity.getString(R.string.list_mode_anime)))
+        compose.onNodeWithText(another.titles.romaji).assertExists()
+        compose.onNodeWithText(older.titles.romaji).assertDoesNotExist()
+        row.assertDoesNotExist()
     }
 
     @Test

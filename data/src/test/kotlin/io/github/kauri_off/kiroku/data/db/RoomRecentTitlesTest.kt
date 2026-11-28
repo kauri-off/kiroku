@@ -20,6 +20,7 @@ import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
 import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
@@ -78,6 +79,106 @@ class RoomRecentTitlesTest {
         }
 
     @Test
+    fun `dismissal survives reopening and blocks only already reserved visits of the removed typed title`() =
+        runBlocking {
+            val sessions = SessionFixture(folder.root)
+            val session = sessions.open()
+            val name = "dismissed-visits.db"
+            context.deleteDatabase(name)
+            val anime = anime(1, "Anime")
+            val manga = RecentTitle(RecentTitleId.Manga(1), Titles("Manga"), true)
+            val other = anime(2, "Other anime")
+            try {
+                val (scope, replay, reserved) =
+                    KirokuDatabase.open(context, name).use { db ->
+                        val history = RoomRecentTitles({ db }, session) { throw AssertionError(it) }
+                        val scope = history.activeScope()
+                        val visit = checkNotNull(history.reserveVisit(scope))
+                        history.record(scope, anime, visit)
+                        history.record(scope, manga, checkNotNull(history.reserveVisit(scope)))
+                        val pending = checkNotNull(history.reserveVisit(scope))
+                        assertTrue(history.remove(scope, anime.key))
+                        Triple(scope, visit, pending)
+                    }
+                KirokuDatabase.open(context, name).use { db ->
+                    val history = RoomRecentTitles({ db }, sessions.reopen()) { throw AssertionError(it) }
+                    assertEquals(listOf(manga), history.observe(scope).first())
+                    history.record(scope, anime, replay)
+                    history.record(scope, anime, reserved)
+                    assertEquals(listOf(manga), history.observe(scope).first())
+                    history.record(scope, other, reserved)
+                    assertEquals(listOf(other, manga), history.observe(scope).first())
+                    history.record(scope, anime, checkNotNull(history.reserveVisit(scope)))
+                    assertEquals(listOf(anime, other, manga), history.observe(scope).first())
+                }
+            } finally {
+                sessions.close()
+                context.deleteDatabase(name)
+            }
+        }
+
+    @Test
+    fun `the three most recent mixed visits stay after earlier visits are evicted`() =
+        runBlocking {
+            val sessions = SessionFixture(folder.root)
+            try {
+                val session = sessions.open()
+                KirokuDatabase.builder(context, null).build().use { db ->
+                    val history = RoomRecentTitles({ db }, session) { throw AssertionError(it) }
+                    val scope = history.activeScope()
+                    val older = anime(1, "Older")
+                    val evicted = anime(2, "Evicted")
+                    val manga = RecentTitle(RecentTitleId.Manga(2), Titles("Manga"), true)
+                    val newest = anime(3, "Newest")
+                    val last = anime(4, "Last")
+                    val earlyVisit = checkNotNull(history.reserveVisit(scope))
+                    history.record(scope, evicted, earlyVisit)
+                    for (title in listOf(older, manga, newest, last)) {
+                        history.record(scope, title, checkNotNull(history.reserveVisit(scope)))
+                    }
+                    assertEquals(listOf(last, newest, manga), history.observe(scope).first())
+                    assertEquals(3L, db.rows("recent_title"))
+                    assertTrue(history.remove(scope, last.key))
+                    history.record(scope, evicted, earlyVisit)
+                    assertEquals(listOf(newest, manga), history.observe(scope).first())
+                    history.record(scope, evicted, checkNotNull(history.reserveVisit(scope)))
+                    assertEquals(listOf(evicted, newest, manga), history.observe(scope).first())
+                }
+            } finally {
+                sessions.close()
+            }
+        }
+
+    @Test
+    fun `failed deletion leaves the row and its reserved visits intact until retried`() =
+        runBlocking {
+            val sessions = SessionFixture(folder.root)
+            try {
+                val session = sessions.open()
+                KirokuDatabase.builder(context, null).build().use { db ->
+                    val errors = mutableListOf<Throwable>()
+                    val history = RoomRecentTitles({ db }, session, unexpected = errors::add)
+                    val scope = history.activeScope()
+                    val original = anime(1, "Original")
+                    val updated = anime(1, "Updated")
+                    val visit = checkNotNull(history.reserveVisit(scope))
+                    history.record(scope, original, visit)
+                    db.breakWrites("recent_title", "DELETE")
+                    assertFalse(history.remove(scope, original.key))
+                    assertEquals(1, errors.size)
+                    assertEquals(listOf(original), history.observe(scope).first())
+                    db.repair("recent_title", "DELETE")
+                    history.record(scope, updated, visit)
+                    assertEquals(listOf(updated), history.observe(scope).first())
+                    assertTrue(history.remove(scope, original.key))
+                    assertEquals(emptyList<RecentTitle>(), history.observe(scope).first())
+                }
+            } finally {
+                sessions.close()
+            }
+        }
+
+    @Test
     fun `replay after a committed visit keeps its order and retains known safety until explicit evidence changes it`() =
         runBlocking {
             val sessions = SessionFixture(folder.root)
@@ -123,13 +224,21 @@ class RoomRecentTitlesTest {
                     assertEquals(emptyList<RecentTitle>(), history.observe(first).first())
                     history.record(first, firstTitle, 3)
                     assertEquals(emptyList<RecentTitle>(), history.observe(replacement).first())
-                    history.record(replacement, anime(2, "Second"), 4)
+                    val secondTitle = anime(1, "Second")
+                    history.record(replacement, secondTitle, 4)
+                    assertFalse(history.remove(first, secondTitle.key))
+                    assertFalse(history.remove(guest, secondTitle.key))
+                    assertEquals(listOf(secondTitle), history.observe(replacement).first())
                     session.signOutIfCurrent(replacement.owner) { history.clear(requireNotNull(replacement.owner)) }
                     val nextGuest = history.activeScope()
                     assertNotEquals(nextGuest, guest)
                     history.record(guest, anime(1, "Late guest"), 5)
                     assertEquals(emptyList<RecentTitle>(), history.observe(nextGuest).first())
                     assertEquals(0L, db.rows("recent_title"))
+                    val nextTitle = anime(1, "New guest")
+                    history.record(nextGuest, nextTitle, checkNotNull(history.reserveVisit(nextGuest)))
+                    assertFalse(history.remove(guest, nextTitle.key))
+                    assertEquals(listOf(nextTitle), history.observe(nextGuest).first())
                 }
             } finally {
                 sessions.close()
@@ -351,6 +460,7 @@ class RoomRecentTitlesTest {
                     assertNull(history.observeScope().first())
                     assertEquals(emptyList<RecentTitle>(), history.observe(old).first())
                     assertNull(history.reserveVisit(old))
+                    assertFalse(history.remove(old, RecentTitleId.Anime(1)))
                     history.record(old, anime(3, "Late"), 10)
                     assertEquals(2L, db.rows("recent_title"))
                     val sweep = launch { history.sweepRetired { true } }

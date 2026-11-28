@@ -34,6 +34,11 @@ interface RecentTitles {
 
     fun observe(scope: RecentTitleScope): Flow<List<RecentTitle>>
 
+    suspend fun remove(
+        scope: RecentTitleScope,
+        key: RecentTitleId,
+    ): Boolean
+
     suspend fun reserveVisit(scope: RecentTitleScope): Long?
 
     suspend fun record(
@@ -43,7 +48,7 @@ interface RecentTitles {
     )
 
     companion object {
-        const val LIMIT = 10
+        const val LIMIT = 3
     }
 }
 
@@ -51,6 +56,11 @@ object NoRecentTitles : RecentTitles {
     override fun observeScope() = emptyFlow<RecentTitleScope?>()
 
     override fun observe(scope: RecentTitleScope) = flowOf(emptyList<RecentTitle>())
+
+    override suspend fun remove(
+        scope: RecentTitleScope,
+        key: RecentTitleId,
+    ) = false
 
     override suspend fun reserveVisit(scope: RecentTitleScope): Long? = null
 

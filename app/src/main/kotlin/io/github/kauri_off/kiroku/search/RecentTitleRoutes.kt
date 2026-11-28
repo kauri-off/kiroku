@@ -1,5 +1,7 @@
 package io.github.kauri_off.kiroku.search
 
+import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.SnackbarResult
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -16,6 +18,7 @@ import io.github.kauri_off.kiroku.core.repository.RecentTitle
 import io.github.kauri_off.kiroku.core.repository.RecentTitleId
 import io.github.kauri_off.kiroku.core.repository.RecentTitleScope
 import io.github.kauri_off.kiroku.design.component.LocalOnTop
+import io.github.kauri_off.kiroku.shell.show
 import io.github.kauri_off.kiroku.wiring.AppGraph
 import kotlinx.coroutines.flow.first
 
@@ -67,6 +70,19 @@ internal fun recentTitles(
                     is RecentTitleId.Manga -> graph.manga != null
                 }
         }
+    }
+}
+
+internal suspend fun AppGraph.removeViewedTitle(
+    scope: RecentTitleScope,
+    key: RecentTitleId,
+    snackbars: SnackbarHostState,
+    message: String,
+    retry: String,
+) {
+    while (!recentTitles.remove(scope, key)) {
+        if (recentTitles.observeScope().first() != scope) return
+        if (snackbars.show(message, retry) != SnackbarResult.ActionPerformed) return
     }
 }
 

@@ -14,10 +14,12 @@ import androidx.compose.runtime.saveable.Saver
 import androidx.compose.runtime.saveable.listSaver
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.res.stringResource
 import androidx.lifecycle.createSavedStateHandle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation3.runtime.NavKey
 import io.github.kauri_off.kiroku.CountAsShown
+import io.github.kauri_off.kiroku.R
 import io.github.kauri_off.kiroku.collectAsScreenState
 import io.github.kauri_off.kiroku.core.model.Anime
 import io.github.kauri_off.kiroku.core.model.AnimeId
@@ -75,6 +77,8 @@ fun SearchRoute(
     val historyScope = recentScope(graph)?.takeIf { session != null && it.owner == session?.owner }
     val visits = if (text.isEmpty()) recentTitles(graph, historyScope, adult) else emptyList()
     val scope = rememberCoroutineScope()
+    val removeFailed = stringResource(R.string.search_remove_viewed_failed)
+    val retry = stringResource(R.string.design_retry)
     val shown = results.takeIf { it.query == text && it.adult == adult }
     val linkId = search.linkId
     val content =
@@ -107,6 +111,11 @@ fun SearchRoute(
                 SearchEvent.Submit -> keep(search.text)
                 SearchEvent.Clear -> query.clearText()
                 is SearchEvent.RemoveRecent -> recent = recent - event.query
+                is SearchEvent.RemoveViewed -> {
+                    val viewedScope = historyScope ?: return@SearchScreen
+                    if (visits.none { it.key == event.key }) return@SearchScreen
+                    scope.launch { graph.removeViewedTitle(viewedScope, event.key, snackbars, removeFailed, retry) }
+                }
                 is SearchEvent.OpenRecent -> {
                     val current = session ?: return@SearchScreen
                     val openingScope = historyScope ?: return@SearchScreen

@@ -120,6 +120,10 @@ sealed interface SearchEvent {
         val key: RecentTitleId,
     ) : SearchEvent
 
+    data class RemoveViewed(
+        val key: RecentTitleId,
+    ) : SearchEvent
+
     data class RemoveRecent(
         val query: String,
     ) : SearchEvent

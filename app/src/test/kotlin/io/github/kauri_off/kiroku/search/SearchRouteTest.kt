@@ -8,6 +8,7 @@ import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.assert
+import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsOn
 import androidx.compose.ui.test.getUnclippedBoundsInRoot
 import androidx.compose.ui.test.hasAnyAncestor
@@ -32,6 +33,7 @@ import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.test.pressKey
 import androidx.compose.ui.test.swipeLeft
+import androidx.compose.ui.test.swipeRight
 import io.github.kauri_off.kiroku.core.demo.Demo
 import io.github.kauri_off.kiroku.core.demo.DemoStore
 import io.github.kauri_off.kiroku.core.error.DataError
@@ -244,6 +246,64 @@ class SearchRouteTest {
         back()
         compose.onNode(hasSetTextAction() and hasText("kag")).assertDoesNotExist()
         compose.onNodeWithText("Recently viewed").assertExists()
+    }
+
+    @Test
+    fun `a failed swipe restores the viewed row and another swipe removes it until a fresh opening`() {
+        val anime = FixtureAnime.exactToWatch
+        val title = RecentTitle(RecentTitleId.Anime(anime.id.value), anime.titles, true)
+        val history = DemoRecentTitles(graph.session)
+        val owner = runBlocking { history.observeScope().first() }
+        val original =
+            runBlocking {
+                checkNotNull(history.reserveVisit(owner)).also { history.record(owner, title, it) }
+            }
+        val reserved = runBlocking { checkNotNull(history.reserveVisit(owner)) }
+        val removals = mutableListOf<RecentTitleId>()
+        val source =
+            object : AppGraph by graph {
+                override val madeUp = false
+                override val recentTitles =
+                    object : RecentTitles by history {
+                        override suspend fun remove(
+                            scope: RecentTitleScope,
+                            key: RecentTitleId,
+                        ): Boolean {
+                            assertEquals(owner, scope)
+                            removals += key
+                            return removals.size > 1 && history.remove(scope, key)
+                        }
+                    }
+            }
+        search(source)
+        val row = compose.onNode(hasText(anime.titles.romaji) and hasClickAction())
+        row.performTouchInput { swipeRight() }
+        settle()
+        compose.runOnIdle { assertEquals(listOf(title.key), removals) }
+        row.assertIsDisplayed()
+        val action = row.fetchSemanticsNode().config[SemanticsActions.CustomActions].single()
+        assertEquals("Remove from recently viewed", action.label)
+        row.performTouchInput { swipeLeft() }
+        settle()
+        compose.runOnIdle { assertEquals(listOf(title.key, title.key), removals) }
+        row.assertDoesNotExist()
+
+        runBlocking {
+            history.record(owner, title, original)
+            history.record(owner, title, reserved)
+        }
+        settle()
+        row.assertDoesNotExist()
+        typeKag()
+        compose.onNode(inView(anime.titles.romaji) and hasClickAction()).performClick()
+        settle()
+        back()
+        back()
+        row.assertIsDisplayed()
+        row.performClick()
+        settle()
+        compose.onNodeWithText("Recently viewed").assertDoesNotExist()
+        compose.onNodeWithText(anime.titles.romaji).assertExists()
     }
 
     @Test
