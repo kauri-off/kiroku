@@ -95,12 +95,13 @@ class MangaListViewModelTest {
     )
 
     @Test
-    fun `recreation during a sort write starts with the committed direction and order`() =
+    fun `recreation during a chapters read sort write starts with the committed direction and order`() =
         runTest(dispatcher) {
             val reading = mangaEntry.status
-            val highScore = mangaEntry.copy(id = MangaId(10), score = 9, updatedAt = now)
-            val lowScore = mangaEntry.copy(id = MangaId(20), score = 4, updatedAt = now.minusSeconds(30))
-            snapshot = snapshot.copy(entries = listOf(highScore, lowScore))
+            val high = mangaEntry.copy(id = MangaId(10), chaptersRead = 12, updatedAt = now)
+            val zero = mangaEntry.copy(id = MangaId(20), chaptersRead = 0, updatedAt = now.minusSeconds(30))
+            val unknown = mangaEntry.copy(id = MangaId(30), chaptersRead = null, updatedAt = now.plusSeconds(30))
+            snapshot = snapshot.copy(entries = listOf(high, zero, unknown))
             val write = CompletableDeferred<Unit>()
             val serial = Mutex()
             val repo =
@@ -127,11 +128,11 @@ class MangaListViewModelTest {
                 Snapshot.sendApplyNotifications()
                 runCurrent()
                 first.control(owner, MangaListEvent.OpenSort(reading))
-                first.control(owner, MangaListEvent.SelectSort(ListSort.Score))
+                first.control(owner, MangaListEvent.SelectSort(ListSort.ChaptersRead))
                 first.control(owner, MangaListEvent.SelectDirection(SortDirection.Ascending))
                 Snapshot.sendApplyNotifications()
                 runCurrent()
-                assertEquals(listOf(lowScore, highScore), (first.state.value.content as MangaListContent.Ready).entries)
+                assertEquals(listOf(zero, high, unknown), (first.state.value.content as MangaListContent.Ready).entries)
 
                 shown.cancel()
                 first.viewModelScope.cancel()
@@ -140,8 +141,8 @@ class MangaListViewModelTest {
                 assertEquals(MangaListContent.Loading, recreated.state.value.content)
                 write.complete(Unit)
                 runCurrent()
-                assertEquals(TabSort(ListSort.Score, SortDirection.Ascending), recreated.state.value.sortFor(reading))
-                assertEquals(listOf(lowScore, highScore), (recreated.state.value.content as MangaListContent.Ready).entries)
+                assertEquals(TabSort(ListSort.ChaptersRead, SortDirection.Ascending), recreated.state.value.sortFor(reading))
+                assertEquals(listOf(zero, high, unknown), (recreated.state.value.content as MangaListContent.Ready).entries)
             } finally {
                 write.complete(Unit)
                 first.viewModelScope.cancel()

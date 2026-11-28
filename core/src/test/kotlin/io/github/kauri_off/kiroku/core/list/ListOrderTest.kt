@@ -148,13 +148,15 @@ class ListOrderTest {
 
     @Test
     fun `up next is offered and the default only in watching with airing data`() {
-        assertEquals(ListSort.entries, sortsFor(ListStatus.Watching, withAiring = true))
+        val regular = listOf(ListSort.Title, ListSort.LastUpdated, ListSort.Score, ListSort.StartDate)
+        assertEquals(listOf(ListSort.UpNext) + regular, sortsFor(ListStatus.Watching, withAiring = true))
         assertEquals(ListSort.UpNext, defaultSort(ListStatus.Watching, withAiring = true))
         assertEquals(ListSort.LastUpdated, defaultSort(ListStatus.Watching, withAiring = false))
         ListStatus.entries.filter { it != ListStatus.Watching }.forEach { status ->
-            assertEquals(ListSort.entries - ListSort.UpNext, sortsFor(status, withAiring = true))
+            assertEquals(regular, sortsFor(status, withAiring = true))
             assertEquals(ListSort.LastUpdated, defaultSort(status, withAiring = true))
         }
+        ListStatus.entries.forEach { status -> assertEquals(regular, sortsFor(status, withAiring = false)) }
     }
 
     @Test
@@ -166,6 +168,7 @@ class ListOrderTest {
                 ListSort.LastUpdated to SortDirection.Descending,
                 ListSort.Score to SortDirection.Descending,
                 ListSort.StartDate to SortDirection.Ascending,
+                ListSort.ChaptersRead to SortDirection.Descending,
             ),
             ListSort.entries.associateWith { it.defaultDirection },
         )
@@ -243,7 +246,7 @@ class ListOrderTest {
     @Test
     fun `without a direction each sort keeps its own order, and up next ignores one`() {
         val entries = set.entries
-        ListSort.entries.forEach { sort ->
+        sortsFor(ListStatus.Watching, withAiring = true).forEach { sort ->
             assertEquals(
                 order(entries, sort, set.airing::get, sort.defaultDirection) { it.anime.titles.romaji },
                 order(entries, sort, set.airing::get) { it.anime.titles.romaji },

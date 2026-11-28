@@ -288,6 +288,7 @@ class PublicMangaListRouteTest {
         read.performClick()
         val sort = compose.onNodeWithContentDescription("Sort")
         sort.performClick()
+        compose.onNodeWithText("Chapters read").assertDoesNotExist()
         compose.onNodeWithText("Title").performClick()
         compose.onNodeWithText("Z to A").performClick()
         compose.onNode(SemanticsMatcher.keyIsDefined(SemanticsActions.Dismiss)).performSemanticsAction(SemanticsActions.Dismiss)

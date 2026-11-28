@@ -91,6 +91,7 @@ import io.github.kauri_off.kiroku.core.list.ListSort
 import io.github.kauri_off.kiroku.core.list.SortDirection
 import io.github.kauri_off.kiroku.core.list.TabSort
 import io.github.kauri_off.kiroku.core.list.mangaListSorts
+import io.github.kauri_off.kiroku.core.list.publicMangaListSorts
 import io.github.kauri_off.kiroku.core.model.EntryStatus
 import io.github.kauri_off.kiroku.core.model.ListStatus
 import io.github.kauri_off.kiroku.design.component.AnimeRow
@@ -230,7 +231,7 @@ internal fun ListScreen(
     if (manga != null && !filtering && mangaSortTab != null && mangaContent != null) {
         SortSheet(
             manga.state.sortFor(mangaSortTab),
-            mangaListSorts,
+            if (manga.publicName == null) mangaListSorts else publicMangaListSorts,
             onDismiss = { manga.onEvent(MangaListEvent.DismissSort) },
             onSort = { manga.onEvent(MangaListEvent.SelectSort(it)) },
             onDirection = { manga.onEvent(MangaListEvent.SelectDirection(it)) },

@@ -431,6 +431,7 @@ class StoredPreferences internal constructor(
                     ListSort.LastUpdated -> "last_updated"
                     ListSort.Score -> "score"
                     ListSort.StartDate -> "start_date"
+                    ListSort.ChaptersRead -> "chapters_read"
                 }
             }
 

@@ -10,8 +10,8 @@ import io.github.kauri_off.kiroku.core.error.DataError
 import io.github.kauri_off.kiroku.core.error.Outcome
 import io.github.kauri_off.kiroku.core.list.SortDirection
 import io.github.kauri_off.kiroku.core.list.TabSort
-import io.github.kauri_off.kiroku.core.list.mangaListSorts
 import io.github.kauri_off.kiroku.core.list.orderManga
+import io.github.kauri_off.kiroku.core.list.publicMangaListSorts
 import io.github.kauri_off.kiroku.core.model.MangaListEntry
 import io.github.kauri_off.kiroku.core.model.MangaReadingStatus
 import io.github.kauri_off.kiroku.core.model.Session
@@ -127,7 +127,7 @@ internal class PublicMangaListViewModel(
         when (event) {
             MangaListEvent.Refresh, MangaListEvent.Retry -> refresh()
             else -> {
-                val next = controls.value.after(event, state.value.content as? MangaListContent.Ready)
+                val next = controls.value.after(event, state.value.content as? MangaListContent.Ready, publicMangaListSorts)
                 if (next == controls.value) return
                 if (next.sorts != controls.value.sorts) {
                     val choices =
@@ -163,7 +163,7 @@ internal class PublicMangaListViewModel(
             .chunked(3)
             .mapNotNull { values ->
                 val status = values.first().takeIf(String::isNotBlank) ?: return@mapNotNull null
-                val sort = mangaListSorts.firstOrNull { it.name == values.getOrNull(1) } ?: return@mapNotNull null
+                val sort = publicMangaListSorts.firstOrNull { it.name == values.getOrNull(1) } ?: return@mapNotNull null
                 val direction = SortDirection.entries.firstOrNull { it.name == values.getOrNull(2) } ?: return@mapNotNull null
                 MangaReadingStatus(status) to TabSort(sort, direction)
             }.toMap()
