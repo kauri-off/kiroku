@@ -68,11 +68,7 @@ class MalAnimeRepository(
     override suspend fun refresh(id: AnimeId): Outcome<Unit> {
         val owner = session.currentOwner() ?: return Outcome.Failure(DataError.StorageError)
         val begun = Holder(owner.id?.value)
-        val ready =
-            stored {
-                if (store.holder() == begun) return@stored true
-                withTimeoutOrNull(5.seconds) { awaitList() } != null && store.holder() == begun
-            }
+        val ready = stored { waitForList() && store.holder() == begun }
         if (!session.isCurrentOwner(owner)) return Outcome.Failure(DataError.ListEnded)
         when (ready) {
             is Outcome.Failure -> return ready
@@ -80,6 +76,14 @@ class MalAnimeRepository(
         }
         val (choice, order) = preferences.withAdultChoice { it to ++sequence }
         val answer = titles.title(id, choice?.enabled == true) { session.isCurrentOwner(owner) }
+        if (answer is Outcome.Success && session.isCurrentOwner(owner)) {
+            val settled = stored { waitForList() }
+            if (!session.isCurrentOwner(owner)) return Outcome.Failure(DataError.ListEnded)
+            when (settled) {
+                is Outcome.Failure -> return settled
+                is Outcome.Success -> if (!settled.value) return Outcome.Failure(DataError.StorageError)
+            }
+        }
         return session.withOwner(owner) {
             when (answer) {
                 is Outcome.Failure -> answer
@@ -87,6 +91,8 @@ class MalAnimeRepository(
             }
         } ?: Outcome.Failure(DataError.ListEnded)
     }
+
+    private suspend fun waitForList(): Boolean = withTimeoutOrNull(5.seconds) { awaitList() } != null
 
     private suspend fun publish(
         id: AnimeId,

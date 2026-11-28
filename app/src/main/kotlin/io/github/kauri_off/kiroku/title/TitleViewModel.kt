@@ -129,6 +129,8 @@ class TitleViewModel(
     private var load: Job? = null
     private var replaceObsolete = false
     private var deferredOwnerRetry: Asked? = null
+    private var freshnessOwed = false
+    private var checkingFreshness = false
 
     // The page's own airing ask, apart from its load: AniList's pace never holds the page's indicator or its walk.
     private var airingAsk: Job? = null
@@ -209,6 +211,11 @@ class TitleViewModel(
 
     // Shown again past the stop timeout, the page goes on through refreshIfStale, after its own page if that is stale.
     private fun shownAgain() {
+        if (checkingFreshness) return
+        if (freshnessOwed) {
+            viewModelScope.launch { refreshIfStale() }
+            return
+        }
         if (cut && deferredOwnerRetry == null && load?.isActive != true) walkIfOwed()
         viewModelScope.launch {
             val needed = replaceObsolete || anime.recommendationsNeedRefresh(id, adultSearchChoice.first().enabled)
@@ -320,16 +327,24 @@ class TitleViewModel(
 
     // A load that started while the store was read stands; a fresh page walks its chain if it has not.
     private suspend fun refreshIfStale() {
-        val stale = anime.stale(id, opened?.anime, clock.instant())
-        val otherRecommendations =
-            !stale && (replaceObsolete || anime.recommendationsNeedRefresh(id, adultSearchChoice.first().enabled))
-        if (!loads.isShowing || load?.isActive == true || resumeOwnerRetry()) return
-        if (stale) {
-            refresh(Asked.Shown)
-        } else {
-            if (otherRecommendations) refresh(Asked.Filter)
-            walkIfOwed()
-            viewModelScope.launch { (knownTitle() ?: storedTitle())?.let { askAiring(it, Asked.Shown) } }
+        if (checkingFreshness) return
+        checkingFreshness = true
+        try {
+            val stale = anime.stale(id, opened?.anime, clock.instant())
+            val otherRecommendations =
+                !stale && (replaceObsolete || anime.recommendationsNeedRefresh(id, adultSearchChoice.first().enabled))
+            if (load?.isActive == true) return
+            freshnessOwed = !loads.isShowing
+            if (freshnessOwed || resumeOwnerRetry()) return
+            if (stale) {
+                refresh(Asked.Shown)
+            } else {
+                if (otherRecommendations) refresh(Asked.Filter)
+                walkIfOwed()
+                viewModelScope.launch { (knownTitle() ?: storedTitle())?.let { askAiring(it, Asked.Shown) } }
+            }
+        } finally {
+            checkingFreshness = false
         }
     }
 
@@ -360,6 +375,7 @@ class TitleViewModel(
         load?.cancel()
         replaceObsolete = false
         deferredOwnerRetry = null
+        freshnessOwed = false
         if (asked != Asked.Filter) walking?.cancel()
         failure.value = null
         waitShown.value = asked == Asked.Retry

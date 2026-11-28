@@ -1249,6 +1249,51 @@ class TitleViewModelTest {
     }
 
     @Test
+    fun `a title hidden during its first freshness check loads once on a short return`() =
+        runTest(dispatcher) {
+            val scope = foregroundScope()
+            val graph = TestGraph.over(scope)
+            val id = FixtureAnime.exactToWatch.id
+            val initial = CompletableDeferred<Unit>()
+            val resumed = CompletableDeferred<Unit>()
+            var freshnessReads = 0
+            val repository =
+                object : AnimeRepository by graph.anime {
+                    override fun observeRefreshedAt(id: AnimeId) =
+                        graph.anime.observeRefreshedAt(id).onStart {
+                            when (++freshnessReads) {
+                                1 -> initial.await()
+                                2 -> resumed.await()
+                                else -> Unit
+                            }
+                        }
+                }
+            val title = title(graph, id, SavedStateHandle(), ShellMessages(scope, graph.list), repository = repository)
+            val first = showing(title.state, title.shown)
+            runCurrent()
+            assertEquals(1, freshnessReads)
+            first.cancel()
+            runCurrent()
+            initial.complete(Unit)
+            runCurrent()
+            assertEquals(0, graph.refreshes)
+
+            val second = showing(title.state, title.shown)
+            runCurrent()
+            assertEquals(2, freshnessReads)
+            second.cancel()
+            runCurrent()
+            showing(title.state, title.shown)
+            runCurrent()
+            assertEquals(2, freshnessReads)
+            resumed.complete(Unit)
+            advanceUntilIdle()
+            assertEquals(1, graph.refreshed.count { it == id })
+            assertEquals(FixtureDetails.full, (title.state.value as TitleState.Shown).page.details)
+            scope.cancel()
+        }
+
+    @Test
     fun `the details are refreshed once, not again when the page is shown again while they are fresh`() =
         test { s ->
             assertEquals(FixtureDetails.full, s.shown.page.details)

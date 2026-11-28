@@ -696,11 +696,11 @@ class MalAnimeRepositoryTest {
         }
 
     @Test
-    fun `an unsettled list times out with a storage error before dispatch`() =
+    fun `an unsettled guest list times out with a storage error before dispatch`() =
         runTest {
             val clearing = CompletableDeferred<Unit>()
             val s = subject(awaitList = { clearing.await() })
-            assertEquals(Outcome.Success(Unit), session.signIn(TokenGrant("access", "refresh")))
+            assertEquals(Session.SignedOut, session.currentSession())
             assertEquals(Outcome.Failure(DataError.StorageError), withTimeoutOrNull(6_000) { s.titles.refresh(id) })
             assertEquals(0, network.api.requestCount)
             assertEquals(Triple(null, null, null), s.stored())

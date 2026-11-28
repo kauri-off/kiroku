@@ -149,7 +149,12 @@ class LiveListTest {
     private suspend fun LiveGraph.signInOnce() = signIn.once()
 
     @Test
-    fun `a replacement anime read waits for sign-in to clear the guest title cache`() =
+    fun `a replacement anime read waits for sign-in to clear the guest title cache`() = replacementWaitsForClear(returnToGuest = false)
+
+    @Test
+    fun `a new guest anime read waits for the in-flight account clear`() = replacementWaitsForClear(returnToGuest = true)
+
+    private fun replacementWaitsForClear(returnToGuest: Boolean) =
         runBlocking {
             val guestRequest = CompletableDeferred<Unit>()
             val guestReply = CountDownLatch(1)
@@ -165,7 +170,7 @@ class LiveListTest {
                 ServedMal.answer(200, recorded)
             }
             val graph =
-                LiveGraph(parts(process(), "title-owner"), listStore = { parts ->
+                LiveGraph(parts(process(), "title-owner-$returnToGuest"), listStore = { parts ->
                     val room = liveListStore(parts)
                     object : LocalList by room {
                         override suspend fun clear(owner: SignInId?) {
@@ -185,6 +190,10 @@ class LiveListTest {
                     guestRequest.await()
                     graph.signInOnce()
                     clearing.await()
+                    if (returnToGuest) {
+                        graph.account.signOut()
+                        assertEquals(Session.SignedOut, graph.account.currentSession())
+                    }
                     guestReply.countDown()
                     assertEquals(Outcome.Failure(DataError.ListEnded), guest.await())
 
@@ -195,6 +204,7 @@ class LiveListTest {
 
                     clear.complete(Unit)
                     assertEquals(Outcome.Success(Unit), replacement.await())
+                    graph.list.settleForTitleRead()
                     assertEquals(2, requests.get())
                     assertEquals(setOf(id), graph.anime.observePagesRead().first())
                     assertNotNull(graph.anime.observeRefreshedAt(id).first())
