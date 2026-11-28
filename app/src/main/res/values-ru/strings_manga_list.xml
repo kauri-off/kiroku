@@ -7,6 +7,10 @@
     <string name="manga_list_on_hold">Отложено</string>
     <string name="manga_list_dropped">Брошено</string>
     <string name="manga_list_planned">Запланировано</string>
+    <string name="manga_list_sort_chapters_read">Прочитано глав</string>
+    <string name="manga_list_direction_most">Сначала больше</string>
+    <string name="manga_list_direction_fewest">Сначала меньше</string>
     <string name="public_manga_list_title">Список манги %1$s</string>
     <string name="public_manga_list_empty">Этот список манги пуст</string>
+    <string name="manga_chapters_read_unknown">Число прочитанных глав неизвестно</string>
 </resources>

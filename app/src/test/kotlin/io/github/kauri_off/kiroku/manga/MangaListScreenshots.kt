@@ -4,6 +4,10 @@ import androidx.compose.material3.SnackbarHostState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import io.github.kauri_off.kiroku.core.error.DataError
+import io.github.kauri_off.kiroku.core.list.ListSort
+import io.github.kauri_off.kiroku.core.list.SortDirection
+import io.github.kauri_off.kiroku.core.list.TabSort
+import io.github.kauri_off.kiroku.core.list.orderManga
 import io.github.kauri_off.kiroku.core.model.MangaId
 import io.github.kauri_off.kiroku.core.model.MangaListEntry
 import io.github.kauri_off.kiroku.core.model.MangaReadingStatus
@@ -52,6 +56,10 @@ class MangaListScreenshots : ScreenshotRegistry() {
             case("sort-sheet", window = WindowSize(360, 760), largeText = true) { Screen(mangaListFixture(), sortSheetOpen = true) },
             case("sort-sheet-wide", window = WindowSize(840, 600), largeText = true) {
                 Screen(mangaListFixture(), sortSheetOpen = true)
+            },
+            case("chapters-read") { Screen(chapterProgress(), sort = fewestChapters) },
+            case("chapters-read-sort", window = WindowSize(360, 760), largeText = true) {
+                Screen(chapterProgress(), sort = fewestChapters, sortSheetOpen = true)
             },
             case("punctuation-status") {
                 val status = MangaReadingStatus("__")
@@ -107,6 +115,19 @@ private val listEntries =
 private val readingEntries =
     (10L..23).map { id -> mangaEntry.copy(id = MangaId(id), titles = Titles("Reading fixture $id"), posterUrl = null) }
 
+private val fewestChapters = TabSort(ListSort.ChaptersRead, SortDirection.Ascending)
+
+private fun chapterProgress(): MangaListContent.Ready {
+    val entries =
+        listOf(
+            mangaEntry,
+            mangaEntry.copy(id = MangaId(4), titles = Titles("Copper Hills"), chaptersRead = 0, volumesRead = null),
+            mangaEntry.copy(id = MangaId(5), titles = Titles("Autumn Letter"), chaptersRead = null, volumesRead = null),
+            mangaEntry.copy(id = MangaId(6), titles = Titles("Paper Gardens"), chaptersRead = 5, volumesRead = null),
+        )
+    return mangaListFixture(orderManga(entries, fewestChapters, TitleLanguage.Romaji))
+}
+
 internal fun mangaListFixture(entries: List<MangaListEntry> = listEntries) = MangaListContent.Ready(entries, TitleLanguage.Romaji)
 
 @Composable
@@ -116,6 +137,7 @@ private fun Screen(
     tab: MangaReadingStatus = MangaEditStatus.Reading.readingStatus,
     filter: String? = null,
     sortSheetOpen: Boolean = false,
+    sort: TabSort = defaultMangaSort,
 ) {
     val matches = remember(content, filter) { mangaTitleFilter().rows(content as? MangaListContent.Ready, filter, 0) }
     ShellScreen(ShellState(Destination.List), {}) {
@@ -126,6 +148,7 @@ private fun Screen(
                     sessionExpired = expired,
                     tab = tab,
                     filter = ListState.Typed(filter),
+                    sorts = mapOf(tab to sort),
                     sortTab = tab.takeIf { sortSheetOpen },
                     matches = matches,
                 ),

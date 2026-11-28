@@ -14,6 +14,7 @@ import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.SemanticsNodeInteraction
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsNotDisplayed
+import androidx.compose.ui.test.assertIsOn
 import androidx.compose.ui.test.assertIsSelected
 import androidx.compose.ui.test.getUnclippedBoundsInRoot
 import androidx.compose.ui.test.hasAnyDescendant
@@ -21,6 +22,7 @@ import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.isDisplayed
 import androidx.compose.ui.test.junit4.StateRestorationTester
 import androidx.compose.ui.test.onAllNodesWithText
+import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollToIndex
@@ -32,6 +34,7 @@ import io.github.kauri_off.kiroku.core.list.SortDirection
 import io.github.kauri_off.kiroku.core.list.TabSort
 import io.github.kauri_off.kiroku.core.model.MangaId
 import io.github.kauri_off.kiroku.core.model.MangaListEntry
+import io.github.kauri_off.kiroku.core.model.MangaListNumber
 import io.github.kauri_off.kiroku.core.model.MangaReadingStatus
 import io.github.kauri_off.kiroku.core.model.Titles
 import io.github.kauri_off.kiroku.design.composeRule
@@ -57,6 +60,38 @@ class MangaListScreenTest {
 
     @get:Rule
     val rule: TestRule = registered(compose)
+
+    @Test
+    fun `the sort sheet selects chapters read and either direction`() {
+        val content = mangaListFixture()
+        var controls by mutableStateOf(MangaListControls())
+        compose.setContent {
+            Screen(MangaListState(content = content, sorts = controls.sorts, sortTab = controls.sortTab)) {
+                controls = controls.after(it, content)
+            }
+        }
+        compose.onNodeWithContentDescription("Sort").performClick()
+        compose.onNodeWithText("Chapters read").performClick().assertIsSelected()
+        compose.onNodeWithText("Most first").assertIsOn()
+        compose.onNodeWithText("Fewest first").performClick().assertIsOn()
+        assertEquals(TabSort(ListSort.ChaptersRead, SortDirection.Ascending), controls.sorts[mangaEntry.status])
+        compose.onNodeWithText("Most first").performClick().assertIsOn()
+        assertEquals(TabSort(ListSort.ChaptersRead, SortDirection.Descending), controls.sorts[mangaEntry.status])
+    }
+
+    @Test
+    fun `chapter sort identifies unverified displayed progress as unknown`() {
+        val entry = mangaEntry.copy(chaptersRead = 26, unverifiedNumbers = setOf(MangaListNumber.ChaptersRead))
+        val content = mangaListFixture(listOf(entry))
+        state = MangaListState(content = content)
+        compose.setContent { Screen(state) {} }
+        compose.onNodeWithText("26\u00A0chapters", substring = true).assertIsDisplayed()
+
+        compose.runOnIdle { state = state.copy(sorts = mapOf(entry.status to TabSort(ListSort.ChaptersRead))) }
+
+        compose.onNodeWithText("Chapters read unknown", substring = true).assertIsDisplayed()
+        compose.onNodeWithText("26\u00A0chapters", substring = true).assertDoesNotExist()
+    }
 
     @Test
     fun `a swipe selects the next status and tabs show only their own rows`() {
@@ -146,7 +181,7 @@ class MangaListScreenTest {
         val initial =
             MangaListState(
                 content = mangaListFixture(entries),
-                sorts = mapOf(mangaEntry.status to TabSort(ListSort.Title, SortDirection.Descending)),
+                sorts = mapOf(mangaEntry.status to TabSort(ListSort.ChaptersRead, SortDirection.Ascending)),
             )
         var recreating = false
         state = initial.copy(content = MangaListContent.Loading)

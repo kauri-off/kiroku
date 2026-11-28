@@ -255,18 +255,19 @@ class StoredPreferencesTest {
         val replacement = SignInId("first_other")
         val planned = MangaReadingStatus("plan_to_read")
         val unfamiliar = MangaReadingStatus("__")
-        val mangaScore = TabSort(ListSort.Score, SortDirection.Ascending)
+        val fewest = TabSort(ListSort.ChaptersRead, SortDirection.Ascending)
+        val most = TabSort(ListSort.ChaptersRead, SortDirection.Descending)
         val mangaTitle = TabSort(ListSort.Title, SortDirection.Descending)
         val anime = TabSort(ListSort.StartDate, SortDirection.Descending)
         process {
             it.setListSort(ListStatus.Planned, anime)
-            it.setMangaListSort(owner, planned, mangaScore)
-            it.setMangaListSort(owner, unfamiliar, mangaTitle)
+            it.setMangaListSort(owner, planned, fewest)
+            it.setMangaListSort(owner, unfamiliar, most)
             it.setMangaListSort(replacement, planned, mangaTitle)
         }
         process {
             assertEquals(anime, it.observeListSorts().first()[ListStatus.Planned])
-            assertEquals(mapOf(planned to mangaScore, unfamiliar to mangaTitle), it.mangaSorts(owner))
+            assertEquals(mapOf(planned to fewest, unfamiliar to most), it.mangaSorts(owner))
             assertEquals(mapOf(planned to mangaTitle), it.mangaSorts(replacement))
             assertEquals(Outcome.Success(Unit), it.reconcileMangaListSorts(replacement))
             assertTrue(it.mangaSorts(owner).isEmpty())

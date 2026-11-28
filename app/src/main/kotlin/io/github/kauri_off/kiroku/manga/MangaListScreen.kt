@@ -244,7 +244,7 @@ internal fun MangaListBody(
                         }
                     }
                 } else {
-                    MangaPages(state.tab, content, motion, scrolls, onEvent, pagePadding, publicList)
+                    MangaPages(state, content, motion, scrolls, onEvent, pagePadding, publicList)
                 }
             }
             val pagerBody = Modifier.belowBars(padding).fillMaxSize()
@@ -301,7 +301,7 @@ private fun rememberMangaScroll(
 
 @Composable
 private fun MangaPages(
-    tab: MangaReadingStatus,
+    state: MangaListState,
     content: MangaListContent.Ready,
     motion: ListTabMotion,
     scrolls: Map<MangaReadingStatus, LazyListState?>,
@@ -309,8 +309,8 @@ private fun MangaPages(
     padding: PaddingValues,
     publicList: Boolean,
 ) {
-    val index = content.pageIndex(tab)
-    val selection = rememberUpdatedState(tab)
+    val index = content.pageIndex(state.tab)
+    val selection = rememberUpdatedState(state.tab)
     val events = rememberUpdatedState(onEvent)
     LaunchedEffect(motion) {
         motion.followRest { page ->
@@ -322,7 +322,15 @@ private fun MangaPages(
     key(motion) {
         ListStatusPager(motion, key = { content.statuses[it].code }) { page ->
             val status = content.statuses[page]
-            MangaListPage(content, status, scrolls.getValue(status), onEvent, padding, publicList)
+            MangaListPage(
+                content,
+                status,
+                scrolls.getValue(status),
+                onEvent,
+                padding,
+                publicList,
+                byChaptersRead = !publicList && state.sortFor(status).sort == ListSort.ChaptersRead,
+            )
         }
     }
 }
@@ -335,6 +343,7 @@ private fun MangaListPage(
     onEvent: (MangaListEvent) -> Unit,
     padding: PaddingValues,
     publicList: Boolean,
+    byChaptersRead: Boolean,
 ) {
     val entries = content.pages[status].orEmpty()
     if (entries.isEmpty() && content.streaming) {
@@ -349,7 +358,7 @@ private fun MangaListPage(
         } else {
             stringResource(R.string.list_empty, status.displayName())
         }
-    MangaRows(entries, content, scroll, onEvent, padding, publicList, empty)
+    MangaRows(entries, content, scroll, onEvent, padding, publicList, empty, byChaptersRead = byChaptersRead)
 }
 
 @Composable
@@ -362,6 +371,7 @@ private fun MangaRows(
     publicList: Boolean,
     empty: String? = null,
     showStatus: Boolean = false,
+    byChaptersRead: Boolean = false,
 ) {
     SubScreenList(
         SubScreenBody.List(scroll = scroll) {
@@ -376,6 +386,7 @@ private fun MangaRows(
                         content.language,
                         showStatus,
                         publicList,
+                        byChaptersRead,
                         open = { onEvent(MangaListEvent.Open(entry)) },
                         edit = if (content.canEdit && !publicList) ({ onEvent(MangaListEvent.Edit(entry)) }) else null,
                     )
@@ -393,10 +404,11 @@ private fun MangaListRow(
     language: TitleLanguage,
     showStatus: Boolean,
     publicList: Boolean,
+    byChaptersRead: Boolean,
     open: () -> Unit,
     edit: (() -> Unit)?,
 ) {
-    val progress = entry.progressParts(publicList)
+    val progress = entry.progressParts(publicList, byChaptersRead)
     ListItem(
         onClick = open,
         onLongClick = edit,
@@ -421,8 +433,14 @@ internal fun MangaReadingStatus.displayName(): String =
     MangaEditStatus.entries.find { it.readingStatus == this }?.let { stringResource(it.label) } ?: malCodeAsText(code).ifBlank { code }
 
 @Composable
-internal fun MangaListEntry.progressParts(publicList: Boolean = false): List<String> {
-    val chapters = chaptersRead?.let { pluralStringResource(R.plurals.manga_chapters, it, countText(it)) }
+internal fun MangaListEntry.progressParts(
+    publicList: Boolean = false,
+    byChaptersRead: Boolean = false,
+): List<String> {
+    val count = if (byChaptersRead) recordedChaptersRead else chaptersRead
+    val chapters =
+        count?.let { pluralStringResource(R.plurals.manga_chapters, it, countText(it)) }
+            ?: if (byChaptersRead) stringResource(R.string.manga_chapters_read_unknown) else null
     val volumes = volumesRead?.let { pluralStringResource(R.plurals.manga_volumes, it, countText(it)) }
     val scoreLabel =
         score?.let {

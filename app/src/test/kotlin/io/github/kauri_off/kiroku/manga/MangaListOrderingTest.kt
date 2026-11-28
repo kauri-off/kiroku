@@ -11,6 +11,20 @@ import org.junit.Test
 
 class MangaListOrderingTest {
     @Test
+    fun `chapter edits update rows in place until the next ordering pass`() {
+        val first = mangaEntry.copy(id = MangaId(10), chaptersRead = 12)
+        val second = mangaEntry.copy(id = MangaId(20), chaptersRead = 6)
+        val ordering = MangaListOrdering()
+        val choices = mapOf(first.status to TabSort(ListSort.ChaptersRead))
+        val language = TitleLanguage.Romaji
+        assertEquals(listOf(first, second), ordering.entries(listOf(second, first), language, choices, 0, emptyList(), null))
+        val updated = second.copy(chaptersRead = 13)
+        val rows = listOf(first, updated)
+        assertEquals(rows, ordering.entries(rows, language, choices, 0, emptyList(), null))
+        assertEquals(listOf(updated, first), ordering.entries(rows, language, choices, 1, rows, null))
+    }
+
+    @Test
     fun `a row joins at the end and the next pull orders the destination`() {
         val planned = MangaReadingStatus("plan_to_read")
         val joining = mangaEntry.copy(id = MangaId(10), titles = Titles("First alphabetically"))
