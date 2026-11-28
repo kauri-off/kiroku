@@ -61,14 +61,15 @@ fun BrowseScreen(
     snackbars: SnackbarHostState,
     modifier: Modifier = Modifier,
     autoLoadMore: Boolean = true,
+    scroll: LazyListState? = null,
 ) {
     val period = state.season?.period
-    val scroll = if (period == null) null else key(period) { rememberLazyListState() }
+    val listScroll = scroll ?: period?.let { key(it) { rememberLazyListState() } }
     val body =
         if (!state.available) {
             SubScreenBody.State(ScreenState.Empty(stringResource(R.string.search_suggestions_unavailable)))
         } else {
-            browseBody(state.rows, onRetry = { onEvent(BrowseEvent.Retry) }, scroll = scroll) { rows ->
+            browseBody(state.rows, onRetry = { onEvent(BrowseEvent.Retry) }, scroll = listScroll) { rows ->
                 pagedRows(
                     period ?: state.list,
                     rows.items,

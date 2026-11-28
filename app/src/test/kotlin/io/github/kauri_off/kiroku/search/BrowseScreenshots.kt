@@ -1,5 +1,6 @@
 package io.github.kauri_off.kiroku.search
 
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
@@ -36,6 +37,24 @@ class BrowseScreenshots : ScreenshotRegistry() {
             ),
             case("this-season", content = screen(seasonal)),
             case("season-short-list", largeText = true, content = screen(shortSeason)),
+            case("season-scrolled") {
+                BrowseScreen(
+                    seasonal,
+                    onEvent = {},
+                    snackbars = remember { SnackbarHostState() },
+                    scroll = rememberLazyListState(initialFirstVisibleItemIndex = 2, initialFirstVisibleItemScrollOffset = 120),
+                )
+            },
+            case(
+                "season-menu-large-text",
+                largeText = true,
+                content = screen(shortSeason.copy(season = winter.copy(menu = SeasonMenu.Season))),
+            ),
+            case(
+                "year-menu-large-text",
+                largeText = true,
+                content = screen(shortSeason.copy(season = winter.copy(menu = SeasonMenu.Year))),
+            ),
             case("season-menu", content = screen(seasonal.copy(season = winter.copy(menu = SeasonMenu.Season)))),
             case("year-menu", content = screen(seasonal.copy(season = winter.copy(menu = SeasonMenu.Year)))),
             case("season-loading", content = screen(seasonal.copy(rows = Paged.Loading))),
