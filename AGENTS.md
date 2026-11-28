@@ -58,7 +58,7 @@ settings in `gradle.properties` without a measurement.
 
 A machine may have its own rules for running builds, emulators and `adb` (a job queue, memory limits, where
 scratch files go). If `~/.config/kiroku/MACHINE.md` exists, read it before the first such command and follow it in
-place of the commands above. `tools/` holds the maintainer's job queue; the build does not need it.
+place of the commands above.
 
 ## The worktree rule
 
