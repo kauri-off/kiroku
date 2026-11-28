@@ -76,14 +76,6 @@ class MalAnimeRepository(
         }
         val (choice, order) = preferences.withAdultChoice { it to ++sequence }
         val answer = titles.title(id, choice?.enabled == true) { session.isCurrentOwner(owner) }
-        if (answer is Outcome.Success && session.isCurrentOwner(owner)) {
-            val settled = stored { waitForList() }
-            if (!session.isCurrentOwner(owner)) return Outcome.Failure(DataError.ListEnded)
-            when (settled) {
-                is Outcome.Failure -> return settled
-                is Outcome.Success -> if (!settled.value) return Outcome.Failure(DataError.StorageError)
-            }
-        }
         return session.withOwner(owner) {
             when (answer) {
                 is Outcome.Failure -> answer

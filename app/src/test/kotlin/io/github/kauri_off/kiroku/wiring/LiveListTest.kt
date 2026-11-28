@@ -154,6 +154,64 @@ class LiveListTest {
     @Test
     fun `a new guest anime read waits for the in-flight account clear`() = replacementWaitsForClear(returnToGuest = true)
 
+    @Test
+    fun `a timed-out title lets a retried clear finish after committing its owner`() =
+        runBlocking {
+            val firstFailure = CompletableDeferred<Unit>()
+            val committed = CompletableDeferred<Unit>()
+            val release = CompletableDeferred<Unit>()
+            val finished = CompletableDeferred<Unit>()
+            val clears = AtomicInteger()
+            val parts = parts(process(), "title-clear-timeout")
+            val room = liveListStore(parts)
+            val graph =
+                LiveGraph(parts, listStore = {
+                    object : LocalList by room {
+                        override suspend fun clear(owner: SignInId?) {
+                            if (owner == null) {
+                                room.clear(null)
+                                return
+                            }
+                            val attempt = clears.incrementAndGet()
+                            if (attempt == 1) firstFailure.complete(Unit)
+                            if (attempt <= 2) throw IOException("The title cache could not be cleared")
+                            room.clear(owner)
+                            committed.complete(Unit)
+                            release.await()
+                            finished.complete(Unit)
+                        }
+                    }
+                })
+            val recorded = ServedMal.recorded("title_airing.200.json")
+            mal.anime = { ServedMal.answer(200, recorded) }
+            val id = AnimeId(61987)
+            try {
+                withTimeout(12.seconds) {
+                    graph.list.observeSyncedAt().first()
+                    graph.signInOnce()
+                    firstFailure.await()
+
+                    val accountTitle = async { graph.anime.refresh(id) }
+                    committed.await()
+                    assertNotNull(room.state().owner)
+                    assertEquals(3, clears.get())
+                    assertEquals(Outcome.Failure(DataError.StorageError), accountTitle.await())
+                    assertFalse(finished.isCompleted)
+                    assertTrue(mal.asked.none { it.startsWith("GET /v2/anime/") })
+
+                    graph.account.signOut()
+                    assertEquals(Session.SignedOut, graph.account.currentSession())
+                    release.complete(Unit)
+                    finished.await()
+                    assertEquals(Outcome.Success(Unit), graph.anime.refresh(id))
+                    assertNull(room.state().owner)
+                    assertEquals(setOf(id), graph.anime.observePagesRead().first())
+                }
+            } finally {
+                release.complete(Unit)
+            }
+        }
+
     private fun replacementWaitsForClear(returnToGuest: Boolean) =
         runBlocking {
             val guestRequest = CompletableDeferred<Unit>()
