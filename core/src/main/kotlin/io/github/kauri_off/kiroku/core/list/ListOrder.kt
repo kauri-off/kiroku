@@ -14,7 +14,7 @@ import java.text.Collator
 import java.time.Instant
 import java.util.Locale
 
-enum class ListSort { UpNext, Title, LastUpdated, Score, StartDate }
+enum class ListSort { UpNext, Title, LastUpdated, Score, StartDate, ChaptersRead }
 
 enum class SortDirection { Ascending, Descending }
 
@@ -24,14 +24,21 @@ val ListSort.defaultDirection: SortDirection?
         when (this) {
             ListSort.UpNext -> null
             ListSort.Title, ListSort.StartDate -> SortDirection.Ascending
-            ListSort.LastUpdated, ListSort.Score -> SortDirection.Descending
+            ListSort.LastUpdated, ListSort.Score, ListSort.ChaptersRead -> SortDirection.Descending
         }
 
 // The sorts a tab offers; "Up next" needs airing data, which another user's list does not have.
 fun sortsFor(
     status: EntryStatus,
     withAiring: Boolean,
-): List<ListSort> = ListSort.entries.filter { it != ListSort.UpNext || (status == ListStatus.Watching && withAiring) }
+): List<ListSort> =
+    ListSort.entries.filter {
+        when (it) {
+            ListSort.UpNext -> status == ListStatus.Watching && withAiring
+            ListSort.ChaptersRead -> false
+            else -> true
+        }
+    }
 
 fun defaultSort(
     status: EntryStatus,
@@ -71,11 +78,13 @@ fun order(
             ListSort.LastUpdated -> keyed(ascending) { it.updatedAt }
             ListSort.Score -> keyed(ascending) { it.values.score }
             ListSort.StartDate -> keyed(ascending) { it.anime.startDate?.firstDay() }
+            ListSort.ChaptersRead -> throw IllegalArgumentException()
         }
     return entries.sortedWith(comparator.then(byTitle).thenBy(id))
 }
 
-val mangaListSorts: List<ListSort> = listOf(ListSort.Title, ListSort.LastUpdated, ListSort.Score)
+val publicMangaListSorts: List<ListSort> = listOf(ListSort.Title, ListSort.LastUpdated, ListSort.Score)
+val mangaListSorts: List<ListSort> = publicMangaListSorts + ListSort.ChaptersRead
 
 fun orderManga(
     entries: List<MangaListEntry>,
@@ -90,6 +99,7 @@ fun orderManga(
             ListSort.Title -> if (ascending) byTitle else byTitle.reversed()
             ListSort.LastUpdated -> keyed(ascending, MangaListEntry::updatedAt)
             ListSort.Score -> keyed(ascending, MangaListEntry::score)
+            ListSort.ChaptersRead -> keyed(ascending, MangaListEntry::recordedChaptersRead)
             ListSort.UpNext, ListSort.StartDate -> throw IllegalArgumentException()
         }
     return entries.sortedWith(comparator.then(byTitle).thenBy(id))

@@ -71,6 +71,8 @@ fun ListSort.directions(): List<Pair<SortDirection, Int>> =
         ListSort.LastUpdated -> listOf(Descending to R.string.list_direction_newest, Ascending to R.string.list_direction_oldest)
         ListSort.Score -> listOf(Descending to R.string.list_direction_highest, Ascending to R.string.list_direction_lowest)
         ListSort.StartDate -> listOf(Ascending to R.string.list_direction_earliest, Descending to R.string.list_direction_latest)
+        ListSort.ChaptersRead ->
+            listOf(Descending to R.string.manga_list_direction_most, Ascending to R.string.manga_list_direction_fewest)
     }
 
 @StringRes
@@ -81,4 +83,5 @@ fun ListSort.labelRes(): Int =
         ListSort.LastUpdated -> R.string.list_sort_last_updated
         ListSort.Score -> R.string.list_sort_score
         ListSort.StartDate -> R.string.list_sort_start_date
+        ListSort.ChaptersRead -> R.string.manga_list_sort_chapters_read
     }

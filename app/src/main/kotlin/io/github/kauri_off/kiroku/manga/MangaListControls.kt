@@ -1,6 +1,7 @@
 package io.github.kauri_off.kiroku.manga
 
 import androidx.lifecycle.SavedStateHandle
+import io.github.kauri_off.kiroku.core.list.ListSort
 import io.github.kauri_off.kiroku.core.list.TabSort
 import io.github.kauri_off.kiroku.core.list.mangaListSorts
 import io.github.kauri_off.kiroku.core.model.MangaReadingStatus
@@ -19,6 +20,7 @@ internal data class MangaListControls(
     fun after(
         event: MangaListEvent,
         content: MangaListContent.Ready?,
+        availableSorts: List<ListSort> = mangaListSorts,
     ): MangaListControls {
         val tab = sortTab
         val choice = tab?.let(sorts::get) ?: defaultMangaSort
@@ -37,7 +39,7 @@ internal data class MangaListControls(
                 }
             MangaListEvent.DismissSort -> copy(sortTab = null)
             is MangaListEvent.SelectSort ->
-                if (tab != null && event.sort in mangaListSorts && event.sort != choice.sort) {
+                if (tab != null && event.sort in availableSorts && event.sort != choice.sort) {
                     copy(sorts = sorts + (tab to TabSort(event.sort)))
                 } else {
                     this

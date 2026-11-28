@@ -352,6 +352,7 @@ Not to forget:
 - [x] Download and share anime and manga gallery images.
 - [x] Pure-black theme.
 - [x] Choice of startup tab.
+- [x] **LIST-02 Sort the personal manga list by chapters read.**
 - [x] Season browser.
 
 ## After 1.0

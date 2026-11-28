@@ -2,6 +2,7 @@ package io.github.kauri_off.kiroku.core.list
 
 import io.github.kauri_off.kiroku.core.model.MangaId
 import io.github.kauri_off.kiroku.core.model.MangaListEntry
+import io.github.kauri_off.kiroku.core.model.MangaListNumber
 import io.github.kauri_off.kiroku.core.model.MangaReadingStatus
 import io.github.kauri_off.kiroku.core.model.TitleLanguage
 import io.github.kauri_off.kiroku.core.model.Titles
@@ -20,6 +21,31 @@ class MangaListOrderTest {
             MangaListEntry(MangaId(2), Titles("Aoi", "Beta"), status, updatedAt = old, score = 5),
             MangaListEntry(MangaId(1), Titles("Aardvark", "Alpha"), status, explicitlyUnrated = true),
         )
+
+    @Test
+    fun `chapters read sorts known zero with verified counts and keeps unknown counts last`() {
+        val titles =
+            listOf(
+                MangaListEntry(MangaId(1), Titles("Aardvark"), status),
+                MangaListEntry(MangaId(2), Titles("Albatross"), status, chaptersRead = 0),
+                MangaListEntry(MangaId(3), Titles("Fox"), status, chaptersRead = 8),
+                MangaListEntry(MangaId(4), Titles("Otter"), status, chaptersRead = 16),
+                MangaListEntry(MangaId(6), Titles("Bear"), status, chaptersRead = 8),
+                MangaListEntry(MangaId(5), Titles("Bear"), status, chaptersRead = 8),
+                MangaListEntry(
+                    MangaId(7),
+                    Titles("Badger"),
+                    status,
+                    chaptersRead = 100,
+                    unverifiedNumbers = setOf(MangaListNumber.ChaptersRead),
+                ),
+            )
+
+        val ascending = TabSort(ListSort.ChaptersRead, SortDirection.Ascending)
+        val descending = TabSort(ListSort.ChaptersRead)
+        assertEquals(listOf(2L, 5L, 6L, 3L, 4L, 1L, 7L), orderManga(titles, ascending, TitleLanguage.Romaji).map { it.id.value })
+        assertEquals(listOf(4L, 5L, 6L, 3L, 2L, 1L, 7L), orderManga(titles, descending, TitleLanguage.Romaji).map { it.id.value })
+    }
 
     @Test
     fun `missing dates and scores go last in both directions with title and id ties`() {
