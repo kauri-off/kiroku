@@ -1,6 +1,7 @@
 # Contributing to Kiroku
 
-Before changing code, read the relevant entries in the [roadmap](ROADMAP.md) and [architecture](docs/ARCHITECTURE.md).
+Before changing code, read your issue or task brief and the relevant sections of the [architecture](docs/ARCHITECTURE.md).
+Use [GitHub Issues](https://github.com/kauri-off/kiroku/issues) to report problems or propose changes.
 Follow the conventions in [AGENTS.md](AGENTS.md), including Conventional Commits for pull request titles.
 Pull requests are squash-merged. For data fixtures, follow the [recording rules](docs/ARCHITECTURE.md#111-tests-and-recorded-responses).
 
