@@ -17,6 +17,7 @@ import io.github.kauri_off.kiroku.core.repository.RecentTitles
 import io.github.kauri_off.kiroku.data.session.MalSession
 import io.github.kauri_off.kiroku.data.session.fileRetry
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
@@ -28,6 +29,7 @@ import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.withContext
 
 @Entity(tableName = "recent_title", primaryKeys = ["manga", "title_id"])
 internal data class RecentTitleRow(
@@ -141,16 +143,17 @@ class RoomRecentTitles(
     private suspend fun <T : Any> withScope(
         scope: RecentTitleScope,
         run: suspend (KirokuDatabase) -> T,
-    ): T? {
-        val owner = session.observeOwner().first()
-        if (scopeFor(owner) != scope) return null
-        return stored {
-            session.withOwner(owner) {
-                if (retired(scope.owner)) return@withOwner null
-                run(database())
+    ): T? =
+        withContext(Dispatchers.IO) {
+            val owner = session.observeOwner().first()
+            if (scopeFor(owner) != scope) return@withContext null
+            stored {
+                session.withOwner(owner) {
+                    if (retired(scope.owner)) return@withOwner null
+                    run(database())
+                }
             }
         }
-    }
 
     override suspend fun record(
         scope: RecentTitleScope,

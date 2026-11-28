@@ -11,6 +11,7 @@ import io.github.kauri_off.kiroku.data.session.FailingDisk
 import io.github.kauri_off.kiroku.data.session.SessionFixture
 import io.github.kauri_off.kiroku.data.session.TokenGrant
 import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.asCoroutineDispatcher
 import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
@@ -29,6 +30,8 @@ import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.RuntimeEnvironment
 import java.time.Duration
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.Executors
 
 @RunWith(RobolectricTestRunner::class)
 class RoomRecentTitlesTest {
@@ -266,6 +269,48 @@ class RoomRecentTitlesTest {
             } finally {
                 sessions.close()
                 context.deleteDatabase(name)
+            }
+        }
+
+    @Test
+    fun `a history reservation releases the session gate while its caller is paused`() =
+        runBlocking {
+            val sessions = SessionFixture(folder.root)
+            try {
+                val session = sessions.open()
+                KirokuDatabase.builder(context, null).build().use { db ->
+                    Executors.newSingleThreadExecutor().asCoroutineDispatcher().use { caller ->
+                        val entered = CompletableDeferred<Unit>()
+                        val release = CompletableDeferred<Unit>()
+                        val paused = CompletableDeferred<Unit>()
+                        val resume = CountDownLatch(1)
+                        val history =
+                            RoomRecentTitles({
+                                entered.complete(Unit)
+                                release.await()
+                                db
+                            }, session) { throw AssertionError(it) }
+                        val scope = history.activeScope()
+                        val reservation = launch(caller) { history.reserveVisit(scope) }
+                        try {
+                            withTimeout(5_000) {
+                                entered.await()
+                                caller.executor.execute {
+                                    paused.complete(Unit)
+                                    resume.await()
+                                }
+                                paused.await()
+                                release.complete(Unit)
+                                assertTrue(session.whileOwner(scope.owner) { true })
+                            }
+                        } finally {
+                            resume.countDown()
+                            reservation.cancelAndJoin()
+                        }
+                    }
+                }
+            } finally {
+                sessions.close()
             }
         }
 

@@ -20,6 +20,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.awaitCancellation
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -110,14 +111,22 @@ class SourceSectionTest {
         val tokens = File(context.noBackupFilesDir, "account.tokens")
         val inside = File(tokens, "held").apply { parentFile!!.mkdirs() }
         inside.writeText("held")
-        runBlocking { context.appGraph.session.signOut() }
+        val guest =
+            runBlocking {
+                context.appGraph.session.signOut()
+                checkNotNull(
+                    context.appGraph.recentTitles
+                        .observeScope()
+                        .first(),
+                )
+            }
         assertTrue(tokens.isDirectory)
         inside.delete()
 
         restartApp(context, exit = {})
 
         assertTrue(tokens.isFile)
-        assertEquals(0L, tokens.length())
+        assertEquals("\u0002${guest.key.removePrefix("guest-")}", tokens.readText())
     }
 
     @Test

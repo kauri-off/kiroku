@@ -414,7 +414,8 @@ class SandboxAppTest {
         waited { graph.session.signOut() }
         assertEquals(Session.SignedOut, waited { graph.session.observeSession().first() })
         assertEquals(emptyList<ListEntry>(), waited { graph.list.observeEntries().first() })
-        assertEquals(0L, File(context.noBackupFilesDir, "sandbox.tokens").length())
+        val guest = checkNotNull(waited { graph.recentTitles.observeScope().first() })
+        assertEquals("\u0002${guest.key.removePrefix("guest-")}", File(context.noBackupFilesDir, "sandbox.tokens").readText())
         assertEquals(
             TabSort.defaultFor(ListStatus.Completed),
             waited {
