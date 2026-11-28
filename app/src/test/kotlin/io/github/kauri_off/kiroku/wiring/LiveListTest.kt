@@ -304,7 +304,7 @@ class LiveListTest {
             val parts = parts(process())
             val owner = SignInId("0f8fad5b-d9cb-469f-a165-70867728950e")
             parts.tokenFile.writeBytes(byteArrayOf(0) + owner.value.encodeToByteArray())
-            liveTitles(parts).observeAnime(AnimeId(1)).first()
+            liveTitles(parts, { liveSession(parts) }).observeAnime(AnimeId(1)).first()
             val file = context.getDatabasePath(parts.databaseName).path
             SQLiteDatabase.openDatabase(file, null, SQLiteDatabase.OPEN_READWRITE).use { db ->
                 db.execSQL("INSERT INTO manga_list_state (owner, synced_at) VALUES (?, 0), ('retired', 0)", arrayOf(owner.value))
@@ -393,7 +393,7 @@ class LiveListTest {
     private suspend fun seedMangaWithBlockedPurge(parts: LiveParts): SignInId {
         val owner = SignInId("0f8fad5b-d9cb-469f-a165-70867728950e")
         parts.tokenFile.writeBytes(byteArrayOf(0) + owner.value.encodeToByteArray())
-        liveTitles(parts).observeAnime(AnimeId(1)).first()
+        liveTitles(parts, { liveSession(parts) }).observeAnime(AnimeId(1)).first()
         editMangaDatabase(parts) { db ->
             db.execSQL("INSERT INTO manga_list_state (owner, synced_at) VALUES (?, 0)", arrayOf(owner.value))
             db.execSQL(

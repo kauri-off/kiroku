@@ -35,15 +35,20 @@ import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.async
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeout
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
+import okhttp3.Dispatcher
+import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
@@ -78,6 +83,11 @@ class MalAnimeRepositoryTest {
 
     private val airing = recordedTitle("title_airing")
     private val id = airing.anime.id
+    private val sessions by lazy { SessionFixture(folder.root) }
+    private val session by lazy { sessions.open() }
+
+    @After
+    fun closeSession() = runBlocking { sessions.close() }
 
     private class Subject(
         val titles: MalAnimeRepository,
@@ -91,7 +101,7 @@ class MalAnimeRepositoryTest {
         val store = TitleStore(database, dispatcher, network.unexpected::add)
         val preferences = StoredPreferences(File(folder.newFolder(), "title.preferences_pb"), backgroundScope, network.unexpected::add)
         return Subject(
-            MalAnimeRepository(MalTitles(network.http), store, clock, preferences, network.unexpected::add),
+            MalAnimeRepository(MalTitles(network.http), store, session, clock, preferences, network.unexpected::add),
             store,
             database,
             preferences,
@@ -417,7 +427,8 @@ class MalAnimeRepositoryTest {
             s.preferences.setAdultInSearch(false)
             release.countDown()
             assertEquals(Outcome.Success(Unit), outstanding.await())
-            val freshReader = MalAnimeRepository(MalTitles(network.http), s.store, network.clock, s.preferences, network.unexpected::add)
+            val freshReader =
+                MalAnimeRepository(MalTitles(network.http), s.store, session, network.clock, s.preferences, network.unexpected::add)
             val stored = freshReader.observeDetails(title).first()!!
             assertEquals(adult.details.copy(recommendations = emptyList(), recommendationsIncludeAdult = null), stored)
             assertEquals(adult.anime, freshReader.observeAnime(title).first())
@@ -650,9 +661,9 @@ class MalAnimeRepositoryTest {
     @Test
     fun `a guest page request cannot repopulate the cache after signing in and out`() =
         runTest {
+            val calls = Dispatcher().apply { maxRequests = 1 }
+            network.calls = calls
             val s = subject()
-            val sessions = SessionFixture(folder.newFolder())
-            val session = sessions.open(dispatcher = dispatcher)
             val local = RoomLocalList(s.database, backgroundScope, dispatcher, network.unexpected::add)
             val list =
                 ListEngine(MalRemoteList(network.http, session), local, session.observeSession(), network.clock, backgroundScope) {
@@ -673,6 +684,12 @@ class MalAnimeRepositoryTest {
                 val sent = withContext(Dispatchers.IO) { network.api.received() }
                 assertEquals("/v2/anime/${id.value}", sent.url.encodedPath)
                 assertNull(sent.headers["Authorization"])
+                val queued = async { s.titles.refresh(id) }
+                withContext(Dispatchers.IO) {
+                    withTimeout(5_000) {
+                        while (calls.queuedCallsCount() == 0) delay(1)
+                    }
+                }
 
                 assertEquals(Outcome.Success(Unit), session.signIn(TokenGrant("access", "refresh")))
                 val signedIn = checkNotNull(session.currentSession()?.owner)
@@ -690,16 +707,23 @@ class MalAnimeRepositoryTest {
 
                 release.countDown()
                 val result = request.await()
+                val queuedResult = queued.await()
                 assertTrue(network.unexpected.isEmpty())
                 val pages = s.titles.observePagesRead().first()
                 assertEquals("the retired guest response must leave the page cache empty", emptySet<AnimeId>(), pages)
                 assertEquals(Triple(null, null, null), s.stored())
                 assertEquals(Outcome.Failure(DataError.ListEnded), result)
+                assertEquals(Outcome.Failure(DataError.ListEnded), queuedResult)
+                assertEquals(1, network.api.requestCount)
+
+                assertEquals(Outcome.Success(Unit), s.preferences.setAdultInSearch(true))
+                network.clock.now += Duration.ofSeconds(60)
                 assertEquals(Outcome.Success(Unit), s.titles.refresh(id))
-                assertEquals(Triple(airing.anime, airing.details, network.clock.now), s.stored())
+                assertEquals(Triple(airing.anime, airing.details.copy(recommendationsIncludeAdult = true), network.clock.now), s.stored())
+                assertEquals(setOf(id), s.titles.observePagesRead().first())
+                assertEquals(2, network.api.requestCount)
             } finally {
                 release.countDown()
-                sessions.close()
             }
         }
 }

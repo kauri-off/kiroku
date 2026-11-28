@@ -21,10 +21,11 @@ class MalTitles(
     suspend fun title(
         id: AnimeId,
         adult: Boolean,
+        maySendRead: (() -> Boolean)? = null,
     ): Outcome<MalTitle> {
         val answer =
             http
-                .call {
+                .call(maySendRead = maySendRead) {
                     val repairs = Repairs()
                     api.title(id.value, MalFields.DETAILS, nsfw = if (adult) true else null).toTitle(repairs) to repairs
                 }.clientIdOutcome()
