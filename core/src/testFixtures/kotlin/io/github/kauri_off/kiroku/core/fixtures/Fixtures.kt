@@ -38,6 +38,7 @@ import io.github.kauri_off.kiroku.core.fixtures.FixtureTime.moscow
 import io.github.kauri_off.kiroku.core.fixtures.FixtureTime.weekly
 import io.github.kauri_off.kiroku.core.model.Anime
 import io.github.kauri_off.kiroku.core.model.AnimeId
+import io.github.kauri_off.kiroku.core.model.AnimeSeason
 import io.github.kauri_off.kiroku.core.model.EntryStatus
 import io.github.kauri_off.kiroku.core.model.ListEntry
 import io.github.kauri_off.kiroku.core.model.ListStatus
@@ -162,3 +163,5 @@ object Fixtures {
         updatedAt = moscow(updated),
     )
 }
+
+fun FixtureSet.animeIn(period: AnimeSeason): List<Anime> = anime.filter { details[it.id]?.season == period }

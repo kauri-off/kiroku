@@ -9,7 +9,6 @@ import io.github.kauri_off.kiroku.core.model.AnimeSeason
 import io.github.kauri_off.kiroku.core.model.PartialDate
 import io.github.kauri_off.kiroku.core.model.RelatedAnime
 import io.github.kauri_off.kiroku.core.model.RelationType
-import io.github.kauri_off.kiroku.core.model.Season
 import io.github.kauri_off.kiroku.core.model.Source
 import io.github.kauri_off.kiroku.core.model.StatusCounts
 import io.github.kauri_off.kiroku.core.model.TitleStatistics
@@ -344,16 +343,7 @@ object FixtureDetails {
 
     val sparse: AnimeDetails = all.single { it.id == A.premiereUnannounced.id }
 
-    fun seasonOf(date: LocalDate): AnimeSeason =
-        AnimeSeason(
-            date.year,
-            when (date.monthValue) {
-                in 1..3 -> Season.Winter
-                in 4..6 -> Season.Spring
-                in 7..9 -> Season.Summer
-                else -> Season.Fall
-            },
-        )
+    fun seasonOf(date: LocalDate): AnimeSeason = AnimeSeason.of(date)
 
     private fun details(anime: Anime): AnimeDetails {
         val info = infos.getValue(anime.id)

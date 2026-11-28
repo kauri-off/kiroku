@@ -2,12 +2,15 @@ package io.github.kauri_off.kiroku.search
 
 import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.LazyListState
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.key
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import io.github.kauri_off.kiroku.R
 import io.github.kauri_off.kiroku.core.model.AnimeId
+import io.github.kauri_off.kiroku.core.model.AnimeSeason
 import io.github.kauri_off.kiroku.core.repository.BrowseList
 import io.github.kauri_off.kiroku.design.component.ScreenState
 import io.github.kauri_off.kiroku.titlesub.SubScreen
@@ -21,6 +24,7 @@ data class BrowseState(
     // Whether a row's long press opens its edit sheet: only while there is a list to edit.
     val editable: Boolean = false,
     val available: Boolean = true,
+    val season: SeasonPickerState? = null,
 )
 
 sealed interface BrowseEvent {
@@ -32,6 +36,14 @@ sealed interface BrowseEvent {
 
     data class Edit(
         val id: AnimeId,
+    ) : BrowseEvent
+
+    data class SelectPeriod(
+        val period: AnimeSeason,
+    ) : BrowseEvent
+
+    data class ShowSeasonMenu(
+        val menu: SeasonMenu?,
     ) : BrowseEvent
 
     data object LoadMore : BrowseEvent
@@ -49,14 +61,17 @@ fun BrowseScreen(
     snackbars: SnackbarHostState,
     modifier: Modifier = Modifier,
     autoLoadMore: Boolean = true,
+    scroll: LazyListState? = null,
 ) {
+    val period = state.season?.period
+    val listScroll = scroll ?: period?.let { key(it) { rememberLazyListState() } }
     val body =
         if (!state.available) {
             SubScreenBody.State(ScreenState.Empty(stringResource(R.string.search_suggestions_unavailable)))
         } else {
-            browseBody(state.rows, onRetry = { onEvent(BrowseEvent.Retry) }) { rows ->
+            browseBody(state.rows, onRetry = { onEvent(BrowseEvent.Retry) }, scroll = listScroll) { rows ->
                 pagedRows(
-                    state.list,
+                    period ?: state.list,
                     rows.items,
                     rows.more,
                     R.string.search_browse_failed,
@@ -69,13 +84,22 @@ fun BrowseScreen(
             }
         }
     SubScreen(
-        title = browseName(state.list),
+        title = if (period == null) browseName(state.list) else stringResource(R.string.search_seasonal_anime),
         sessionExpired = state.sessionExpired,
         onBack = { onEvent(BrowseEvent.Back) },
         onSignIn = { onEvent(BrowseEvent.SignIn) },
         snackbars = snackbars,
         body = body,
         modifier = modifier,
+        controls = {
+            state.season?.let {
+                SeasonPicker(
+                    it,
+                    onSelect = { selected -> onEvent(BrowseEvent.SelectPeriod(selected)) },
+                    onMenu = { menu -> onEvent(BrowseEvent.ShowSeasonMenu(menu)) },
+                )
+            }
+        },
     )
 }
 

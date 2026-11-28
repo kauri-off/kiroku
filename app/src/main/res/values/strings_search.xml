@@ -19,4 +19,11 @@
     <string name="search_loading_more">Loading more</string>
     <string name="search_browse_empty">This list has no titles yet</string>
     <string name="search_browse_failed">Could not load this list</string>
+    <string name="search_seasonal_anime">Seasonal anime</string>
+    <string name="search_season_picker">Season, %1$s</string>
+    <string name="search_year_picker">Year, %1$d</string>
+    <string name="search_season_winter">Winter</string>
+    <string name="search_season_spring">Spring</string>
+    <string name="search_season_summer">Summer</string>
+    <string name="search_season_fall">Fall</string>
 </resources>

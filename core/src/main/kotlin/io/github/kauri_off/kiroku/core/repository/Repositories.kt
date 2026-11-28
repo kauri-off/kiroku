@@ -8,6 +8,7 @@ import io.github.kauri_off.kiroku.core.list.TabSort
 import io.github.kauri_off.kiroku.core.model.Anime
 import io.github.kauri_off.kiroku.core.model.AnimeDetails
 import io.github.kauri_off.kiroku.core.model.AnimeId
+import io.github.kauri_off.kiroku.core.model.AnimeSeason
 import io.github.kauri_off.kiroku.core.model.DisplayPreferences
 import io.github.kauri_off.kiroku.core.model.EntryStatus
 import io.github.kauri_off.kiroku.core.model.ListEntry
@@ -366,6 +367,8 @@ interface SearchRepository {
     ): Outcome<Page<Anime>>
 
     fun openBrowse(list: BrowseList): BrowseSession
+
+    fun openSeason(period: AnimeSeason): BrowseSession
 
     fun openSuggestions(owner: SignInId): BrowseSession
 }

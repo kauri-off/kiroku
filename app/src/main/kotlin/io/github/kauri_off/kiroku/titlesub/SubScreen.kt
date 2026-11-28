@@ -62,6 +62,7 @@ internal fun SubScreen(
     snackbars: SnackbarHostState,
     body: SubScreenBody,
     modifier: Modifier = Modifier,
+    controls: @Composable () -> Unit = {},
 ) {
     val scrollBehavior = TopAppBarDefaults.pinnedScrollBehavior()
     ScreenScaffold(
@@ -77,6 +78,7 @@ internal fun SubScreen(
                 scrollBehavior = scrollBehavior,
             )
             if (sessionExpired) SessionBanner(onSignIn = onSignIn)
+            controls()
         },
         snackbarHost = { ScreenSnackbarHost(snackbars) },
     ) { padding ->

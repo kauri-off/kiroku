@@ -6,8 +6,10 @@ import io.github.kauri_off.kiroku.ShownLoads
 import io.github.kauri_off.kiroku.core.error.DataError
 import io.github.kauri_off.kiroku.core.error.Outcome
 import io.github.kauri_off.kiroku.core.model.Anime
+import io.github.kauri_off.kiroku.core.model.AnimeSeason
 import io.github.kauri_off.kiroku.core.model.SignInId
 import io.github.kauri_off.kiroku.core.repository.BrowseList
+import io.github.kauri_off.kiroku.core.repository.BrowseSession
 import io.github.kauri_off.kiroku.core.repository.Connection
 import io.github.kauri_off.kiroku.core.repository.Page
 import io.github.kauri_off.kiroku.core.repository.Ranked
@@ -31,20 +33,30 @@ internal fun BrowseViewModel(
     connection: Connection,
     includeAdult: Flow<Boolean?>,
     owner: SignInId? = null,
-): BrowseViewModel<Anime> {
-    val browse by lazy { owner?.let(search::openSuggestions) ?: search.openBrowse(list) }
-    return BrowseViewModel({ offset, adult, _ -> browse.load(offset, adult) }, Anime::id, connection, includeAdult)
+): BrowseViewModel<Anime> =
+    BrowseViewModel(
+        browseRead { owner?.let(search::openSuggestions) ?: search.openBrowse(list) },
+        Anime::id,
+        connection,
+        includeAdult,
+    )
+
+internal fun browseRead(open: () -> BrowseSession): suspend (Int, Boolean, () -> Boolean) -> Outcome<Page<Ranked<Anime>>> {
+    val browse by lazy(open)
+    return { offset, adult, _ -> browse.load(offset, adult) }
 }
 
 @OptIn(ExperimentalCoroutinesApi::class)
 internal class BrowseViewModel<T>(
-    private val read: suspend (Int, Boolean, () -> Boolean) -> Outcome<Page<Ranked<T>>>?,
+    read: suspend (Int, Boolean, () -> Boolean) -> Outcome<Page<Ranked<T>>>?,
     private val idOf: (T) -> Any,
     connection: Connection,
     includeAdult: Flow<Boolean?>,
     private val pauseWhenHidden: Boolean = false,
+    period: AnimeSeason? = null,
 ) : ViewModel() {
-    private val pages = MutableStateFlow(BrowseResults<T>())
+    private var read = read
+    private val pages = MutableStateFlow(BrowseResults<T>(period = period))
     private var adult: Boolean? = null
     private var pending: Job? = null
     private var beforeLoad: BrowseResults<T>? = null
@@ -71,12 +83,7 @@ internal class BrowseViewModel<T>(
                 validated = true
                 if (adult != enabled) {
                     adult = enabled
-                    pending?.cancel()
-                    beforeLoad = null
-                    pausedRetry = null
-                    pages.value = BrowseResults()
-                    loads.started()
-                    reconnect = false
+                    reset(pages.value.period)
                 }
                 if (loads.isShowing) {
                     if (reconnect) retry() else resume()
@@ -85,6 +92,25 @@ internal class BrowseViewModel<T>(
                 pages
             }.onCompletion { validated = false }
             .stateIn(viewModelScope, SharingStarted.WhileSubscribed(replayExpirationMillis = 0), BrowseResults())
+
+    fun selectPeriod(
+        period: AnimeSeason,
+        read: suspend (Int, Boolean, () -> Boolean) -> Outcome<Page<Ranked<T>>>?,
+    ) {
+        if (pages.value.period == period) return
+        this.read = read
+        reset(period)
+        if (loads.isShowing) resume()
+    }
+
+    private fun reset(period: AnimeSeason?) {
+        pending?.cancel()
+        beforeLoad = null
+        pausedRetry = null
+        pages.value = BrowseResults(period = period)
+        loads.started()
+        reconnect = false
+    }
 
     private fun resume() {
         val retry = pausedRetry
@@ -138,6 +164,7 @@ internal class BrowseViewModel<T>(
                             BrowseResults(
                                 titles = (page.titles + answer.value.items).distinctBy { idOf(it.item) },
                                 nextOffset = answer.value.nextOffset,
+                                period = page.period,
                             )
                         is Outcome.Failure -> page.copy(error = answer.error, loading = false)
                     }
@@ -152,6 +179,7 @@ internal data class BrowseResults<T>(
     val nextOffset: Int? = 0,
     val loading: Boolean = false,
     val error: DataError? = null,
+    val period: AnimeSeason? = null,
 ) {
     fun <R> rows(map: (Ranked<T>) -> R): Paged<R> {
         if (nextOffset == 0) return error?.let { Paged.Failed(it) } ?: Paged.Loading

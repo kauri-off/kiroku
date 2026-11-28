@@ -579,12 +579,20 @@ class ProcessDeathTest {
             navigator!!.open(browse)
         }
         compose.waitForIdle()
+        compose.onNodeWithContentDescription("Year, 2026").performClick()
+        compose.onNodeWithText("2025").performClick()
+        compose.onNodeWithContentDescription("Season, Winter").performClick()
+        compose.onNodeWithText("Fall").performClick()
+        compose.waitForIdle()
         owner.viewModelStore.clear()
         owner = Owner()
         restoration.emulateSavedInstanceStateRestore()
         compose.waitForIdle()
         assertEquals(Destination.Search, navigator!!.current)
         assertEquals(listOf(Destination.Search.root, browse), navigator!!.stackOf(Destination.Search))
+        compose.onNodeWithContentDescription("Season, Fall").assertExists()
+        compose.onNodeWithContentDescription("Year, 2025").assertExists()
+        compose.onNodeWithText(FixtureAnime.exactToWatch.titles.romaji, substring = true).assertExists()
     }
 
     @Test

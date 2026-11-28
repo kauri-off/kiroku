@@ -3,6 +3,7 @@ package io.github.kauri_off.kiroku.data.anime
 import io.github.kauri_off.kiroku.core.error.DataError
 import io.github.kauri_off.kiroku.core.error.Outcome
 import io.github.kauri_off.kiroku.core.model.Anime
+import io.github.kauri_off.kiroku.core.model.AnimeSeason
 import io.github.kauri_off.kiroku.core.model.Session
 import io.github.kauri_off.kiroku.core.model.SignInId
 import io.github.kauri_off.kiroku.core.repository.BrowseList
@@ -10,6 +11,7 @@ import io.github.kauri_off.kiroku.core.repository.BrowseSession
 import io.github.kauri_off.kiroku.core.repository.Page
 import io.github.kauri_off.kiroku.core.repository.Ranked
 import io.github.kauri_off.kiroku.core.repository.SearchRepository
+import io.github.kauri_off.kiroku.data.db.seasons
 import io.github.kauri_off.kiroku.data.network.AUTHORIZATION
 import io.github.kauri_off.kiroku.data.network.MalFields
 import io.github.kauri_off.kiroku.data.network.MalHttp
@@ -54,17 +56,16 @@ class MalSearch(
 
     override fun openBrowse(list: BrowseList): BrowseSession =
         when (list) {
-            BrowseList.ThisSeason -> {
-                val today = LocalDate.now(clock)
-                val season = SEASONS[(today.monthValue - 1) / 3]
-                browseSession(ranked = false) { offset, nsfw ->
-                    api.season(today.year, season, offset, PAGE_SIZE, MalFields.SUMMARY, nsfw)
-                }
-            }
+            BrowseList.ThisSeason -> openSeason(AnimeSeason.of(LocalDate.now(clock)))
             BrowseList.TopAiring -> ranking("airing")
             BrowseList.TopRated -> ranking("all")
             BrowseList.MostPopular -> ranking("bypopularity")
             BrowseList.Suggestions -> BrowseSession { _, _ -> Outcome.Failure(DataError.SessionExpired) }
+        }
+
+    override fun openSeason(period: AnimeSeason): BrowseSession =
+        browseSession(ranked = false) { offset, nsfw ->
+            api.season(period.year, seasons.toColumn(period.season), offset, PAGE_SIZE, MalFields.SUMMARY, nsfw)
         }
 
     override fun openSuggestions(owner: SignInId): BrowseSession =
@@ -122,7 +123,6 @@ class MalSearch(
 
     private companion object {
         const val PAGE_SIZE = 10
-        val SEASONS = listOf("winter", "spring", "summer", "fall")
     }
 }
 
