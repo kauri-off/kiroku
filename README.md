@@ -31,7 +31,7 @@ The app is available in English and Russian.
 You can get updates through [GitHub Releases](https://github.com/kauri-off/kiroku/releases) or add the repository to
 Obtainium.
 
-[Privacy](PRIVACY.md) · [Roadmap](ROADMAP.md) · [Report an issue](https://github.com/kauri-off/kiroku/issues) ·
+[Privacy](PRIVACY.md) · [Report an issue](https://github.com/kauri-off/kiroku/issues) ·
 [Contributing](CONTRIBUTING.md) · [GPL-3.0-or-later](LICENSE)
 
 Kiroku is an unofficial client. It is not affiliated with or endorsed by MyAnimeList or AniList.

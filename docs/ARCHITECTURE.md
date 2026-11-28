@@ -31,10 +31,8 @@ stack · 7 Persistence, errors and writes · 8 Design system · 9 How the interf
 - The user's profile and statistics; another user's list and statistics by user name.
 - Russian and English user interface.
 
-**After 1.0**, `ROADMAP.md` lists what is planned (a deeper title page, a schedule, read-only forums) and
-which dailyAL features are not built, each with its reason. Android only. Later features have to fit without
-redesign: at most five top-level destinations (section 6.3); a new data source is an optional section that can fail
-without affecting its page (section 2.3).
+Kiroku is Android-only. New features fit within the navigation and data source constraints of sections 6.3 and 2.3.
+Any forum or review support is read-only. Random discovery and other users' title progress feeds are outside scope.
 
 ## 2. Data sources
 
@@ -50,7 +48,9 @@ without affecting its page (section 2.3).
 | Characters, videos, reviews, other users' avatar and "about" | None chosen (section 13); not in 1.0 | |
 
 - Kiroku has no server of its own, scrapes no HTML, loads no remote configuration and asks no other app or service
-  to download anything for it (no downloadable fonts).
+  to download anything for it (no downloadable fonts). AI review summaries, profile background uploads and
+  server-backed autocomplete are out of scope.
+- Dub information has no approved data source with a known licence.
 - AniList is chosen for airing times because it is a documented public API that knows real episode times, breaks
   and delays, and covers long-running shows regardless of season (dailyAL issue #8). MAL's own `broadcast` field (a
   weekday and a Japan-time slot) knows none of that and only feeds the estimate of section 4.
@@ -72,6 +72,7 @@ MAL (from its API reference):
   user. Their avatar, join date and "about" are not available and are not shown in 1.0.
 - There is no user search: another user is opened by user name, in any letter case, or by a
   `myanimelist.net/profile/…` link.
+- News, featured articles, interest stacks, clubs, friends and other users' history stay on MyAnimeList.
 - Title statistics are the status distribution and the member count; MAL's API has no per-score histogram.
 - Search has no filter parameters, so 1.0 has no search filters.
 - Dates may be partial ("2017-10-23", "2017-10", "2017").
@@ -310,6 +311,7 @@ one emulator run shows a notification posted in Doze and the alarm restored afte
   settings. Planning continues either way, so a later grant needs no further step.
 - **Delay.** A notification comes when the episode airs in Japan (the default), or 30 minutes, 1 hour or 3 hours
   later.
+- Air times are not exported to the system calendar.
 - **Limits the app cannot remove.** A force-stopped app receives nothing until it is opened, and without the
   exact-alarm access a notification can come up to an hour late. The notification settings show which link broke
   when a notification is missing (the permission, exact alarms, the battery restriction, each with a link to its
@@ -359,6 +361,7 @@ one emulator run shows a notification posted in Doze and the alarm restored afte
   it is read, adds each part's titles at the end of their tabs; its order is computed when the read ends.
 - Text a person types is state the view model owns and changes inside the event; no flow sits between a keystroke and
   its field.
+- Search has no query syntax for genres or users.
 - A write to the list runs in the shell's scope, never a view model's, so the write and its message outlive the
   screen.
 - A thin `XRoute` connects the view model to the screen and to navigation, and is the only place that knows either.
@@ -371,6 +374,7 @@ one emulator run shows a notification posted in Doze and the alarm restored afte
 
 - Top-level destinations in 1.0: **List**, **Search**, **Profile**, in a bottom bar on phones and a rail on wide
   windows. Settings opens from Profile. Five destinations is the maximum.
+- There is no customisable home dashboard.
 - Each destination keeps its own back stack. Tapping the current destination again pops it to its root.
 - Back from the root of Search or Profile goes to List; Back from the root of List leaves the app.
 - A notification or a title's link builds the stack List → Title, and a profile's link List, then Profile → that
@@ -431,6 +435,8 @@ was chosen against, and why:
   status the app does not know stays on the List.
 - A stored choice that cannot be read counts as never made and is reported; it stays in its file unless the file
   itself cannot be read.
+- Planned entries serve as bookmarks. Kiroku keeps no separate local bookmarks or unsynchronised private entry
+  notes. Cache refresh frequency is internal, and the app offers no settings backup or restore.
 - Every schema change is a real migration with a migration test, and a schema version, once on `main`, never
   changes. **There is no destructive fallback**: it would erase the record of announced episodes and announce
   them again (N10).
@@ -460,6 +466,8 @@ edit changed, so a value changed on the website since the last download, or one 
 MAL has. A step is written at once. The edit sheet writes nothing before Save, and is not dismissed with unsaved
 changes without asking. "+1" on a row offers Undo, and so does a change on the title page that completes the title
 (W7).
+
+"Add to list" uses Planned as its fixed default.
 
 The score from 1 to 10 and the five statuses are the app's own model, which today equals MAL's.
 
@@ -509,6 +517,8 @@ decided as section 9 says.
 - **Dynamic colour** is on by default on Android 12 and later, and light and dark follow the system; a setting
   overrides each. Below Android 12 and in screenshot tests the scheme comes from one seed colour, which is not MAL's
   blue. One screenshot variant uses a second, contrasting seed to expose misused colour roles.
+- Personalisation uses the theme settings. Seasonal backgrounds, a manual accent picker and font choices are out
+  of scope.
 - Colours are used only through the theme's colour roles.
 - **Edge-to-edge.** Content is never hidden under a system bar: the last row of every list can be scrolled clear of
   the gesture bar, and a snackbar never sits under it.
@@ -524,13 +534,17 @@ The default Material 3 Expressive type scale with the system font. A component k
 - Layout code uses only the `Spacing` tokens, the theme's named sizes and component defaults: no literal dp value or
   colour outside the theme.
 - Every tappable element is at least 48 × 48 dp and every control has a label; the render fails otherwise (section
-  11.2). An action behind a long press is offered to screen readers too.
+  11.2). Screen readers announce each control's action or value and follow the visual order. An action behind a long
+  press is offered to screen readers too.
 - **Large text** is a font scale of 1.5 or more. No text or control is clipped at any font scale up to 2.0.
 
 ### 8.4 Components
 
 A screen uses stock Material 3 components directly, and the shared components of `design/component`, each built
 from stock ones and rendered in the gallery (section 11.2). No control is drawn by hand. Icons are Material icons.
+
+The List keeps a single layout for each media type. It omits a row editor, alternate grid or density modes, and
+counts on status tabs. Related titles have no graph view.
 
 ### 8.5 Motion
 
@@ -573,7 +587,8 @@ The code and the screenshots rendered from `main` are the record of what was dec
   media type, season ("Fall 2024" / "Осень 2024"), source, age rating, relation type, and genres. An unknown value
   falls back to MAL's code written as words ("light_novel" as "Light novel"), and an unknown genre to its MAL name.
   This fallback is the only interface text not from the resources. Titles, alternative titles, synopses,
-  user names and proper names (studios, producers) are content and are not translated.
+  user names and proper names (studios, producers) are content and are not translated. Synopsis translation is
+  left to the system's text selection tools.
 - Quantities use plural resources (Russian needs `one`, `few`, `many`, `other`). Sentences are never concatenated.
 - Dates and times follow the locale and the device's 12/24-hour setting, in the device's time zone.
 - **An air time** is written relative to today and never has both a weekday and a date; a next episode and a
@@ -581,8 +596,8 @@ The code and the screenshots rendered from `main` are the record of what was dec
   has the forms in both languages.
 - Language choice: on Android 13 and later the "Language" setting opens the system's per-app language screen. On
   Android 8 to 12 the app follows the system language; an in-app picker would require AppCompat.
-- "Title language" chooses among romaji, English and Japanese; when the chosen one is missing, the romaji title is
-  shown. Russian titles come after 1.0.
+- The app-wide "Title language" setting chooses among romaji, English and Japanese; when the chosen one is
+  missing, the romaji title is shown. Russian titles come after 1.0.
 
 ## 11. Testing and screenshots
 
@@ -667,6 +682,7 @@ only when rendered on the same machine.
   `release` environment, re-signs it with the release key and runs nothing else: no Gradle, no cache, no
   third-party code. That environment is limited to `main` and version tags. Signing keys never enter the
   repository. F-Droid follows after 1.0. Kiroku is not published on Google Play.
+- The default build has no donation link.
 - **Debug signing.** Debug builds from every checkout and worktree of the maintainer's machine are signed with
   one shared debug key, so that each installs over the other without losing data. Elsewhere the build falls back
   to the platform's default debug key.

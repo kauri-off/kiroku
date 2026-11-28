@@ -165,7 +165,7 @@ class ListTabMotion(
     // A finger is on the pager; only its drag is held by [gate].
     var touching = false
 
-    // Every page is laid out, so a scroll of the pager composes none, which can crash Compose (ROADMAP).
+    // Laying out all pages before a drag avoids a Compose RectList crash during scrolling.
     private val staged: Boolean get() = pager.layoutInfo.beyondViewportPageCount >= all
 
     private suspend fun laidOut(count: Int) = snapshotFlow { pager.layoutInfo.beyondViewportPageCount }.first { it >= count }

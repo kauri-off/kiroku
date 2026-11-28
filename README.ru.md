@@ -32,8 +32,8 @@
 Скачивайте обновления в [GitHub Releases](https://github.com/kauri-off/kiroku/releases) или добавьте репозиторий в
 Obtainium.
 
-[Конфиденциальность](PRIVACY.md) · [План работ](ROADMAP.md) ·
-[Сообщить о проблеме](https://github.com/kauri-off/kiroku/issues) · [Участие в проекте](CONTRIBUTING.md) ·
+[Конфиденциальность](PRIVACY.md) · [Сообщить о проблеме](https://github.com/kauri-off/kiroku/issues) ·
+[Участие в проекте](CONTRIBUTING.md) ·
 [GPL-3.0-or-later](LICENSE)
 
 Kiroku — неофициальный клиент. Он не связан с MyAnimeList и AniList и не одобрен ими.

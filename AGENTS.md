@@ -3,8 +3,8 @@
 Kiroku is an unofficial Android client for MyAnimeList: Kotlin, Jetpack Compose, Material 3, GPL-3.0-or-later. The
 product name is "Kiroku"; lowercase `kiroku` is used only for identifiers.
 
-Read before working: your task in [ROADMAP.md](ROADMAP.md), and in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) the
-opening and the sections your task and your brief name. Beyond those, by what you touch:
+Before working, read your issue or task brief and the opening and relevant sections of
+[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md). Read these additional sections as needed:
 
 | You touch | Read |
 |---|---|
@@ -23,10 +23,10 @@ The rest of the documents is not needed for your task.
 - Code and tests are the source of truth for how things work. When the code or a device shows a document to be
   wrong, correct the document in the same pull request, by shortening or restating it, not by describing the
   implementation.
-- A document does not repeat what the code or a test states. When your task makes a sentence redundant (a value
-  that is now a constant, a case list that is now a registry, a rule that is now a test), delete the sentence.
-- A change makes a document longer only by adding a decision, a constraint, an invariant, a term or a milestone's
-  tasks. Your hand-off names, for each sentence you add, the sentence it replaces, or says that it is new.
+- Record previously undocumented decisions and constraints in their canonical document. Consolidate repetition
+  across documents and remove prose that duplicates code or tests. Each documentation iteration must reduce the
+  total line count of tracked Markdown. Preserve valid decisions and useful acceptance information when editing.
+  Your hand-off names, for each sentence you add, the sentence it replaces, or says that it is new.
 - Propose changes to decisions or invariants in the hand-off and get approval before treating them as decided.
 - Screen content and layout are decided by reviewing the running app or its screenshots
   (ARCHITECTURE section 9), and no tracked text prescribes it. Build one version and show it; make variants only
@@ -74,7 +74,6 @@ place of the commands above.
   `chore`. Scopes: `core`, `data`, `app`, `list`, `title`, `search`, `profile`, `settings`, `notify`, `auth`,
   `design`.
 - Branches are squash-merged, so the pull request title is the commit message and follows the same format.
-- Tick the task's checkbox in `ROADMAP.md` in the same branch, and cut its entry down to its name.
 
 ## Code conventions
 
@@ -97,7 +96,7 @@ place of the commands above.
 
 ## Interface tasks
 
-After your final commit, the `ROADMAP.md` tick included, render the screens you changed and check that
+After your final commit, render the screens you changed and check that
 `app/build/outputs/roborazzi/RENDERED_AT` names that commit and does not say "dirty". A file that names another
 commit means the render did not run, not that you should edit the file. Look at every image yourself, including the
 `__full` ones, and hand over the commit hash and the output directory.
