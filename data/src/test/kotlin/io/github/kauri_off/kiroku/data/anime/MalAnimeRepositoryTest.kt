@@ -3,11 +3,14 @@ package io.github.kauri_off.kiroku.data.anime
 import io.github.kauri_off.kiroku.core.error.DataError
 import io.github.kauri_off.kiroku.core.error.DataException
 import io.github.kauri_off.kiroku.core.error.Outcome
+import io.github.kauri_off.kiroku.core.list.ListEngine
 import io.github.kauri_off.kiroku.core.model.AiringStatus
 import io.github.kauri_off.kiroku.core.model.AnimeId
+import io.github.kauri_off.kiroku.core.model.Session
 import io.github.kauri_off.kiroku.core.model.SignInId
 import io.github.kauri_off.kiroku.core.model.TitlePicture
 import io.github.kauri_off.kiroku.core.model.chainWalk
+import io.github.kauri_off.kiroku.core.model.owner
 import io.github.kauri_off.kiroku.core.model.sequelChain
 import io.github.kauri_off.kiroku.core.repository.detailsStale
 import io.github.kauri_off.kiroku.data.db.KirokuDatabase
@@ -17,6 +20,7 @@ import io.github.kauri_off.kiroku.data.db.TitleStore
 import io.github.kauri_off.kiroku.data.db.breakWrites
 import io.github.kauri_off.kiroku.data.db.dispatcher
 import io.github.kauri_off.kiroku.data.db.execute
+import io.github.kauri_off.kiroku.data.list.MalRemoteList
 import io.github.kauri_off.kiroku.data.network.AnotherTitleAnswer
 import io.github.kauri_off.kiroku.data.network.NetworkFixture
 import io.github.kauri_off.kiroku.data.network.NetworkFixture.Companion.answer
@@ -25,6 +29,8 @@ import io.github.kauri_off.kiroku.data.network.UnusableAnswer
 import io.github.kauri_off.kiroku.data.network.received
 import io.github.kauri_off.kiroku.data.preferences.StoredPreferences
 import io.github.kauri_off.kiroku.data.recorder.RecordedAnswers
+import io.github.kauri_off.kiroku.data.session.SessionFixture
+import io.github.kauri_off.kiroku.data.session.TokenGrant
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -640,4 +646,60 @@ class MalAnimeRepositoryTest {
             }
         }
     }
+
+    @Test
+    fun `a guest page request cannot repopulate the cache after signing in and out`() =
+        runTest {
+            val s = subject()
+            val sessions = SessionFixture(folder.newFolder())
+            val session = sessions.open(dispatcher = dispatcher)
+            val local = RoomLocalList(s.database, backgroundScope, dispatcher, network.unexpected::add)
+            val list =
+                ListEngine(MalRemoteList(network.http, session), local, session.observeSession(), network.clock, backgroundScope) {
+                    network.unexpected += it
+                }
+            val release = CountDownLatch(1)
+            try {
+                assertEquals(Session.SignedOut, session.observeSession().first())
+                list.observeSyncedAt().first()
+                val originalGuest = session.observeOwner().first()
+                val recorded = RecordedAnswers.named("title_airing")
+                network.answers {
+                    check(release.await(5, TimeUnit.SECONDS))
+                    answer(recorded.status, recorded.body)
+                }
+
+                val request = async { s.titles.refresh(id) }
+                val sent = withContext(Dispatchers.IO) { network.api.received() }
+                assertEquals("/v2/anime/${id.value}", sent.url.encodedPath)
+                assertNull(sent.headers["Authorization"])
+
+                assertEquals(Outcome.Success(Unit), session.signIn(TokenGrant("access", "refresh")))
+                val signedIn = checkNotNull(session.currentSession()?.owner)
+                list.observeSyncedAt().first()
+                assertEquals(signedIn, local.state().owner)
+                assertTrue(s.store.refresh(airing.anime, airing.details, network.clock.now))
+                assertEquals(setOf(id), s.titles.observePagesRead().first())
+
+                assertTrue(session.signOutIfCurrent(signedIn) {})
+                list.observeSyncedAt().first()
+                assertNull(local.state().owner)
+                assertFalse(session.isCurrentOwner(originalGuest))
+                assertEquals(Triple(null, null, null), s.stored())
+                assertFalse(request.isCompleted)
+
+                release.countDown()
+                val result = request.await()
+                assertTrue(network.unexpected.isEmpty())
+                val pages = s.titles.observePagesRead().first()
+                assertEquals("the retired guest response must leave the page cache empty", emptySet<AnimeId>(), pages)
+                assertEquals(Triple(null, null, null), s.stored())
+                assertEquals(Outcome.Failure(DataError.ListEnded), result)
+                assertEquals(Outcome.Success(Unit), s.titles.refresh(id))
+                assertEquals(Triple(airing.anime, airing.details, network.clock.now), s.stored())
+            } finally {
+                release.countDown()
+                sessions.close()
+            }
+        }
 }
