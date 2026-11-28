@@ -9,6 +9,7 @@ import androidx.compose.runtime.State
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.Saver
 import androidx.compose.runtime.saveable.listSaver
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -26,6 +27,7 @@ import io.github.kauri_off.kiroku.core.model.Season
 import io.github.kauri_off.kiroku.core.model.Session
 import io.github.kauri_off.kiroku.core.model.SignInId
 import io.github.kauri_off.kiroku.core.model.TitleLanguage
+import io.github.kauri_off.kiroku.core.model.owner
 import io.github.kauri_off.kiroku.core.repository.BrowseList
 import io.github.kauri_off.kiroku.design.component.LocalOnTop
 import io.github.kauri_off.kiroku.edit.EditSheetRoute
@@ -36,6 +38,7 @@ import io.github.kauri_off.kiroku.wiring.AppGraph
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.launch
 import kotlinx.serialization.Serializable
 import java.time.LocalDate
 
@@ -55,6 +58,7 @@ fun SearchRoute(
     onBrowse: (BrowseKey) -> Unit,
     onSignIn: () -> Unit,
     onManga: () -> Unit = {},
+    onOpenRecent: (RecentTitleOpening) -> Unit = {},
 ) {
     val language by remember(graph) { graph.titleLanguage }.collectAsScreenState(TitleLanguage.Romaji)
     val search = viewModel { SearchViewModel(graph.search, graph.connection, createSavedStateHandle(), graph.showAdultInSearch) }
@@ -68,6 +72,9 @@ fun SearchRoute(
     val resultState = if (LocalOnTop.current) search.state else search.cachedState
     val results by resultState.collectAsScreenState()
     val adult by remember(graph) { graph.showAdultInSearch }.collectAsScreenState(initial = null)
+    val historyScope = recentScope(graph)?.takeIf { session != null && it.owner == session?.owner }
+    val visits = if (text.isEmpty()) recentTitles(graph, historyScope, adult) else emptyList()
+    val scope = rememberCoroutineScope()
     val shown = results.takeIf { it.query == text && it.adult == adult }
     val linkId = search.linkId
     val content =
@@ -76,8 +83,8 @@ fun SearchRoute(
                 SearchContent.Start(
                     recent,
                     suggestions = session is Session.SignedIn,
-                    mangaAvailable =
-                        graph.mangaCatalogue != null,
+                    mangaAvailable = graph.mangaCatalogue != null,
+                    viewed = visits.map { RecentTitleRow(it.key, it.titles.preferred(language)) },
                 )
             linkId != null -> SearchContent.AnimeLink(linkId)
             shown == null -> SearchContent.Results(text, Paged.Loading)
@@ -100,6 +107,12 @@ fun SearchRoute(
                 SearchEvent.Submit -> keep(search.text)
                 SearchEvent.Clear -> query.clearText()
                 is SearchEvent.RemoveRecent -> recent = recent - event.query
+                is SearchEvent.OpenRecent -> {
+                    val current = session ?: return@SearchScreen
+                    val openingScope = historyScope ?: return@SearchScreen
+                    val title = visits.firstOrNull { it.key == event.key } ?: return@SearchScreen
+                    scope.launch { graph.openRecent(RecentTitleOpening(title, current, language, openingScope), onOpenRecent) }
+                }
                 is SearchEvent.SearchAgain -> {
                     query.setTextAndPlaceCursorAtEnd(event.query)
                     keep(event.query)

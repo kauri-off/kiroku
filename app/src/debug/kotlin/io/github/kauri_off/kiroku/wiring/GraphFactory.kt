@@ -6,8 +6,10 @@ import android.util.Log
 import coil3.intercept.Interceptor
 import io.github.kauri_off.kiroku.BuildConfig
 import io.github.kauri_off.kiroku.core.demo.Demo
+import io.github.kauri_off.kiroku.core.model.Session
 import io.github.kauri_off.kiroku.core.notify.NotificationAlarm
 import io.github.kauri_off.kiroku.core.notify.RunTrigger
+import io.github.kauri_off.kiroku.core.repository.RecentTitles
 import io.github.kauri_off.kiroku.data.network.OddAnswer
 import io.github.kauri_off.kiroku.data.preferences.PreferencesFailure
 import io.github.kauri_off.kiroku.data.sandbox.SandboxMal
@@ -121,6 +123,14 @@ class DemoGraph(
 
     override val clock = demo.clock
     override val session = demo.session
+    private val history = DemoRecentTitles(session)
+    override val recentTitles: RecentTitles get() = history
+
+    override suspend fun signOut(expected: Session) {
+        history.clear()
+        super.signOut(expected)
+    }
+
     override val list = demo.list
     override val anime = demo.anime
     override val airing = demo.airing

@@ -19,6 +19,7 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performImeAction
 import androidx.compose.ui.test.performScrollToIndex
+import androidx.compose.ui.test.performSemanticsAction
 import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.test.swipeRight
@@ -37,6 +38,8 @@ import io.github.kauri_off.kiroku.core.repository.MangaCatalogue
 import io.github.kauri_off.kiroku.core.repository.MangaRepository
 import io.github.kauri_off.kiroku.core.repository.Page
 import io.github.kauri_off.kiroku.core.repository.Ranked
+import io.github.kauri_off.kiroku.core.repository.RecentTitle
+import io.github.kauri_off.kiroku.core.repository.RecentTitleId
 import io.github.kauri_off.kiroku.core.repository.StoredManga
 import io.github.kauri_off.kiroku.design.composeRule
 import io.github.kauri_off.kiroku.design.registered
@@ -45,6 +48,7 @@ import io.github.kauri_off.kiroku.manga.MangaAddRouteList
 import io.github.kauri_off.kiroku.manga.mangaFixture
 import io.github.kauri_off.kiroku.shell.AppRoute
 import io.github.kauri_off.kiroku.wiring.AppGraph
+import io.github.kauri_off.kiroku.wiring.DemoRecentTitles
 import io.github.kauri_off.kiroku.wiring.MainDispatcherRule
 import io.github.kauri_off.kiroku.wiring.TestGraph
 import kotlinx.coroutines.CompletableDeferred
@@ -52,7 +56,9 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.StandardTestDispatcher
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -204,6 +210,70 @@ class MangaCatalogueRouteTest {
     }
 
     @Test
+    fun `a manga opened from ranking can be reopened from both empty Search screens`() {
+        catalogue(stored = StoredManga(mangaFixture, demo.clock.instant()), rememberVisits = true)
+        compose.onNodeWithText("Manga ranking").performClick()
+        settle()
+        compose.onNode(scrollable).performScrollToIndex(19)
+        settle()
+        compose.onNode(scrollable).performScrollToIndex(20)
+        compose.onNodeWithText("Could not load this list").assertExists()
+        compose.onNodeWithText("Retry").performClick()
+        settle()
+        compose.onNode(scrollable).performScrollToIndex(20)
+        compose.onNodeWithText("21.\u00a0$title").performClick()
+        settle()
+        compose.onNodeWithText(title).assertIsDisplayed()
+
+        repeat(2) {
+            compose.onNodeWithContentDescription("Back").performClick()
+            settle()
+        }
+        compose.onNodeWithText("Recently viewed").assertIsDisplayed()
+        compose.onNodeWithText(title).performClick()
+        settle()
+        compose.onNodeWithText("Synopsis").assertExists()
+        repeat(2) {
+            compose.onNodeWithContentDescription("Back").performClick()
+            settle()
+        }
+        compose.onNodeWithText("Recently viewed").assertIsDisplayed()
+        compose.onNodeWithText(title).performClick()
+        settle()
+        compose.onNodeWithText("Synopsis").assertExists()
+        compose.onNodeWithContentDescription("Back").performClick()
+        settle()
+        compose.onNodeWithText("Recently viewed").assertIsDisplayed()
+    }
+
+    @Test
+    fun `Change on a manga opened from history keeps Back pointing to Search`() {
+        val list = MangaAddRouteList(demo.clock)
+        val history = DemoRecentTitles(demo.session)
+        scope.launch {
+            history.record(
+                history.observeScope().first(),
+                RecentTitle(RecentTitleId.Manga(mangaFixture.id.value), mangaFixture.titles, true),
+                1,
+            )
+        }
+        catalogue(stored = StoredManga(mangaFixture, demo.clock.instant()), openManga = false, list = list, history = history)
+        compose.onNodeWithText(title).performClick()
+        settle()
+        addPlanned(list)
+        compose.onNodeWithText("Change").performClick()
+        settle()
+        compose.onNodeWithText("Save").assertExists()
+        val handle = compose.activity.getString(androidx.compose.material3.R.string.m3c_bottom_sheet_drag_handle_description)
+        compose.onNodeWithContentDescription(handle).performSemanticsAction(SemanticsActions.Dismiss)
+        settle()
+        compose.onNodeWithText("Save").assertDoesNotExist()
+        compose.onNodeWithContentDescription("Back").performClick()
+        settle()
+        compose.onNodeWithText("Recently viewed").assertIsDisplayed()
+    }
+
+    @Test
     fun `opening a result pauses a deferred ranking Retry until Back`() {
         val ready = CompletableDeferred<Unit>()
         catalogue(beforeRankingRetry = ready)
@@ -347,12 +417,15 @@ class MangaCatalogueRouteTest {
         beforeRankingRetry: CompletableDeferred<Unit>? = null,
         restore: StateRestorationTester? = null,
         openManga: Boolean = true,
+        rememberVisits: Boolean = false,
         additionalQueries: Set<String> = emptySet(),
         list: MangaAddRouteList? = null,
+        history: DemoRecentTitles? = null,
     ) {
         val graph =
             object : AppGraph by demo {
                 override val madeUp = false
+                override val recentTitles = history ?: if (rememberVisits) DemoRecentTitles(session) else demo.recentTitles
                 override val mangaListEditor = list
                 override val mangaList = list
                 override val mangaCatalogue =

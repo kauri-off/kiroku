@@ -135,7 +135,7 @@ class MalSession internal constructor(
     private suspend fun readFile(first: Boolean): Stored? {
         var unread: IOException? = null
         val stored =
-            guarded<Stored?>(Stored.SignedOut) {
+            guarded<Stored?>(newGuest()) {
                 try {
                     store.read()
                 } catch (e: IOException) {
@@ -169,7 +169,7 @@ class MalSession internal constructor(
 
     override suspend fun signOut() {
         guarded(Unit) {
-            change { retiring { kept(Stored.SignedOut) } }
+            change { retiring { kept(newGuest()) } }
         }
     }
 
@@ -186,7 +186,7 @@ class MalSession internal constructor(
 
     internal fun isCurrentOwner(owner: SessionOwner): Boolean = owners.value === owner
 
-    internal suspend fun <T : Any> withOwner(
+    internal suspend fun <T> withOwner(
         owner: SessionOwner,
         run: suspend () -> T,
     ): T? {
@@ -197,7 +197,8 @@ class MalSession internal constructor(
     private fun publish(value: Stored) {
         val id = value.session.owner
         val current = owners.value
-        if (current == null || current.id != id) owners.value = SessionOwner(id)
+        val guest = (value as? Stored.Guest)?.generation
+        if (current == null || current.id != id || current.guestGeneration != guest) owners.value = SessionOwner(id, guest)
         state.value = value
     }
 
@@ -227,7 +228,7 @@ class MalSession internal constructor(
                 if (state.value?.session?.owner != owner) return@change false
                 retiring {
                     beforeSignOut()
-                    kept(Stored.SignedOut, onWriteFailure)
+                    kept(newGuest(), onWriteFailure)
                     true
                 }
             }
@@ -421,13 +422,15 @@ class MalSession internal constructor(
         guarded(TokenResult.Failed(DataError.ServerError)) { endpoint.post(grant).read() }
 
     private companion object {
+        fun newGuest() = Stored.Guest(UUID.randomUUID().toString())
+
         val expired = Outcome.Failure(DataError.SessionExpired)
         val unread = Outcome.Failure(DataError.StorageError)
 
         val Stored.session: Session
             get() =
                 when (this) {
-                    Stored.SignedOut -> Session.SignedOut
+                    Stored.SignedOut, is Stored.Guest -> Session.SignedOut
                     is Stored.SignedIn -> Session.SignedIn(SignInId(tokens.signIn))
                     is Stored.Expired -> Session.Expired(SignInId(signIn))
                 }

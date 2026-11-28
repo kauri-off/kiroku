@@ -8,14 +8,21 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.remember
 import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.navigation3.runtime.NavKey
 import io.github.kauri_off.kiroku.about.AboutKey
 import io.github.kauri_off.kiroku.about.AboutRoute
 import io.github.kauri_off.kiroku.collectAsScreenState
 import io.github.kauri_off.kiroku.core.link.Link
+import io.github.kauri_off.kiroku.core.model.AiringStatus
+import io.github.kauri_off.kiroku.core.model.Anime
 import io.github.kauri_off.kiroku.core.model.AnimeId
+import io.github.kauri_off.kiroku.core.model.MangaDetails
+import io.github.kauri_off.kiroku.core.model.MangaId
 import io.github.kauri_off.kiroku.core.model.Session
+import io.github.kauri_off.kiroku.core.model.SignInId
 import io.github.kauri_off.kiroku.core.model.owner
 import io.github.kauri_off.kiroku.core.repository.BrowseList
+import io.github.kauri_off.kiroku.core.repository.RecentTitleId
 import io.github.kauri_off.kiroku.design.component.LocalMessageCovers
 import io.github.kauri_off.kiroku.design.component.MessageCovers
 import io.github.kauri_off.kiroku.edit.MangaEditSheet
@@ -28,8 +35,10 @@ import io.github.kauri_off.kiroku.manga.LocalMangaEditing
 import io.github.kauri_off.kiroku.manga.MangaEditOrigin
 import io.github.kauri_off.kiroku.manga.MangaTitleKey
 import io.github.kauri_off.kiroku.manga.MangaTitleRoute
+import io.github.kauri_off.kiroku.manga.MangaTitleSummary
 import io.github.kauri_off.kiroku.manga.PublicMangaListKey
 import io.github.kauri_off.kiroku.manga.PublicMangaListRoute
+import io.github.kauri_off.kiroku.notShown
 import io.github.kauri_off.kiroku.notifysettings.NotifySettingsKey
 import io.github.kauri_off.kiroku.notifysettings.NotifySettingsRoute
 import io.github.kauri_off.kiroku.profile.OpenedProfiles
@@ -44,6 +53,7 @@ import io.github.kauri_off.kiroku.search.MangaRankingKey
 import io.github.kauri_off.kiroku.search.MangaRankingRoute
 import io.github.kauri_off.kiroku.search.MangaSearchKey
 import io.github.kauri_off.kiroku.search.MangaSearchRoute
+import io.github.kauri_off.kiroku.search.RecentTitleOpening
 import io.github.kauri_off.kiroku.search.SearchRoute
 import io.github.kauri_off.kiroku.search.searchStandIn
 import io.github.kauri_off.kiroku.settings.SettingsKey
@@ -69,6 +79,7 @@ import io.github.kauri_off.kiroku.titlesub.ScoresKey
 import io.github.kauri_off.kiroku.titlesub.ScoresRoute
 import io.github.kauri_off.kiroku.wiring.AppGraph
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.firstOrNull
 
 // The app: the shell over the screens built so far, with the messages that outlive the screen that posted them.
 @Composable
@@ -88,12 +99,14 @@ fun AppRoute(
     LaunchedEffect(edit) {
         edit?.let { request ->
             val owner = request.owner
+            val active = graph.session.observeSession().first()
+            val recentScope =
+                graph.recentTitles
+                    .observeScope()
+                    .firstOrNull()
+                    ?.takeIf { it.owner == active.owner }
             if (owner != null) {
-                if (graph.session
-                        .observeSession()
-                        .first()
-                        .owner != owner
-                ) {
+                if (active.owner != owner) {
                     messages.editTaken(request)
                     return@let
                 }
@@ -102,11 +115,12 @@ fun AppRoute(
                 if (navigator.current != Destination.Search) navigator.select(Destination.Search)
                 if (origin?.owner != owner.value) {
                     val page = TitleKey(request.id.value, suggestionsOwner = owner.value)
-                    if (navigator.stack.last() != page) navigator.open(page)
+                    val shown = navigator.stack.last() as? TitleKey
+                    if (shown?.id != request.id.value || shown.suggestionsOwner != owner.value) navigator.open(page)
                     return@let
                 }
             }
-            navigator.showEditorOf(request.id, graph.mangaList != null)
+            navigator.showEditorOf(request.id, graph.mangaList != null, active.owner, recentScope?.key)
         }
     }
     SignInTurns(graph, navigator)
@@ -121,8 +135,9 @@ fun AppRoute(
         val editing = mangaEditing?.state?.value ?: return@LaunchedEffect
         if (editing.owner != request.owner || !editing.signedIn || editing.open != null) return@LaunchedEffect
         if (editing.snapshot?.entries?.any { it.id == request.id } != true) return@LaunchedEffect
-        val page = MangaTitleKey(request.id.value)
-        if (navigator.stack.last() != page && !navigator.mangaEditOrigin().inMangaList) navigator.open(page)
+        val shown = navigator.stack.last() as? MangaTitleKey
+        val same = shown?.id == request.id.value && (shown.recentOwner == null || shown.recentOwner == request.owner.value)
+        if (!same && !navigator.mangaEditOrigin().inMangaList) navigator.open(MangaTitleKey(request.id.value))
         mangaEditing.open(request.owner, request.id, request.title, navigator.mangaEditOrigin(), request.totals)
     }
     if (links != null) LinkTurns(links, navigator) { mangaEditing?.dismissPresentation() }
@@ -157,9 +172,10 @@ private fun ShellNavigator.mangaEditOrigin(): MangaEditOrigin {
 private fun ShellNavigator.showEditorOf(
     id: AnimeId,
     mangaAvailable: Boolean,
+    owner: SignInId?,
+    recentScope: String?,
 ) {
     val stack = stackOf(visible.last())
-    val page = TitleKey(id.value)
     val subScreen =
         when (val shown = stack.last()) {
             is DetailsKey -> shown.id == id.value
@@ -169,11 +185,22 @@ private fun ShellNavigator.showEditorOf(
             else -> false
         }
     when {
-        (stack.last() is ListRoot && (!mangaAvailable || listMode == ListMode.Anime)) || stack.last() == page -> Unit
-        subScreen && stack.getOrNull(stack.lastIndex - 1) == page -> back()
-        else -> open(page)
+        (stack.last() is ListRoot && (!mangaAvailable || listMode == ListMode.Anime)) -> Unit
+        (stack.last() as? TitleKey).matches(id, owner, recentScope) -> Unit
+        subScreen && (stack.getOrNull(stack.lastIndex - 1) as? TitleKey).matches(id, owner, recentScope) -> back()
+        else -> open(TitleKey(id.value))
     }
 }
+
+private fun TitleKey?.matches(
+    id: AnimeId,
+    owner: SignInId?,
+    recentScope: String?,
+): Boolean =
+    this != null &&
+        this.id == id.value &&
+        (suggestionsOwner == null || suggestionsOwner == owner?.value) &&
+        (recentOwner == null || recentOwner == recentScope)
 
 // Each link handed over is acted on once.
 @Composable
@@ -242,6 +269,7 @@ fun appEntries(
                 onBrowse = { navigator.open(it) },
                 onSignIn = signIn,
                 onManga = { navigator.open(MangaSearchKey) },
+                onOpenRecent = { navigator.open(it.page()) },
             )
         }
         entry<MangaSearchKey> {
@@ -250,6 +278,7 @@ fun appEntries(
                 snackbars,
                 onBack = { back() },
                 onRanking = { navigator.open(MangaRankingKey) },
+                onOpenRecent = { navigator.open(it.page()) },
                 onOpen = { navigator.open(MangaTitleKey(it)) },
                 onSignIn = signIn,
             )
@@ -346,3 +375,44 @@ fun appEntries(
         }
     }
 }
+
+private fun RecentTitleOpening.page(): NavKey =
+    when (val key = title.key) {
+        is RecentTitleId.Anime -> {
+            val anime =
+                Anime(
+                    id = AnimeId(key.value),
+                    titles = title.titles,
+                    posterUrl = null,
+                    largePosterUrl = null,
+                    mediaType = null,
+                    airingStatus = AiringStatus.Unrecognized(notShown("")),
+                    malEpisodes = null,
+                    startDate = null,
+                    broadcast = null,
+                    meanScore = null,
+                    rank = null,
+                    genres = null,
+                    averageEpisodeDuration = null,
+                    safeForSearch = title.safeForSearch,
+                )
+            TitleKey(key.value, TitleSummary(anime, null, null, session, language = language), recentOwner = scope.key)
+        }
+        is RecentTitleId.Manga -> {
+            val manga =
+                MangaDetails(
+                    id = MangaId(key.value),
+                    titles = title.titles,
+                    posterUrl = null,
+                    largePosterUrl = null,
+                    synopsis = null,
+                    format = null,
+                    publication = null,
+                    volumes = null,
+                    chapters = null,
+                    meanScore = null,
+                    safeForSearch = title.safeForSearch,
+                )
+            MangaTitleKey(MangaTitleSummary(manga, language, session.owner), recentOwner = scope.key)
+        }
+    }

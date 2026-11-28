@@ -4,6 +4,7 @@ import java.time.LocalDate
 
 class SessionOwner(
     val id: SignInId?,
+    val guestGeneration: String? = null,
 )
 
 sealed interface Session {

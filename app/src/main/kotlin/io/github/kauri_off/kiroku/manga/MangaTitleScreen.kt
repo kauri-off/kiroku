@@ -25,6 +25,7 @@ import io.github.kauri_off.kiroku.core.model.MangaDetails
 import io.github.kauri_off.kiroku.core.model.MangaFormat
 import io.github.kauri_off.kiroku.core.model.MangaListEntry
 import io.github.kauri_off.kiroku.core.model.MangaPublication
+import io.github.kauri_off.kiroku.core.model.Session
 import io.github.kauri_off.kiroku.core.model.malCodeAsText
 import io.github.kauri_off.kiroku.design.component.ScreenState
 import io.github.kauri_off.kiroku.design.component.SectionHeader
@@ -52,6 +53,7 @@ internal data class MangaTitleState(
     val reconcilingAdd: Boolean = false,
     val checkingMembership: Boolean = false,
     val coverOpen: Boolean = false,
+    val session: Session? = null,
 )
 
 internal enum class MangaAddAction { Available, Saving }

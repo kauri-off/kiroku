@@ -37,7 +37,7 @@ class MalMangaCatalogue(
             .call {
                 api
                     .search(text, offset, PAGE_SIZE, MalFields.MANGA_SUMMARY, nsfw = true.takeIf { includeAdult })
-                    .mapPage(offset) { hit, repairs -> hit.manga(repairs) }
+                    .mapPage(offset) { hit, repairs -> hit.manga(repairs, includeAdult) }
             }.clientIdOutcome()
     }
 
@@ -52,7 +52,7 @@ class MalMangaCatalogue(
                 .call(maySendRead = canDispatch) {
                     api
                         .ranking("all", offset, PAGE_SIZE, MalFields.MANGA_SUMMARY, nsfw = true.takeIf { includeAdult })
-                        .mapPage(offset) { hit, repairs -> Ranked(hit.position(repairs), hit.manga(repairs)) }
+                        .mapPage(offset) { hit, repairs -> Ranked(hit.position(repairs), hit.manga(repairs, includeAdult)) }
                 }.clientIdOutcome()
         return answer.takeUnless { it == Outcome.Failure(DataError.ListEnded) }
     }
@@ -85,9 +85,13 @@ private class CatalogueHit(
     val node: JsonObject,
     val ranking: JsonElement? = null,
 ) {
-    fun manga(repairs: MutableSet<String>): MangaDetails {
+    fun manga(
+        repairs: MutableSet<String>,
+        includeAdult: Boolean,
+    ): MangaDetails {
         val id = (node["id"] as? JsonPrimitive)?.longOrNull?.takeIf { it > 0 }
-        return node.toManga(MangaId(requireNotNull(id)), repairs)
+        val manga = node.toManga(MangaId(requireNotNull(id)), repairs)
+        return if (!includeAdult && manga.safeForSearch == null) manga.copy(safeForSearch = true) else manga
     }
 
     fun position(repairs: MutableSet<String>): Int? {

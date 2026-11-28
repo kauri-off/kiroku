@@ -68,6 +68,7 @@ import androidx.compose.ui.semantics.semantics
 import io.github.kauri_off.kiroku.R
 import io.github.kauri_off.kiroku.core.model.AnimeId
 import io.github.kauri_off.kiroku.core.repository.BrowseList
+import io.github.kauri_off.kiroku.core.repository.RecentTitleId
 import io.github.kauri_off.kiroku.design.component.LocalOnTop
 import io.github.kauri_off.kiroku.design.component.ScreenSnackbarHost
 import io.github.kauri_off.kiroku.design.component.ScreenState
@@ -108,7 +109,7 @@ fun SearchScreen(
             mangaScroll?.requestScrollToItem(expandedMangaScroll.firstVisibleItemIndex, expandedMangaScroll.firstVisibleItemScrollOffset)
         }
         when (event) {
-            is SearchEvent.Open, is SearchEvent.Browse, is SearchEvent.OpenManga,
+            is SearchEvent.Open, is SearchEvent.Browse, is SearchEvent.OpenManga, is SearchEvent.OpenRecent,
             SearchEvent.SignIn, SearchEvent.Manga, SearchEvent.BrowseManga,
             -> bars++
             else -> Unit
@@ -260,8 +261,9 @@ private fun Body(
         is SearchContent.MangaStart ->
             CentredList(padding) {
                 recentRows(content.recent, onEvent, rows)
+                viewedRows(content.viewed, content.recent.isNotEmpty(), onEvent, rows)
                 item(key = BROWSE, contentType = HEADER) {
-                    val gap = if (content.recent.isEmpty()) Modifier else Modifier.padding(top = Spacing.l)
+                    val gap = if (content.recent.isEmpty() && content.viewed.isEmpty()) Modifier else Modifier.padding(top = Spacing.l)
                     SectionHeader(stringResource(R.string.search_browse), gap)
                 }
                 item(key = MANGA, contentType = LINK) {
@@ -290,8 +292,9 @@ private fun LazyListScope.start(
     rows: ListItemColors,
 ) {
     recentRows(content.recent, onEvent, rows)
+    viewedRows(content.viewed, content.recent.isNotEmpty(), onEvent, rows)
     item(key = BROWSE, contentType = HEADER) {
-        val gap = if (content.recent.isEmpty()) Modifier else Modifier.padding(top = Spacing.l)
+        val gap = if (content.recent.isEmpty() && content.viewed.isEmpty()) Modifier else Modifier.padding(top = Spacing.l)
         SectionHeader(stringResource(R.string.search_browse), gap)
     }
     if (content.suggestions) {
@@ -319,6 +322,30 @@ private fun LazyListScope.recentRows(
         items(recent, key = { it }, contentType = { RECENT_QUERY }) { query ->
             RecentSearchRow(query, rows, onEvent)
         }
+    }
+}
+
+private fun LazyListScope.viewedRows(
+    viewed: List<RecentTitleRow>,
+    afterQueries: Boolean,
+    onEvent: (SearchEvent) -> Unit,
+    rows: ListItemColors,
+) {
+    if (viewed.isEmpty()) return
+    item(key = VIEWED, contentType = HEADER) {
+        val gap = if (afterQueries) Modifier.padding(top = Spacing.l) else Modifier
+        SectionHeader(stringResource(R.string.search_recent_titles), gap)
+    }
+    items(viewed, contentType = { VIEWED_TITLE }) { title ->
+        ListItem(
+            onClick = { onEvent(SearchEvent.OpenRecent(title.key)) },
+            colors = rows,
+            supportingContent = {
+                Text(stringResource(if (title.key is RecentTitleId.Manga) R.string.list_mode_manga else R.string.list_mode_anime))
+            },
+            trailingContent = { Icon(painterResource(R.drawable.ic_chevron_right), contentDescription = null) },
+            content = { Text(title.title) },
+        )
     }
 }
 
@@ -500,6 +527,8 @@ private const val RECENT = 0
 private const val BROWSE = 1
 private const val OPEN_ID = 2
 private const val MANGA = 3
+private const val VIEWED = 4
+private const val VIEWED_TITLE = 3
 private const val HEADER = 0
 private const val LINK = 1
 private const val RECENT_QUERY = 2

@@ -26,6 +26,8 @@ import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performImeAction
 import androidx.compose.ui.test.performKeyInput
 import androidx.compose.ui.test.performScrollToIndex
+import androidx.compose.ui.test.performScrollToNode
+import androidx.compose.ui.test.performSemanticsAction
 import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.test.pressKey
@@ -45,6 +47,7 @@ import io.github.kauri_off.kiroku.core.model.ListStatus
 import io.github.kauri_off.kiroku.core.model.Session
 import io.github.kauri_off.kiroku.core.model.SignInId
 import io.github.kauri_off.kiroku.core.model.TitleLanguage
+import io.github.kauri_off.kiroku.core.model.Titles
 import io.github.kauri_off.kiroku.core.repository.BrowseList
 import io.github.kauri_off.kiroku.core.repository.BrowseSession
 import io.github.kauri_off.kiroku.core.repository.ListRepository
@@ -52,6 +55,10 @@ import io.github.kauri_off.kiroku.core.repository.ListWrite
 import io.github.kauri_off.kiroku.core.repository.NoSignIn
 import io.github.kauri_off.kiroku.core.repository.Page
 import io.github.kauri_off.kiroku.core.repository.Ranked
+import io.github.kauri_off.kiroku.core.repository.RecentTitle
+import io.github.kauri_off.kiroku.core.repository.RecentTitleId
+import io.github.kauri_off.kiroku.core.repository.RecentTitleScope
+import io.github.kauri_off.kiroku.core.repository.RecentTitles
 import io.github.kauri_off.kiroku.core.repository.SearchRepository
 import io.github.kauri_off.kiroku.core.repository.SessionRepository
 import io.github.kauri_off.kiroku.core.repository.SignIn
@@ -63,6 +70,7 @@ import io.github.kauri_off.kiroku.shell.AppRoute
 import io.github.kauri_off.kiroku.shell.ShellMessages
 import io.github.kauri_off.kiroku.signin.SignInOwner
 import io.github.kauri_off.kiroku.wiring.AppGraph
+import io.github.kauri_off.kiroku.wiring.DemoRecentTitles
 import io.github.kauri_off.kiroku.wiring.MainDispatcherRule
 import io.github.kauri_off.kiroku.wiring.TestGraph
 import kotlinx.coroutines.CompletableDeferred
@@ -71,6 +79,8 @@ import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.test.StandardTestDispatcher
@@ -207,6 +217,117 @@ class SearchRouteTest {
         compose.onNode(inView(anime.titles.romaji) and hasClickAction()).performClick()
         settle()
         compose.onNodeWithText(anime.titles.romaji).assertExists()
+    }
+
+    @Test
+    fun `an opened anime appears on empty Search and Back from history returns to the same search`() {
+        val history = DemoRecentTitles(graph.session)
+        val source =
+            object : AppGraph by graph {
+                override val madeUp = false
+                override val recentTitles = history
+            }
+        search(source)
+        typeKag()
+        val anime = FixtureAnime.exactToWatch
+        compose.onNode(inView(anime.titles.romaji) and hasClickAction()).performClick()
+        settle()
+        compose.onNodeWithText(anime.titles.romaji).assertExists()
+        back()
+        compose.onNode(hasSetTextAction() and hasText("kag")).assertExists()
+        compose.onNodeWithText("Recently viewed").assertDoesNotExist()
+        back()
+        compose.onNodeWithText("Recently viewed").assertExists()
+        compose.onNodeWithText(anime.titles.romaji).performClick()
+        settle()
+        compose.onNodeWithText(anime.titles.romaji).assertExists()
+        back()
+        compose.onNode(hasSetTextAction() and hasText("kag")).assertDoesNotExist()
+        compose.onNodeWithText("Recently viewed").assertExists()
+    }
+
+    @Test
+    fun `Change from the details of an anime opened from history keeps Back pointing to Search`() {
+        val anime = FixtureAnime.notOnListAiring
+        val history = DemoRecentTitles(graph.session)
+        scope.launch {
+            history.record(history.observeScope().first(), RecentTitle(RecentTitleId.Anime(anime.id.value), anime.titles, true), 1)
+        }
+        search(
+            object : AppGraph by graph {
+                override val madeUp = false
+                override val recentTitles = history
+            },
+        )
+        compose.onNodeWithText(anime.titles.romaji).performClick()
+        settle()
+        compose.onNodeWithText("Add to list").performClick()
+        settle()
+        val details = hasText("Details") and hasClickAction()
+        compose.onNode(hasScrollToIndexAction()).performScrollToNode(details)
+        compose.onNode(details).performClick()
+        settle()
+        compose.onNodeWithText("Change").performClick()
+        settle()
+        compose.onNodeWithText("Save").assertExists()
+        val handle = compose.activity.getString(androidx.compose.material3.R.string.m3c_bottom_sheet_drag_handle_description)
+        compose.onNodeWithContentDescription(handle).performSemanticsAction(SemanticsActions.Dismiss)
+        settle()
+        compose.onNodeWithText("Save").assertDoesNotExist()
+        back()
+        compose.onNodeWithText("Recently viewed").assertExists()
+    }
+
+    @Test
+    fun `history follows the adult setting and never displays a previous owner's rows`() {
+        val owner = SignInId("first")
+        val sessionState = MutableStateFlow<Session>(Session.SignedIn(owner))
+        val session =
+            object : SessionRepository by graph.session {
+                override fun observeSession() = sessionState
+            }
+        val anime = FixtureAnime.exactToWatch
+        val safe = RecentTitle(RecentTitleId.Anime(anime.id.value), anime.titles, true)
+        val adult = RecentTitle(RecentTitleId.Anime(2), Titles("Adult title"), false)
+        val unknown = RecentTitle(RecentTitleId.Anime(3), Titles("Unknown title"), null)
+        val source =
+            object : AppGraph by graph {
+                override val madeUp = false
+                override val session = session
+                override val recentTitles =
+                    object : RecentTitles by DemoRecentTitles(session) {
+                        override fun observe(scope: RecentTitleScope) =
+                            flowOf(listOf(adult, unknown, safe).takeIf { scope.owner == owner }.orEmpty())
+                    }
+            }
+        search(source)
+        compose.onNodeWithText(safe.titles.romaji).assertExists()
+        compose.onNodeWithText(adult.titles.romaji).assertDoesNotExist()
+        compose.onNodeWithText(unknown.titles.romaji).assertDoesNotExist()
+        scope.launch { graph.preferences.setAdultInSearch(true) }
+        settle()
+        compose.onNodeWithText(adult.titles.romaji).assertExists()
+        compose.onNodeWithText(unknown.titles.romaji).assertExists()
+        scope.launch { graph.preferences.setAdultInSearch(false) }
+        settle()
+        compose.onNodeWithText(adult.titles.romaji).assertDoesNotExist()
+        compose.onNodeWithText(unknown.titles.romaji).assertDoesNotExist()
+        sessionState.value = Session.Expired(owner)
+        settle()
+        compose.onNodeWithText(safe.titles.romaji).performClick()
+        settle()
+        compose.onNodeWithText("Recently viewed").assertDoesNotExist()
+        compose.onNodeWithText(safe.titles.romaji).assertExists()
+        sessionState.value = Session.SignedIn(SignInId("replacement"))
+        settle()
+        compose.onNodeWithText("Browse").assertExists()
+        compose.onNodeWithText("Recently viewed").assertDoesNotExist()
+        compose.onNodeWithText(safe.titles.romaji).assertDoesNotExist()
+    }
+
+    private fun back() {
+        compose.runOnUiThread { compose.activity.onBackPressedDispatcher.onBackPressed() }
+        settle()
     }
 
     @Test
@@ -765,7 +886,11 @@ class SearchRouteTest {
     @Test
     fun `signed out seasons can change from empty and open a title then return to the selected period`() {
         runBlocking { graph.session.signOut() }
-        search()
+        val source =
+            object : AppGraph by graph {
+                override val recentTitles = DemoRecentTitles(graph.session)
+            }
+        search(source)
         compose.onNodeWithText("This season").performClick()
         settle()
         compose.onNodeWithContentDescription("Season, Winter").assertExists()
@@ -791,6 +916,13 @@ class SearchRouteTest {
         compose.onNodeWithContentDescription("Season, Fall").assertExists()
         compose.onNodeWithContentDescription("Year, 2025").assertExists()
         row.assertExists()
+        back()
+        compose.onNodeWithText("Recently viewed").assertExists()
+        compose.onNodeWithText(title).performClick()
+        settle()
+        compose.onNodeWithText(title).assertExists()
+        back()
+        compose.onNodeWithText("Recently viewed").assertExists()
     }
 
     @Test

@@ -49,7 +49,7 @@ class MalSearch(
         val answer =
             http.call {
                 val page = api.search(text, offset, PAGE_SIZE, MalFields.SUMMARY, nsfw = if (includeAdult) true else null)
-                page.mapPage(offset) { hit, repairs -> hit.node.toAnime(repairs.within("node")) }
+                page.mapPage(offset) { hit, repairs -> hit.node.toAnime(repairs.within("node")).fromFilteredRead(includeAdult) }
             }
         return answer.clientIdOutcome()
     }
@@ -103,7 +103,7 @@ class MalSearch(
                     val page = fetch(offset, if (includeAdult) true else null)
                     page.mapPage(offset) { hit, repairs ->
                         val position = if (ranked) hit.position(repairs) else null
-                        Ranked(position, hit.node.toAnime(repairs.within("node")))
+                        Ranked(position, hit.node.toAnime(repairs.within("node")).fromFilteredRead(includeAdult))
                     }
                 }.clientIdOutcome()
         }
@@ -180,3 +180,6 @@ private interface SearchApi {
         @Query("nsfw") nsfw: Boolean?,
     ): SearchPageNode
 }
+
+private fun Anime.fromFilteredRead(includeAdult: Boolean): Anime =
+    if (!includeAdult && safeForSearch == null) copy(safeForSearch = true) else this

@@ -17,9 +17,14 @@ import androidx.navigation3.runtime.NavKey
 import io.github.kauri_off.kiroku.CountAsShown
 import io.github.kauri_off.kiroku.collectAsScreenState
 import io.github.kauri_off.kiroku.core.model.AnimeId
+import io.github.kauri_off.kiroku.core.model.owner
+import io.github.kauri_off.kiroku.core.repository.RecentTitle
+import io.github.kauri_off.kiroku.core.repository.RecentTitleId
 import io.github.kauri_off.kiroku.edit.EditSheetRoute
 import io.github.kauri_off.kiroku.edit.editSheetViewModel
 import io.github.kauri_off.kiroku.notShown
+import io.github.kauri_off.kiroku.search.RecordTitleVisit
+import io.github.kauri_off.kiroku.search.recentOpeningIsCurrent
 import io.github.kauri_off.kiroku.shell.LocalSuggestionsOwner
 import io.github.kauri_off.kiroku.shell.ShellMessages
 import io.github.kauri_off.kiroku.wiring.AppGraph
@@ -30,13 +35,14 @@ import kotlinx.serialization.Transient
 data class TitleKey(
     val id: Long,
     val suggestionsOwner: String? = null,
+    val recentOwner: String? = null,
 ) : NavKey {
     // Not saved: a page restored after process death starts from the store.
     @Transient
     var opened: TitleSummary? = null
         private set
 
-    constructor(id: Long, opened: TitleSummary?) : this(id) {
+    constructor(id: Long, opened: TitleSummary?, recentOwner: String? = null) : this(id, recentOwner = recentOwner) {
         this.opened = opened
     }
 }
@@ -60,6 +66,7 @@ fun TitleRoute(
     snackbars: SnackbarHostState,
     links: TitleLinks,
 ) {
+    if (!recentOpeningIsCurrent(graph, key.recentOwner)) return
     val id = AnimeId(key.id)
     val owner = LocalSuggestionsOwner.current
     val title =
@@ -83,6 +90,19 @@ fun TitleRoute(
     val editor = editSheetViewModel(graph, messages)
     val context = LocalContext.current
     val state by title.state.collectAsScreenState()
+    val recordableOwner = owner ?: key.opened?.session?.owner
+    val anime =
+        (state as? TitleState.Shown)
+            ?.page
+            ?.anime
+            ?.takeIf { recordableOwner == null || state.session?.owner == recordableOwner }
+    RecordTitleVisit(
+        graph,
+        state.session,
+        anime?.let {
+            RecentTitle(RecentTitleId.Anime(id.value), it.titles, it.safeForSearch ?: key.opened?.anime?.safeForSearch)
+        },
+    )
     var coverOpen by rememberSaveable(key.id) { mutableStateOf(false) }
     CountAsShown(title.shown)
     TitleScreen(

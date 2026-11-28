@@ -23,6 +23,7 @@ import androidx.compose.ui.semantics.getOrNull
 import io.github.kauri_off.kiroku.R
 import io.github.kauri_off.kiroku.core.error.DataError
 import io.github.kauri_off.kiroku.core.model.AnimeId
+import io.github.kauri_off.kiroku.core.repository.RecentTitleId
 import io.github.kauri_off.kiroku.design.MotionBounds
 import io.github.kauri_off.kiroku.manga.mangaFixture
 import io.github.kauri_off.kiroku.screenshots.ScreenshotRegistry
@@ -59,9 +60,25 @@ class SearchScreenshots : ScreenshotRegistry() {
     private val pasted = "anime/5114/Fullmetal_Al"
     private val animeLink = SearchState(TextFieldState(pasted), true, SearchContent.AnimeLink(AnimeId(5114)))
 
+    private val viewed =
+        listOf(
+            RecentTitleRow(RecentTitleId.Anime(1), "Kage no Tabi"),
+            RecentTitleRow(RecentTitleId.Manga(1), mangaFixture.titles.romaji),
+            RecentTitleRow(RecentTitleId.Anime(2), "Hoshi no Kiroku"),
+            RecentTitleRow(RecentTitleId.Anime(3), "Hana no Michi"),
+        )
+    private val withHistory =
+        SearchFixtureStates.start.copy(content = SearchContent.Start(recent, viewed = viewed))
+
     override val cases =
         listOf(
             case("start", content = screen(SearchFixtureStates.start)),
+            case("recent-titles", largeText = true, content = screen(withHistory)),
+            case("recent-titles-expanded", keyboard = true, content = screen(withHistory.copy(expanded = true))),
+            case(
+                "manga-recent-titles",
+                content = screen(SearchState(TextFieldState(), false, SearchContent.MangaStart(emptyList(), listOf(viewed[1])))),
+            ),
             case("recent-dismissed", content = screen(afterDismiss)),
             case("start-signed-in", largeText = true, content = screen(SearchFixtureStates.startSignedIn)),
             case(
@@ -69,7 +86,7 @@ class SearchScreenshots : ScreenshotRegistry() {
                 content =
                     screen(
                         SearchFixtureStates.startNoRecent.copy(
-                            content = SearchContent.Start(emptyList(), suggestions = true, mangaAvailable = true),
+                            content = SearchContent.Start(emptyList(), suggestions = true, mangaAvailable = true, viewed = viewed),
                         ),
                     ),
             ),

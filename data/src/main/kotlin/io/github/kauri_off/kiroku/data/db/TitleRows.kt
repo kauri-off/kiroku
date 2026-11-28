@@ -40,6 +40,7 @@ internal data class TitleRow(
     val rank: Int?,
     val genres: String?,
     @ColumnInfo(name = "episode_duration") val episodeDuration: Long?,
+    @ColumnInfo(name = "safe_for_search") val safeForSearch: Boolean? = null,
 ) {
     // A stored value is never replaced by a missing one or one filled in; a picture's sizes, and a broadcast, are one value.
     fun mergedWith(
@@ -67,6 +68,7 @@ internal data class TitleRow(
             rank = newer.rank ?: rank,
             genres = if (Unread.Genres in unread) genres ?: newer.genres else newer.genres ?: genres,
             episodeDuration = newer.episodeDuration ?: episodeDuration,
+            safeForSearch = newer.safeForSearch ?: safeForSearch,
         )
 
     // The mapper's main title for a page without one: its English title, else its Japanese one, out of its own slot.
@@ -88,6 +90,7 @@ internal data class TitleRow(
             rank = rank,
             genres = genres?.let(::genresOf),
             averageEpisodeDuration = episodeDuration?.let(::durationOf),
+            safeForSearch = safeForSearch,
         )
 
     companion object {
@@ -114,6 +117,7 @@ internal fun Anime.toRow(): TitleRow =
         rank = rank,
         genres = genres?.let(::genresToColumn),
         episodeDuration = averageEpisodeDuration?.toColumn(),
+        safeForSearch = safeForSearch,
     )
 
 internal data class StatisticsColumns(

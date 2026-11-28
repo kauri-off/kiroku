@@ -21,6 +21,7 @@ import io.github.kauri_off.kiroku.core.user.RemoteMangaLists
 import io.github.kauri_off.kiroku.data.anilist.AniListAiring
 import io.github.kauri_off.kiroku.data.anime.MalSearch
 import io.github.kauri_off.kiroku.data.db.KirokuDatabase
+import io.github.kauri_off.kiroku.data.db.RoomRecentTitles
 import io.github.kauri_off.kiroku.data.manga.MalMangaCatalogue
 import io.github.kauri_off.kiroku.data.manga.MalMangaRepository
 import io.github.kauri_off.kiroku.data.manga.MalPublicMangaLists
@@ -162,6 +163,7 @@ internal class LiveGraph(
             { user },
             { notifications },
             runLog,
+            forgetRecentTitles = { owner -> owner == null || !hasDatabase() || recentTitles.clear(owner) },
             forgetMangaSorts = { preferences.forgetMangaListSorts(it) },
             forgetManga = {
                 val old = publicManga
@@ -220,6 +222,21 @@ internal class LiveGraph(
     }
     override val airing by lazy { LiveAiring(parts, account.observeSession(), { list }, account::whileOwner, airingOf) }
     override val scores by lazy { parts.scores }
+    private val recentStore by lazy {
+        val database = lazy { parts.database }
+        RoomRecentTitles(
+            { database.onFirstUse(parts.scope) },
+            account,
+            wasRetired = { owner -> withContext(Dispatchers.IO) { wasRetiredOnDisk(owner) } },
+            unexpected = parts.unexpected,
+        )
+    }
+    private val recentCleanup =
+        parts.scope.launch(Dispatchers.IO, start = CoroutineStart.LAZY) {
+            recentStore.sweepRetired(::hasDatabase)
+        }
+    override val recentTitles: RoomRecentTitles
+        get() = recentStore.also { recentCleanup.start() }
     override val search by lazy { MalSearch(parts.http, parts.clock) { account } }
     override val user: LiveUser by lazy { liveUser(parts, account, ownProfile) }
     override val connection by lazy { liveConnection(parts) }
@@ -235,7 +252,10 @@ internal class LiveGraph(
 
     init {
         parts.scope.launch(Dispatchers.IO) {
-            if (hasDatabase()) startMangaCleanup()
+            if (hasDatabase()) {
+                startMangaCleanup()
+                recentCleanup.start()
+            }
             if (hasPreferencesFile(parts)) mangaSortCleanup.start()
         }
     }
@@ -331,6 +351,7 @@ private class SignOutForgets(
     private val user: () -> LiveUser,
     private val notifications: () -> LiveNotifications,
     private val runs: KeptRuns?,
+    private val forgetRecentTitles: suspend (SignInId?) -> Boolean,
     private val forgetMangaSorts: suspend (SignInId) -> Unit,
     private val forgetManga: suspend () -> Boolean,
 ) : SessionRepository by account {
@@ -353,7 +374,9 @@ private class SignOutForgets(
                 cancelTaps()
                 airing().retire(owner)
                 user().forgetPublicLists()
-                if (!forgetManga()) images.recordRetirement(owner)
+                val mangaForgotten = forgetManga()
+                val recentForgotten = forgetRecentTitles(owner)
+                if (!mangaForgotten || !recentForgotten) images.recordRetirement(owner)
                 images.retire(owner)
             }
         if (!signedOut) return

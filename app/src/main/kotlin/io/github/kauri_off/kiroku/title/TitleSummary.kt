@@ -6,6 +6,7 @@ import io.github.kauri_off.kiroku.core.model.AnimeDetails
 import io.github.kauri_off.kiroku.core.model.AnimeId
 import io.github.kauri_off.kiroku.core.model.ListEntry
 import io.github.kauri_off.kiroku.core.model.Session
+import io.github.kauri_off.kiroku.core.model.TitleLanguage
 
 // What a row or a page shows of one title, handed to the screen it opens, which starts from it and falls back to it.
 class TitleSummary(
@@ -18,6 +19,7 @@ class TitleSummary(
     val page: PageSummary? = null,
     // The title's page was read before, so a value its title lacks is one MAL gives none of.
     val pageRead: Boolean = page != null,
+    val language: TitleLanguage = TitleLanguage.Romaji,
 )
 
 // What a title page shows below its header: the details, and the list entries and airing of the related titles.

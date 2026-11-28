@@ -23,6 +23,7 @@ import io.github.kauri_off.kiroku.data.db.seasons
 import io.github.kauri_off.kiroku.data.db.sources
 import io.github.kauri_off.kiroku.data.network.MalFields.PICTURES
 import io.github.kauri_off.kiroku.data.network.MalJson
+import io.github.kauri_off.kiroku.data.network.searchSafety
 import io.github.kauri_off.kiroku.data.network.titlePictures
 import kotlinx.serialization.KSerializer
 import kotlinx.serialization.SerialName
@@ -199,6 +200,7 @@ internal fun AnimeNode.toAnime(repairs: Repairs): Anime {
         meanScore = repairs.read("mean", mean.given(), mean.number()?.doubleOrNull?.takeIf { it in 0.0..10.0 }),
         rank = repairs.read("rank", rank.given(), rank.number()?.intOrNull?.takeIf { it > 0 }),
         genres = genresGiven,
+        safeForSearch = nsfw.searchSafety(),
         averageEpisodeDuration =
             repairs
                 .read("average_episode_duration", episodeSeconds.given(), episodeSeconds.number()?.longOrNull?.takeIf { it >= 0 })

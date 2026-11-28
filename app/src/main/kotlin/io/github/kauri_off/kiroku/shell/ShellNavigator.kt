@@ -19,6 +19,7 @@ import io.github.kauri_off.kiroku.core.model.SignInId
 import io.github.kauri_off.kiroku.core.repository.BrowseList
 import io.github.kauri_off.kiroku.list.ListMode
 import io.github.kauri_off.kiroku.manga.MangaListKey
+import io.github.kauri_off.kiroku.manga.MangaTitleKey
 import io.github.kauri_off.kiroku.notShown
 import io.github.kauri_off.kiroku.search.BrowseKey
 import io.github.kauri_off.kiroku.title.TitleKey
@@ -76,13 +77,18 @@ class ShellNavigator internal constructor(
         stacks.values.forEach { stack -> (stack.lastIndex downTo 1).filter { stack[it] == key }.forEach { stack.removeAt(it) } }
     }
 
-    internal fun pruneSuggestions(owner: SignInId?) {
+    internal fun pruneOwnedSearchPages(
+        owner: SignInId?,
+        recentScope: String?,
+    ) {
         val search = stacks.getValue(Destination.Search)
         val retired =
             search.indexOfFirst { key ->
                 when {
                     key is BrowseKey && key.list == BrowseList.Suggestions -> owner == null || key.owner != owner.value
                     key is TitleKey && key.suggestionsOwner != null -> key.suggestionsOwner != owner?.value
+                    key is TitleKey && key.recentOwner != null -> recentScope != null && key.recentOwner != recentScope
+                    key is MangaTitleKey && key.recentOwner != null -> recentScope != null && key.recentOwner != recentScope
                     else -> false
                 }
             }

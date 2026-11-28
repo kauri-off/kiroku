@@ -12,6 +12,7 @@ import androidx.compose.runtime.setValue
 import io.github.kauri_off.kiroku.collectAsScreenState
 import io.github.kauri_off.kiroku.core.model.Session
 import io.github.kauri_off.kiroku.core.model.owner
+import io.github.kauri_off.kiroku.search.recentScope
 import io.github.kauri_off.kiroku.wiring.AppGraph
 
 // A sign-out, wherever it was made, closes every screen and leaves the app as a start without a session does.
@@ -25,7 +26,8 @@ fun SignOutTurns(
     var routeSession by remember(graph, navigator) { mutableStateOf<Session?>(null) }
     var legacyHadSession by rememberSaveable(saver = sessionMarkerSaver) { mutableStateOf(false) }
     var composeOwner by rememberSaveable { mutableStateOf<String?>(null) }
-    LaunchedEffect(session, navigator) {
+    val scope = recentScope(graph)?.takeIf { session != null && it.owner == session?.owner }
+    LaunchedEffect(session, navigator, scope) {
         val current = session ?: return@LaunchedEffect
         val hadSession = navigator.hadSession ?: legacyHadSession
         val signedOut = current == Session.SignedOut
@@ -35,7 +37,7 @@ fun SignOutTurns(
             navigator.restart()
             messages.clear()
         }
-        navigator.pruneSuggestions(current.owner)
+        navigator.pruneOwnedSearchPages(current.owner, scope?.key)
         navigator.hadSession = !signedOut
         navigator.sessionOwner = current.owner
         navigator.restoredNavigation = false

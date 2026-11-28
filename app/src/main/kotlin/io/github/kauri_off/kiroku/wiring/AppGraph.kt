@@ -13,8 +13,10 @@ import io.github.kauri_off.kiroku.core.repository.MangaCatalogue
 import io.github.kauri_off.kiroku.core.repository.MangaListEditor
 import io.github.kauri_off.kiroku.core.repository.MangaListReader
 import io.github.kauri_off.kiroku.core.repository.MangaRepository
+import io.github.kauri_off.kiroku.core.repository.NoRecentTitles
 import io.github.kauri_off.kiroku.core.repository.NotificationsRepository
 import io.github.kauri_off.kiroku.core.repository.PreferencesRepository
+import io.github.kauri_off.kiroku.core.repository.RecentTitles
 import io.github.kauri_off.kiroku.core.repository.SearchRepository
 import io.github.kauri_off.kiroku.core.repository.SessionRepository
 import io.github.kauri_off.kiroku.core.repository.UserRepository
@@ -42,6 +44,7 @@ interface AppGraph {
 
     // A title's score distribution, from a service apart from MAL's pages.
     val scores: ScoreDistributionRepository
+    val recentTitles: RecentTitles get() = NoRecentTitles
     val search: SearchRepository
     val user: UserRepository
     val connection: Connection

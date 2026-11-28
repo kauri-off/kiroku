@@ -618,7 +618,7 @@ class LiveListTest {
             assertEquals(ListContent.SignedOut, screen.state.first { it.content == ListContent.SignedOut }.content)
 
             assertEquals(Session.SignedOut, graph.session.observeSession().first())
-            assertEquals(0L, parts.tokenFile.length())
+            assertEquals(37L, parts.tokenFile.length())
             assertEquals(emptyList<ListEntry>(), graph.list.observeEntries().first())
             assertEquals(emptyMap<AnimeId, StoredEntry>(), store(parts).readAll())
             assertEquals(StoredList(null, null), store(parts).state())
@@ -708,7 +708,7 @@ class LiveListTest {
             assertEquals(emptyMap<AnimeId, StoredEntry>(), store(parts).readAll())
             assertEquals(StoredList(null, null), store(parts).state())
             assertEquals(defaults, graph.preferences.observeListSorts().first())
-            assertEquals(0L, parts.tokenFile.length())
+            assertEquals(37L, parts.tokenFile.length())
         }
 
     // Section 2.3: with AniList out of reach, every unfinished title shows MAL's estimate, nothing is stored and the List shows its rows.

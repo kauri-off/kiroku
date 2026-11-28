@@ -13,9 +13,11 @@ import java.io.FileOutputStream
 import java.io.IOException
 import java.io.InputStream
 import java.io.OutputStream
+import java.nio.ByteBuffer
 import java.nio.file.Files
 import java.nio.file.StandardCopyOption
 import java.security.GeneralSecurityException
+import java.security.MessageDigest
 import java.util.UUID
 
 // One per file and process: a second one on the same file fails at its first use.
@@ -32,8 +34,11 @@ internal class TokenStore(
         withContext(Dispatchers.IO) { File(file.path + NEXT).delete() }
         return try {
             store.data.first()
-        } catch (_: CorruptionException) {
-            Stored.SignedOut
+        } catch (error: CorruptionException) {
+            generateSequence<Throwable>(error) { it.cause }
+                .filterIsInstance<MalformedTokenFile>()
+                .firstOrNull()
+                ?.guest ?: Stored.Guest(UUID.randomUUID().toString())
         }
     }
 
@@ -89,7 +94,7 @@ class TokensNotRead internal constructor(
     }
 }
 
-// An empty file is signed out; else a marker and the sign-in's id in the clear, and after SEALED the sealed tokens.
+// The header identifies a guest or a sign-in; only a sealed sign-in has a payload.
 internal class TokenFormat(
     private val cipher: TokenCipher,
     private val name: String,
@@ -102,12 +107,19 @@ internal class TokenFormat(
     override suspend fun readFrom(input: InputStream): Stored {
         val bytes = input.readBytes()
         if (bytes.isEmpty()) return Stored.SignedOut
-        val signIn = signInIn(bytes) ?: throw CorruptionException(UNREADABLE)
+        val signIn = signInIn(bytes) ?: throw malformed(bytes)
         return when {
+            bytes[0] == GUEST && bytes.size == HEAD -> Stored.Guest(signIn)
             bytes[0] == EXPIRED && bytes.size == HEAD -> Stored.Expired(signIn)
             bytes[0] == SEALED -> unsealed(bytes)?.let(Stored::SignedIn) ?: Stored.Expired(signIn)
-            else -> throw CorruptionException(UNREADABLE)
+            else -> throw malformed(bytes)
         }
+    }
+
+    private fun malformed(bytes: ByteArray): CorruptionException {
+        val digest = ByteBuffer.wrap(MessageDigest.getInstance("SHA-256").digest(bytes))
+        val guest = Stored.Guest(UUID(digest.long, digest.long).toString())
+        return CorruptionException(UNREADABLE, MalformedTokenFile(guest))
     }
 
     // Only a well-formed id counts: a foreign file is not an expired session.
@@ -149,6 +161,7 @@ internal class TokenFormat(
     ) {
         when (t) {
             Stored.SignedOut -> Unit
+            is Stored.Guest -> output.write(head(GUEST, t.generation))
             is Stored.Expired -> output.write(head(EXPIRED, t.signIn))
             is Stored.SignedIn -> output.write(sealed(t.tokens))
         }
@@ -168,9 +181,14 @@ internal class TokenFormat(
     private companion object {
         const val EXPIRED: Byte = 0
         const val SEALED: Byte = 1
+        const val GUEST: Byte = 2
         const val HEAD = 37
         const val UNREADABLE = "The token file cannot be read"
         const val UNSEALABLE = "The tokens cannot be sealed"
         val json = Json { ignoreUnknownKeys = true }
     }
 }
+
+private class MalformedTokenFile(
+    val guest: Stored.Guest,
+) : Exception()

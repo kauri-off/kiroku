@@ -14,6 +14,7 @@ import io.github.kauri_off.kiroku.data.recorder.RecordedAnswers
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 import java.time.Instant
@@ -146,6 +147,8 @@ class MalSearchTest {
             second.items.map { it.item.id },
         )
         (first.items + second.items).forEach { assertNull(it.position) }
+        assertTrue(first.items.all { it.item.safeForSearch == true })
+        assertTrue(second.items.all { it.item.safeForSearch == null })
         assertEquals(10, next)
         assertEquals(20, second.nextOffset)
         val requests =

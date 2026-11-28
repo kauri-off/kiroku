@@ -31,6 +31,7 @@ data class Anime(
     val rank: Int?,
     val genres: List<Genre>?,
     val averageEpisodeDuration: Duration?,
+    val safeForSearch: Boolean? = null,
 ) {
     init {
         require(malEpisodes == null || malEpisodes > 0)

@@ -175,7 +175,7 @@ class TitleViewModel(
         }.stateIn(
             viewModelScope,
             WhileShown,
-            sources.value?.let { build(it, moment.value, null, false, false, false, TitleLanguage.Romaji, false) }
+            sources.value?.let { build(it, moment.value, null, false, false, false, opened?.language ?: TitleLanguage.Romaji, false) }
                 ?: TitleState.Loading(null),
         )
 
