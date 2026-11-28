@@ -12,4 +12,5 @@
     <string name="manga_list_direction_fewest">Fewest first</string>
     <string name="public_manga_list_title">%1$s\'s manga list</string>
     <string name="public_manga_list_empty">This manga list is empty</string>
+    <string name="manga_chapters_read_unknown">Chapters read unknown</string>
 </resources>

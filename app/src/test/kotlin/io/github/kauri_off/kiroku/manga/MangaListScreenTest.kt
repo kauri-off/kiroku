@@ -34,6 +34,7 @@ import io.github.kauri_off.kiroku.core.list.SortDirection
 import io.github.kauri_off.kiroku.core.list.TabSort
 import io.github.kauri_off.kiroku.core.model.MangaId
 import io.github.kauri_off.kiroku.core.model.MangaListEntry
+import io.github.kauri_off.kiroku.core.model.MangaListNumber
 import io.github.kauri_off.kiroku.core.model.MangaReadingStatus
 import io.github.kauri_off.kiroku.core.model.Titles
 import io.github.kauri_off.kiroku.design.composeRule
@@ -76,6 +77,20 @@ class MangaListScreenTest {
         assertEquals(TabSort(ListSort.ChaptersRead, SortDirection.Ascending), controls.sorts[mangaEntry.status])
         compose.onNodeWithText("Most first").performClick().assertIsOn()
         assertEquals(TabSort(ListSort.ChaptersRead, SortDirection.Descending), controls.sorts[mangaEntry.status])
+    }
+
+    @Test
+    fun `chapter sort identifies unverified displayed progress as unknown`() {
+        val entry = mangaEntry.copy(chaptersRead = 26, unverifiedNumbers = setOf(MangaListNumber.ChaptersRead))
+        val content = mangaListFixture(listOf(entry))
+        state = MangaListState(content = content)
+        compose.setContent { Screen(state) {} }
+        compose.onNodeWithText("26\u00A0chapters", substring = true).assertIsDisplayed()
+
+        compose.runOnIdle { state = state.copy(sorts = mapOf(entry.status to TabSort(ListSort.ChaptersRead))) }
+
+        compose.onNodeWithText("Chapters read unknown", substring = true).assertIsDisplayed()
+        compose.onNodeWithText("26\u00A0chapters", substring = true).assertDoesNotExist()
     }
 
     @Test
