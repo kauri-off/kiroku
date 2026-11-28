@@ -32,6 +32,7 @@ import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.retryWhen
 import kotlinx.coroutines.withContext
 
 @Entity(tableName = "recent_title", primaryKeys = ["manga", "title_id"])
@@ -176,6 +177,36 @@ class RoomRecentTitles(
                 unexpected(error)
                 emit(emptyList())
             }
+
+    @OptIn(ExperimentalCoroutinesApi::class)
+    override fun observeRemovalTarget(removal: RecentTitleRemoval): Flow<Boolean> =
+        session.observeOwner().flatMapLatest { owner ->
+            if (scopeFor(owner) != removal.scope) {
+                flowOf(false)
+            } else {
+                flow {
+                    if (retired(removal.scope.owner)) {
+                        emit(false)
+                    } else {
+                        emitAll(
+                            database().recentTitles().observe(removal.scope.key).map { rows ->
+                                !retired(removal.scope.owner) &&
+                                    rows.any {
+                                        it.visit == removal.order &&
+                                            it.id == removal.key.value &&
+                                            it.manga == (removal.key is RecentTitleId.Manga)
+                                    }
+                            },
+                        )
+                    }
+                }.retryWhen { error, attempt ->
+                    if (error !is Exception || error is CancellationException) throw error
+                    if (attempt == 0L) unexpected(error)
+                    delay(fileRetry(attempt.coerceAtMost(Int.MAX_VALUE.toLong()).toInt()).toMillis())
+                    true
+                }
+            }
+        }
 
     override suspend fun reserveVisit(scope: RecentTitleScope): Long? =
         withScope(scope) { db ->

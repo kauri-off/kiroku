@@ -38,8 +38,8 @@ internal fun RecordTitleVisit(
     val scope = active?.takeIf { session != null && it.owner == session.owner }
     LaunchedEffect(graph, onTop, scope, title, visit) {
         val order = visit ?: return@LaunchedEffect
-        if (onTop && scope != null && opening.belongsTo(scope) && title != null) {
-            graph.recentTitles.record(scope, title, order)
+        if (onTop && scope != null && title != null) {
+            opening.record(graph.recentTitles, scope, title, order)
         }
     }
 }

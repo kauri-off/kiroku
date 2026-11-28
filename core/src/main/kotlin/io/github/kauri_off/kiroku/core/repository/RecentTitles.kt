@@ -5,6 +5,7 @@ import io.github.kauri_off.kiroku.core.model.Titles
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.emptyFlow
 import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.map
 
 data class RecentTitle(
     val key: RecentTitleId,
@@ -59,6 +60,9 @@ interface RecentTitles {
     fun observeScope(): Flow<RecentTitleScope?>
 
     fun observe(scope: RecentTitleScope): Flow<List<RecentTitleVisit>>
+
+    fun observeRemovalTarget(removal: RecentTitleRemoval): Flow<Boolean> =
+        observe(removal.scope).map { visits -> visits.any(removal::matches) }
 
     suspend fun remove(removal: RecentTitleRemoval): RecentTitleRemovalResult
 

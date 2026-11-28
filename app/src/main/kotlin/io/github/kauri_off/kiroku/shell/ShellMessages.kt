@@ -10,6 +10,7 @@ import io.github.kauri_off.kiroku.core.model.sameAsWritten
 import io.github.kauri_off.kiroku.core.repository.ListChange
 import io.github.kauri_off.kiroku.core.repository.ListRepository
 import io.github.kauri_off.kiroku.core.repository.ListWrite
+import io.github.kauri_off.kiroku.core.repository.RecentTitleRemoval
 import io.github.kauri_off.kiroku.core.repository.WriteFailure
 import io.github.kauri_off.kiroku.edit.MangaEditTotals
 import io.github.kauri_off.kiroku.search.ViewedTitleWrites
@@ -70,6 +71,7 @@ data class ShellMessage(
         ) : Action
 
         class RetryViewedTitle(
+            val target: RecentTitleRemoval,
             val applicable: Flow<Boolean>,
             val run: () -> Unit,
         ) : Action
@@ -157,8 +159,14 @@ class ShellMessages(
     private var made: Job? = null
 
     fun post(message: ShellMessage) {
-        val posted = Posted(message, ++serial)
         val showing = shown.value
+        val retry = message.action as? ShellMessage.Action.RetryViewedTitle
+        if (retry != null &&
+            (showing.hasViewedRetry(retry.target) || waiting.any { it.posted.hasViewedRetry(retry.target) })
+        ) {
+            return
+        }
+        val posted = Posted(message, ++serial)
         when {
             showing == null || !showing.message.mustStay -> show(posted)
             message.mustStay -> {
@@ -168,6 +176,9 @@ class ShellMessages(
             }
         }
     }
+
+    private fun Posted?.hasViewedRetry(target: RecentTitleRemoval): Boolean =
+        (this?.message?.action as? ShellMessage.Action.RetryViewedTitle)?.target == target
 
     // A screen's write runs in the shell's scope, so the write and the message about it outlive the screen.
     fun write(
@@ -230,7 +241,11 @@ class ShellMessages(
                 is ShellMessage.Action.Undo -> write(action.write)
                 is ShellMessage.Action.Retry -> write(action.write)
                 is ShellMessage.Action.Change -> requested.value = action
-                is ShellMessage.Action.RetryViewedTitle -> if (shown.value == posted) action.run()
+                is ShellMessage.Action.RetryViewedTitle ->
+                    if (shown.value == posted) {
+                        showNext()
+                        action.run()
+                    }
                 is ShellMessage.Action.MangaRecovery -> action.run()
                 is MangaChange -> if (shown.value == posted) mangaRequested.value = action
                 null -> Unit

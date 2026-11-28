@@ -10,42 +10,56 @@ import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 
 internal class ViewedTitleWrites(
     private val scope: CoroutineScope,
     private val post: (ShellMessage) -> Unit,
 ) {
-    private class Opening(
+    class Opening(
         val owner: RecentTitleScope,
         val key: RecentTitleId,
-        var removal: CompletableDeferred<Boolean>? = null,
-        var dismissed: Boolean = false,
-    )
+        val onDismissed: () -> Unit,
+    ) {
+        var removal: CompletableDeferred<Unit>? = null
+        var dismissed = false
+        val recording = Mutex()
 
-    private val reservations = mutableListOf<Opening>()
+        suspend fun awaitRemoval() {
+            while (true) {
+                val pending = removal ?: return
+                pending.await()
+            }
+        }
+
+        suspend fun record(write: suspend () -> Unit) {
+            while (!dismissed) {
+                awaitRemoval()
+                recording.withLock {
+                    if (dismissed) return
+                    if (removal == null) {
+                        write()
+                        return
+                    }
+                }
+            }
+        }
+    }
+
+    private val openings = mutableSetOf<Opening>()
     private val removals = MutableStateFlow(emptySet<RecentTitleRemoval>())
     val pending = removals.asStateFlow()
 
-    suspend fun reserve(
-        history: RecentTitles,
+    fun open(
         owner: RecentTitleScope,
         key: RecentTitleId,
-    ): Long? {
-        val opening = Opening(owner, key)
-        reservations += opening
-        try {
-            val order = history.reserveVisit(owner)
-            while (!opening.dismissed) {
-                val removal = opening.removal ?: return order
-                if (removal.await()) return null
-                if (opening.removal === removal) return order
-            }
-            return null
-        } finally {
-            reservations.remove(opening)
-        }
+        onDismissed: () -> Unit,
+    ): Opening = Opening(owner, key, onDismissed).also { openings += it }
+
+    fun close(opening: Opening) {
+        openings -= opening
     }
 
     fun isRemoving(
@@ -57,7 +71,7 @@ internal class ViewedTitleWrites(
         history: RecentTitles,
         target: RecentTitleRemoval,
         restore: () -> Unit,
-    ) = remove(history, target, restore, reservations.filter { it.owner == target.scope && it.key == target.key })
+    ) = remove(history, target, restore, openings.filter { it.owner == target.scope && it.key == target.key })
 
     private fun remove(
         history: RecentTitles,
@@ -69,31 +83,38 @@ internal class ViewedTitleWrites(
             restore()
             return
         }
-        val removal = CompletableDeferred<Boolean>()
+        val removal = CompletableDeferred<Unit>()
         openings.forEach { it.removal = removal }
         removals.value += target
         scope.launch {
             try {
+                openings.forEach { it.recording.withLock {} }
                 when (val result = history.remove(target)) {
                     RecentTitleRemovalResult.Removed -> {
-                        openings.forEach { it.dismissed = true }
-                        removal.complete(true)
+                        openings.forEach {
+                            it.dismissed = true
+                            it.onDismissed()
+                        }
                     }
                     RecentTitleRemovalResult.Stale -> restore()
                     is RecentTitleRemovalResult.Failed -> {
                         restore()
-                        val applicable = history.observe(target.scope).map { visits -> visits.any(target::matches) }
+                        val applicable = history.observeRemovalTarget(target)
                         val retry = target.copy(through = result.through ?: target.order)
                         post(
                             ShellMessage(
                                 ShellMessage.Text.CouldNotRemoveViewedTitle,
-                                ShellMessage.Action.RetryViewedTitle(applicable) { remove(history, retry, {}, openings) },
+                                ShellMessage.Action.RetryViewedTitle(
+                                    target.copy(through = null),
+                                    applicable,
+                                ) { remove(history, retry, {}, openings) },
                             ),
                         )
                     }
                 }
             } finally {
-                removal.complete(false)
+                openings.forEach { if (it.removal === removal) it.removal = null }
+                removal.complete(Unit)
                 removals.value -= target
             }
         }

@@ -15,6 +15,7 @@ import io.github.kauri_off.kiroku.data.session.TokenGrant
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.asCoroutineDispatcher
 import kotlinx.coroutines.cancelAndJoin
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
@@ -31,9 +32,11 @@ import org.junit.rules.TemporaryFolder
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.RuntimeEnvironment
+import java.io.IOException
 import java.time.Duration
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.Executors
+import java.util.concurrent.atomic.AtomicBoolean
 
 @RunWith(RobolectricTestRunner::class)
 class RoomRecentTitlesTest {
@@ -210,6 +213,47 @@ class RoomRecentTitlesTest {
                     assertEquals(RecentTitleRemovalResult.Stale, history.remove(retry))
                     assertEquals(listOf(anime), history.titles(scope))
                     assertEquals(1, errors.size)
+                }
+            } finally {
+                sessions.close()
+            }
+        }
+
+    @Test
+    fun `a transient read failure cannot retire Retry for a surviving visit`() =
+        runBlocking {
+            val sessions = SessionFixture(folder.root)
+            try {
+                val session = sessions.open()
+                KirokuDatabase.builder(context, null).build().use { db ->
+                    val offline = AtomicBoolean()
+                    val failures = Channel<Unit>(Channel.UNLIMITED)
+                    val history =
+                        RoomRecentTitles({
+                            if (offline.get()) throw IOException("Recent history temporarily unreadable")
+                            db
+                        }, session) { failures.trySend(Unit) }
+                    val scope = history.activeScope()
+                    val title = anime(1, "Original")
+                    val order = checkNotNull(history.reserveVisit(scope))
+                    history.record(scope, title, order)
+                    val target = RecentTitleRemoval(scope, title.key, order)
+                    offline.set(true)
+                    assertEquals(emptyList<RecentTitle>(), history.titles(scope))
+                    withTimeout(5_000) { failures.receive() }
+
+                    val changes = Channel<Boolean>(Channel.UNLIMITED)
+                    val watcher = launch { history.observeRemovalTarget(target).collect { changes.send(it) } }
+                    try {
+                        withTimeout(5_000) { failures.receive() }
+                        assertTrue(changes.tryReceive().isFailure)
+                        offline.set(false)
+                        assertEquals(true, withTimeout(5_000) { changes.receive() })
+                        assertEquals(RecentTitleRemovalResult.Removed, history.remove(target))
+                        assertEquals(false, withTimeout(5_000) { changes.receive() })
+                    } finally {
+                        watcher.cancelAndJoin()
+                    }
                 }
             } finally {
                 sessions.close()
