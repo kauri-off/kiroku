@@ -16,7 +16,7 @@ concurrency:
 # The jobs run side by side and share compiled work through the build cache in the Gradle home that main saves.
 jobs:
   tools:
-    name: Queue self-test
+    name: CI script checks
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     permissions:
@@ -25,33 +25,9 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-          fetch-depth: 2
 
-      # A pull request is compared with its base, a push with main before it; with no such commit the self-test runs.
-      - name: Whether the queue tools changed
-        id: tools
-        env:
-          BEFORE: ${{ github.event.before }}
-        run: |
-          base=HEAD^1
-          if [ "$GITHUB_EVENT_NAME" = push ]; then base=$BEFORE; fi
-          if ! git cat-file -e "$base^{commit}" 2>/dev/null || ! git diff --quiet "$base" HEAD -- tools .github/workflows/ci.yml; then
-            echo run=true >> "$GITHUB_OUTPUT"
-          fi
-
-      # tools/emu runs its command in an unprivileged user and mount namespace, which Ubuntu's AppArmor restricts.
-      - name: Allow unprivileged user namespaces
-        if: steps.tools.outputs.run == 'true'
-        run: |
-          if [ -e /proc/sys/kernel/apparmor_restrict_unprivileged_userns ]; then
-            sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
-          fi
-
-      - name: Queue self-test
-        if: steps.tools.outputs.run == 'true'
-        run: tools/selftest
-        env:
-          KIROKU_SELFTEST_REQUIRE_Q: "1"
+      - name: Check Gradle test timeouts
+        run: .github/scripts/test-timeout-guard
 
       - name: Test the screenshot comparison and the check of the jobs' results
         if: github.event_name == 'pull_request'

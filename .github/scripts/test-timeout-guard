@@ -1,0 +1,31 @@
+#!/usr/bin/env python3
+import re
+import sys
+from pathlib import Path
+
+root = Path(__file__).resolve().parents[2]
+build = (root / "build.gradle.kts").read_text()
+modules = {path.parent.name: path.read_text() for path in root.glob("*/build.gradle.kts")}
+test_tasks = re.search(r"subprojects \{.*?tasks\.withType<Test>\(\)\.configureEach \{(.*?)\n    \}", build, re.S)
+app_build = modules.get("app", "")
+render_task = re.search(
+    r'\ntasks\.withType<Test>\(\)\.matching \{ it\.name == "testDebugUnitTest" \}\.configureEach \{(.*?)\n\}',
+    app_build,
+    re.S,
+)
+render_limits = (
+    [line.strip() for line in render_task[1].splitlines() if "timeout" in line or "testLimit" in line]
+    if render_task else []
+)
+
+if not test_tasks or "timeout = Duration.ofMinutes(10)" not in test_tasks[1]:
+    sys.exit("Expected a 10-minute timeout for all Gradle test tasks")
+if render_limits != [
+    "val testLimit = timeout.get()",
+    "timeout.set(recorded.map { if (it) Duration.ofMinutes(30) else testLimit })",
+] or app_build.count("timeout") != 2:
+    sys.exit("Expected a 30-minute timeout for screenshot recording and the default timeout for other app tests")
+if any("timeout" in text for name, text in modules.items() if name != "app"):
+    sys.exit("Expected other modules to inherit the Gradle test timeout")
+
+print("Gradle test timeout guard passed")

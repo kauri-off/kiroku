@@ -37,7 +37,7 @@ Goal: install a debug APK and verify the List and the title page in the final de
 English, light and dark, on demo data. No MAL client id is needed.
 
 - [x] **M1-01 [A] Project skeleton.**
-- [x] **M1-02 [A] Queue wrappers.**
+- [x] **M1-02 [A] Local build wrappers.**
 - [x] **M1-03 [O] Repository published.**
 - [x] **M1-04 CI workflow.**
 - [x] **M1-05 [A] Domain model and fixtures.**
