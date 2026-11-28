@@ -298,6 +298,14 @@ class ListEngine(
 
     override fun observeSyncedAt(): Flow<Instant?> = shown(null) { syncedAt }
 
+    suspend fun settleForTitleRead() {
+        scope
+            .async {
+                runCatching { flow { emit(mutex.withLock { settle() }) }.retriedOverStore().first() }
+            }.await()
+            .getOrThrow()
+    }
+
     // Nothing signed out, else the store's own once it holds this sign-in's list; it is tried a few times in a row.
     @OptIn(ExperimentalCoroutinesApi::class)
     private fun <T> shown(

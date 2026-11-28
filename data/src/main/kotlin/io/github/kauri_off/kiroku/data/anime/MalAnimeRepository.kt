@@ -6,11 +6,14 @@ import io.github.kauri_off.kiroku.core.error.Outcome
 import io.github.kauri_off.kiroku.core.model.Anime
 import io.github.kauri_off.kiroku.core.model.AnimeDetails
 import io.github.kauri_off.kiroku.core.model.AnimeId
+import io.github.kauri_off.kiroku.core.repository.AdultSearchChoice
 import io.github.kauri_off.kiroku.core.repository.AnimeRepository
+import io.github.kauri_off.kiroku.data.db.Holder
 import io.github.kauri_off.kiroku.data.db.TitleStore
 import io.github.kauri_off.kiroku.data.db.Unread
 import io.github.kauri_off.kiroku.data.network.AnotherTitleAnswer
 import io.github.kauri_off.kiroku.data.preferences.StoredPreferences
+import io.github.kauri_off.kiroku.data.session.MalSession
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.currentCoroutineContext
@@ -20,17 +23,21 @@ import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
 import java.time.Clock
 import java.time.Instant
+import kotlin.time.Duration.Companion.seconds
 
 // The titles of section 7.1: what the store holds, refreshed from MAL's page; a refresh that fails leaves the store as it was.
 class MalAnimeRepository(
     private val titles: MalTitles,
     private val store: TitleStore,
+    private val session: MalSession,
     private val clock: Clock,
     // The setting "Show adult content in search", which inside a title changes only its recommendations.
     private val preferences: StoredPreferences,
     private val unexpected: (Throwable) -> Unit,
+    private val awaitList: suspend () -> Unit = {},
 ) : AnimeRepository {
     private var sequence = 0L
     private val publishedDetails = mutableMapOf<AnimeId, Long>()
@@ -59,15 +66,34 @@ class MalAnimeRepository(
 
     // An answer that comes after a sign-out cleared the store is not stored: its list has ended.
     override suspend fun refresh(id: AnimeId): Outcome<Unit> {
-        val begun =
-            when (val held = stored { store.holder() }) {
-                is Outcome.Failure -> return held
-                is Outcome.Success -> held.value
-            }
+        val owner = session.currentOwner() ?: return Outcome.Failure(DataError.StorageError)
+        val begun = Holder(owner.id?.value)
+        val ready = stored { waitForList() && store.holder() == begun }
+        if (!session.isCurrentOwner(owner)) return Outcome.Failure(DataError.ListEnded)
+        when (ready) {
+            is Outcome.Failure -> return ready
+            is Outcome.Success -> if (!ready.value) return Outcome.Failure(DataError.StorageError)
+        }
         val (choice, order) = preferences.withAdultChoice { it to ++sequence }
-        val answer = titles.title(id, choice?.enabled == true)
-        if (answer !is Outcome.Success) return answer as Outcome.Failure
-        val (anime, details, unread) = answer.value
+        val answer = titles.title(id, choice?.enabled == true) { session.isCurrentOwner(owner) }
+        return session.withOwner(owner) {
+            when (answer) {
+                is Outcome.Failure -> answer
+                is Outcome.Success -> publish(id, answer.value, begun, choice, order)
+            }
+        } ?: Outcome.Failure(DataError.ListEnded)
+    }
+
+    private suspend fun waitForList(): Boolean = withTimeoutOrNull(5.seconds) { awaitList() } != null
+
+    private suspend fun publish(
+        id: AnimeId,
+        title: MalTitle,
+        begun: Holder,
+        choice: AdultSearchChoice?,
+        order: Long,
+    ): Outcome<Unit> {
+        val (anime, details, unread) = title
         // A page of another title is not the one asked for, which would otherwise never get its details.
         if (anime.id != id) {
             unexpected(AnotherTitleAnswer())

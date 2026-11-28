@@ -9,6 +9,7 @@ import io.github.kauri_off.kiroku.core.error.DataError
 import io.github.kauri_off.kiroku.core.error.Outcome
 import io.github.kauri_off.kiroku.core.list.InMemoryLocalList
 import io.github.kauri_off.kiroku.core.list.ListSort
+import io.github.kauri_off.kiroku.core.list.LocalList
 import io.github.kauri_off.kiroku.core.list.SortDirection
 import io.github.kauri_off.kiroku.core.list.StoredEntry
 import io.github.kauri_off.kiroku.core.list.StoredList
@@ -35,6 +36,7 @@ import io.github.kauri_off.kiroku.list.ListContent
 import io.github.kauri_off.kiroku.list.ListEvent
 import io.github.kauri_off.kiroku.list.ListViewModel
 import io.github.kauri_off.kiroku.shell.ShellMessages
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Dispatchers
@@ -50,6 +52,7 @@ import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.withTimeout
+import kotlinx.coroutines.withTimeoutOrNull
 import mockwebserver3.RecordedRequest
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import org.junit.After
@@ -69,6 +72,9 @@ import java.io.File
 import java.io.IOException
 import java.time.Clock
 import java.util.concurrent.CopyOnWriteArrayList
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.atomic.AtomicReference
 import kotlin.time.Duration.Companion.seconds
 
@@ -141,6 +147,131 @@ class LiveListTest {
     }
 
     private suspend fun LiveGraph.signInOnce() = signIn.once()
+
+    @Test
+    fun `a replacement anime read waits for sign-in to clear the guest title cache`() = replacementWaitsForClear(returnToGuest = false)
+
+    @Test
+    fun `a new guest anime read waits for the in-flight account clear`() = replacementWaitsForClear(returnToGuest = true)
+
+    @Test
+    fun `a timed-out title lets a retried clear finish after committing its owner`() =
+        runBlocking {
+            val firstFailure = CompletableDeferred<Unit>()
+            val committed = CompletableDeferred<Unit>()
+            val release = CompletableDeferred<Unit>()
+            val finished = CompletableDeferred<Unit>()
+            val clears = AtomicInteger()
+            val parts = parts(process(), "title-clear-timeout")
+            val room = liveListStore(parts)
+            val graph =
+                LiveGraph(parts, listStore = {
+                    object : LocalList by room {
+                        override suspend fun clear(owner: SignInId?) {
+                            if (owner == null) {
+                                room.clear(null)
+                                return
+                            }
+                            val attempt = clears.incrementAndGet()
+                            if (attempt == 1) firstFailure.complete(Unit)
+                            if (attempt <= 2) throw IOException("The title cache could not be cleared")
+                            room.clear(owner)
+                            committed.complete(Unit)
+                            release.await()
+                            finished.complete(Unit)
+                        }
+                    }
+                })
+            val recorded = ServedMal.recorded("title_airing.200.json")
+            mal.anime = { ServedMal.answer(200, recorded) }
+            val id = AnimeId(61987)
+            try {
+                withTimeout(12.seconds) {
+                    graph.list.observeSyncedAt().first()
+                    graph.signInOnce()
+                    firstFailure.await()
+
+                    val accountTitle = async { graph.anime.refresh(id) }
+                    committed.await()
+                    assertNotNull(room.state().owner)
+                    assertEquals(3, clears.get())
+                    assertEquals(Outcome.Failure(DataError.StorageError), accountTitle.await())
+                    assertFalse(finished.isCompleted)
+                    assertTrue(mal.asked.none { it.startsWith("GET /v2/anime/") })
+
+                    graph.account.signOut()
+                    assertEquals(Session.SignedOut, graph.account.currentSession())
+                    release.complete(Unit)
+                    finished.await()
+                    assertEquals(Outcome.Success(Unit), graph.anime.refresh(id))
+                    assertNull(room.state().owner)
+                    assertEquals(setOf(id), graph.anime.observePagesRead().first())
+                }
+            } finally {
+                release.complete(Unit)
+            }
+        }
+
+    private fun replacementWaitsForClear(returnToGuest: Boolean) =
+        runBlocking {
+            val guestRequest = CompletableDeferred<Unit>()
+            val guestReply = CountDownLatch(1)
+            val clearing = CompletableDeferred<Unit>()
+            val clear = CompletableDeferred<Unit>()
+            val requests = AtomicInteger()
+            val recorded = ServedMal.recorded("title_airing.200.json")
+            mal.anime = {
+                if (requests.incrementAndGet() == 1) {
+                    guestRequest.complete(Unit)
+                    check(guestReply.await(5, TimeUnit.SECONDS))
+                }
+                ServedMal.answer(200, recorded)
+            }
+            val graph =
+                LiveGraph(parts(process(), "title-owner-$returnToGuest"), listStore = { parts ->
+                    val room = liveListStore(parts)
+                    object : LocalList by room {
+                        override suspend fun clear(owner: SignInId?) {
+                            if (owner != null) {
+                                clearing.complete(Unit)
+                                clear.await()
+                            }
+                            room.clear(owner)
+                        }
+                    }
+                })
+            val id = AnimeId(61987)
+            try {
+                withTimeout(10.seconds) {
+                    graph.list.observeSyncedAt().first()
+                    val guest = async { graph.anime.refresh(id) }
+                    guestRequest.await()
+                    graph.signInOnce()
+                    clearing.await()
+                    if (returnToGuest) {
+                        graph.account.signOut()
+                        assertEquals(Session.SignedOut, graph.account.currentSession())
+                    }
+                    guestReply.countDown()
+                    assertEquals(Outcome.Failure(DataError.ListEnded), guest.await())
+
+                    val replacement = async(start = CoroutineStart.UNDISPATCHED) { graph.anime.refresh(id) }
+                    assertNull(withTimeoutOrNull(750) { replacement.await() })
+                    assertEquals(1, requests.get())
+                    assertNull(graph.anime.observeRefreshedAt(id).first())
+
+                    clear.complete(Unit)
+                    assertEquals(Outcome.Success(Unit), replacement.await())
+                    graph.list.settleForTitleRead()
+                    assertEquals(2, requests.get())
+                    assertEquals(setOf(id), graph.anime.observePagesRead().first())
+                    assertNotNull(graph.anime.observeRefreshedAt(id).first())
+                }
+            } finally {
+                guestReply.countDown()
+                clear.complete(Unit)
+            }
+        }
 
     // The List screen over the graph, shown until the test ends.
     private fun TestScope.listScreen(graph: LiveGraph): ListViewModel =
@@ -304,7 +435,7 @@ class LiveListTest {
             val parts = parts(process())
             val owner = SignInId("0f8fad5b-d9cb-469f-a165-70867728950e")
             parts.tokenFile.writeBytes(byteArrayOf(0) + owner.value.encodeToByteArray())
-            liveTitles(parts).observeAnime(AnimeId(1)).first()
+            liveTitles(parts, { liveSession(parts) }).observeAnime(AnimeId(1)).first()
             val file = context.getDatabasePath(parts.databaseName).path
             SQLiteDatabase.openDatabase(file, null, SQLiteDatabase.OPEN_READWRITE).use { db ->
                 db.execSQL("INSERT INTO manga_list_state (owner, synced_at) VALUES (?, 0), ('retired', 0)", arrayOf(owner.value))
@@ -393,7 +524,7 @@ class LiveListTest {
     private suspend fun seedMangaWithBlockedPurge(parts: LiveParts): SignInId {
         val owner = SignInId("0f8fad5b-d9cb-469f-a165-70867728950e")
         parts.tokenFile.writeBytes(byteArrayOf(0) + owner.value.encodeToByteArray())
-        liveTitles(parts).observeAnime(AnimeId(1)).first()
+        liveTitles(parts, { liveSession(parts) }).observeAnime(AnimeId(1)).first()
         editMangaDatabase(parts) { db ->
             db.execSQL("INSERT INTO manga_list_state (owner, synced_at) VALUES (?, 0)", arrayOf(owner.value))
             db.execSQL(

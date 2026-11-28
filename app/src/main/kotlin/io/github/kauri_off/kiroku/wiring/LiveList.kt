@@ -7,7 +7,6 @@ import io.github.kauri_off.kiroku.core.model.Anime
 import io.github.kauri_off.kiroku.core.model.AnimeId
 import io.github.kauri_off.kiroku.core.model.ListEntry
 import io.github.kauri_off.kiroku.core.model.SignInId
-import io.github.kauri_off.kiroku.core.repository.ListRepository
 import io.github.kauri_off.kiroku.data.list.MalRemoteList
 import io.github.kauri_off.kiroku.data.session.MalSession
 import kotlinx.coroutines.CoroutineScope
@@ -22,7 +21,7 @@ internal fun liveList(
     session: MalSession,
     store: (LiveParts) -> LocalList,
     forgetSorts: suspend () -> Unit,
-): ListRepository =
+): ListEngine =
     ListEngine(
         MalRemoteList(parts.http, session),
         StoreOnFirstUse({ store(parts) }, parts.scope, forgetSorts),

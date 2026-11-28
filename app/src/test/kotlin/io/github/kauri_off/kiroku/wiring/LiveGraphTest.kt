@@ -404,7 +404,8 @@ class LiveGraphTest {
 
                     override suspend fun refresh(id: AnimeId) = Outcome.Success(Unit)
                 }
-            val titles = liveTitles(parts(backgroundScope)) { nothing.also { built += Thread.currentThread() } }
+            val parts = parts(backgroundScope)
+            val titles = liveTitles(parts, { liveSession(parts) }) { nothing.also { built += Thread.currentThread() } }
             assertEquals(emptyList<Thread>(), built)
 
             titles.observeAnime(AnimeId(1)).first()
@@ -422,7 +423,7 @@ class LiveGraphTest {
             val source = LiveSource("closed", MalHosts("http://127.0.0.1:1/v2/", "http://127.0.0.1:1/v1/oauth2/"))
             val parts = LiveParts(context, source, "0123abcd", Clock.systemUTC(), backgroundScope, unexpected::add, requests::add, device)
 
-            assertEquals(Outcome.Failure(DataError.NoConnection), liveTitles(parts).refresh(AnimeId(61987)))
+            assertEquals(Outcome.Failure(DataError.NoConnection), liveTitles(parts, { liveSession(parts) }).refresh(AnimeId(61987)))
             assertTrue(requests.toString(), requests.single().startsWith("GET 127.0.0.1/v2/anime/61987?fields "))
         }
 
@@ -463,7 +464,7 @@ class LiveGraphTest {
                 }
             val parts = parts(backgroundScope, LiveSource("refused", MalHosts.Real, refusing))
 
-            assertEquals(Outcome.Failure(DataError.Refused), liveTitles(parts).refresh(AnimeId(61987)))
+            assertEquals(Outcome.Failure(DataError.Refused), liveTitles(parts, { liveSession(parts) }).refresh(AnimeId(61987)))
             assertTrue(File(context.noBackupFilesDir, "refused.backoff").isFile)
             assertFalse(File(context.noBackupFilesDir, "account.backoff").exists())
         }
