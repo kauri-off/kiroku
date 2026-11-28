@@ -27,4 +27,6 @@
     <string name="search_season_summer">Summer</string>
     <string name="search_season_fall">Fall</string>
     <string name="search_recent_titles">Recently viewed</string>
+    <string name="search_remove_viewed">Remove from recently viewed</string>
+    <string name="search_remove_viewed_failed">Could not remove from recently viewed</string>
 </resources>

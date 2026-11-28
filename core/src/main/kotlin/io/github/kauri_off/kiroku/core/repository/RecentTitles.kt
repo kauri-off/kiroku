@@ -5,6 +5,7 @@ import io.github.kauri_off.kiroku.core.model.Titles
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.emptyFlow
 import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.map
 
 data class RecentTitle(
     val key: RecentTitleId,
@@ -29,10 +30,41 @@ data class RecentTitleScope(
     val key: String,
 )
 
+data class RecentTitleVisit(
+    val title: RecentTitle,
+    val order: Long,
+) {
+    val key: RecentTitleId get() = title.key
+}
+
+data class RecentTitleRemoval(
+    val scope: RecentTitleScope,
+    val key: RecentTitleId,
+    val order: Long,
+    val through: Long? = null,
+) {
+    fun matches(visit: RecentTitleVisit): Boolean = key == visit.key && order == visit.order
+}
+
+sealed interface RecentTitleRemovalResult {
+    data object Removed : RecentTitleRemovalResult
+
+    data object Stale : RecentTitleRemovalResult
+
+    data class Failed(
+        val through: Long? = null,
+    ) : RecentTitleRemovalResult
+}
+
 interface RecentTitles {
     fun observeScope(): Flow<RecentTitleScope?>
 
-    fun observe(scope: RecentTitleScope): Flow<List<RecentTitle>>
+    fun observe(scope: RecentTitleScope): Flow<List<RecentTitleVisit>>
+
+    fun observeRemovalTarget(removal: RecentTitleRemoval): Flow<Boolean> =
+        observe(removal.scope).map { visits -> visits.any(removal::matches) }
+
+    suspend fun remove(removal: RecentTitleRemoval): RecentTitleRemovalResult
 
     suspend fun reserveVisit(scope: RecentTitleScope): Long?
 
@@ -43,14 +75,16 @@ interface RecentTitles {
     )
 
     companion object {
-        const val LIMIT = 10
+        const val LIMIT = 3
     }
 }
 
 object NoRecentTitles : RecentTitles {
     override fun observeScope() = emptyFlow<RecentTitleScope?>()
 
-    override fun observe(scope: RecentTitleScope) = flowOf(emptyList<RecentTitle>())
+    override fun observe(scope: RecentTitleScope) = flowOf(emptyList<RecentTitleVisit>())
+
+    override suspend fun remove(removal: RecentTitleRemoval) = RecentTitleRemovalResult.Stale
 
     override suspend fun reserveVisit(scope: RecentTitleScope): Long? = null
 

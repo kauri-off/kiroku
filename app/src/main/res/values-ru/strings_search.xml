@@ -26,4 +26,6 @@
     <string name="search_season_summer">Лето</string>
     <string name="search_season_fall">Осень</string>
     <string name="search_recent_titles">Недавно открытые</string>
+    <string name="search_remove_viewed">Удалить из недавно открытых</string>
+    <string name="search_remove_viewed_failed">Не удалось удалить из недавно открытых</string>
 </resources>

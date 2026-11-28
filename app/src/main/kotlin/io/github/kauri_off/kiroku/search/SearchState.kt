@@ -58,6 +58,8 @@ sealed interface SearchContent {
 data class RecentTitleRow(
     val key: RecentTitleId,
     val title: String,
+    val order: Long = 0,
+    val removing: Boolean = false,
 )
 
 const val MAX_RECENT_SEARCHES = 5
@@ -118,6 +120,12 @@ sealed interface SearchEvent {
 
     data class OpenRecent(
         val key: RecentTitleId,
+    ) : SearchEvent
+
+    data class RemoveViewed(
+        val key: RecentTitleId,
+        val order: Long,
+        val restore: () -> Unit,
     ) : SearchEvent
 
     data class RemoveRecent(

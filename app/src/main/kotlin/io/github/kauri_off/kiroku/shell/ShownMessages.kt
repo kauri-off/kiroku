@@ -76,6 +76,7 @@ fun text(text: ShellMessage.Text): String =
                     else -> R.string.common_could_not_refresh
                 },
             )
+        ShellMessage.Text.CouldNotRemoveViewedTitle -> stringResource(R.string.search_remove_viewed_failed)
         ShellMessage.Text.CouldNotSave -> stringResource(R.string.shell_could_not_save)
         ShellMessage.Text.MangaUnconfirmed -> stringResource(R.string.manga_edit_unconfirmed)
         ShellMessage.Text.MangaRemovalUnconfirmed -> stringResource(R.string.manga_edit_removal_unconfirmed)
@@ -87,7 +88,7 @@ fun actionLabel(action: ShellMessage.Action): String =
     stringResource(
         when (action) {
             is ShellMessage.Action.Undo -> R.string.common_undo
-            is ShellMessage.Action.Retry -> R.string.design_retry
+            is ShellMessage.Action.Retry, is ShellMessage.Action.RetryViewedTitle -> R.string.design_retry
             is ShellMessage.Action.Change, is MangaChange -> R.string.title_change
             is ShellMessage.Action.MangaRecovery -> if (action.readOnly) R.string.manga_edit_refresh_list else R.string.design_retry
         },

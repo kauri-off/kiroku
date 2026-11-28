@@ -4,17 +4,18 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.saveable.rememberSaveable
-import androidx.compose.runtime.setValue
+import androidx.lifecycle.createSavedStateHandle
+import androidx.lifecycle.viewmodel.compose.viewModel
 import io.github.kauri_off.kiroku.collectAsScreenState
 import io.github.kauri_off.kiroku.core.model.Session
 import io.github.kauri_off.kiroku.core.model.TitleLanguage
 import io.github.kauri_off.kiroku.core.model.owner
 import io.github.kauri_off.kiroku.core.repository.RecentTitle
 import io.github.kauri_off.kiroku.core.repository.RecentTitleId
+import io.github.kauri_off.kiroku.core.repository.RecentTitleRemoval
 import io.github.kauri_off.kiroku.core.repository.RecentTitleScope
+import io.github.kauri_off.kiroku.core.repository.RecentTitleVisit
 import io.github.kauri_off.kiroku.design.component.LocalOnTop
 import io.github.kauri_off.kiroku.wiring.AppGraph
 import kotlinx.coroutines.flow.first
@@ -22,19 +23,24 @@ import kotlinx.coroutines.flow.first
 @Composable
 internal fun RecordTitleVisit(
     graph: AppGraph,
+    writes: ViewedTitleWrites,
+    key: RecentTitleId,
     session: Session?,
     title: RecentTitle?,
 ) {
-    var openingOwner by rememberSaveable { mutableStateOf<String?>(null) }
-    var visit by rememberSaveable { mutableStateOf<Long?>(null) }
+    val opening = viewModel { RecentTitleVisitViewModel(createSavedStateHandle()) }
+    val visit by opening.visit.collectAsScreenState()
     val onTop = LocalOnTop.current
-    val scope = recentScope(graph)?.takeIf { session != null && it.owner == session.owner }
-    LaunchedEffect(graph, onTop, scope, title) {
-        if (!onTop || scope == null) return@LaunchedEffect
-        if (openingOwner == null) openingOwner = scope.key
-        if (title == null || openingOwner != scope.key) return@LaunchedEffect
-        val order = visit ?: graph.recentTitles.reserveVisit(scope)?.also { visit = it } ?: return@LaunchedEffect
-        graph.recentTitles.record(scope, title, order)
+    val active = recentScope(graph)
+    LaunchedEffect(graph, onTop, active) {
+        if (onTop && active != null) opening.start(graph.recentTitles, writes, active, key)
+    }
+    val scope = active?.takeIf { session != null && it.owner == session.owner }
+    LaunchedEffect(graph, onTop, scope, title, visit) {
+        val order = visit ?: return@LaunchedEffect
+        if (onTop && scope != null && title != null) {
+            opening.record(graph.recentTitles, scope, title, order)
+        }
     }
 }
 
@@ -56,19 +62,25 @@ internal fun recentTitles(
     scope: RecentTitleScope?,
     allowAdult: Boolean?,
     mangaOnly: Boolean = false,
-): List<RecentTitle> {
+): List<RecentTitleVisit> {
     if (scope == null || allowAdult == null) return emptyList()
     return key(graph, scope) {
         val titles by remember { graph.recentTitles.observe(scope) }.collectAsScreenState(initial = emptyList())
-        titles.filter { title ->
-            (allowAdult || title.safeForSearch == true) &&
-                when (title.key) {
+        titles.filter { visit ->
+            (allowAdult || visit.title.safeForSearch == true) &&
+                when (visit.key) {
                     is RecentTitleId.Anime -> !mangaOnly
                     is RecentTitleId.Manga -> graph.manga != null
                 }
         }
     }
 }
+
+internal fun RecentTitleVisit.row(
+    scope: RecentTitleScope,
+    language: TitleLanguage,
+    pending: Set<RecentTitleRemoval>,
+): RecentTitleRow = RecentTitleRow(key, title.titles.preferred(language), order, pending.any { it.scope == scope && it.key == key })
 
 class RecentTitleOpening internal constructor(
     val title: RecentTitle,

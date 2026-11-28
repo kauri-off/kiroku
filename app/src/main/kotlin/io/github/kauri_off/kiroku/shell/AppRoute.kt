@@ -275,6 +275,7 @@ fun appEntries(
         entry<MangaSearchKey> {
             MangaSearchRoute(
                 graph,
+                messages,
                 snackbars,
                 onBack = { back() },
                 onRanking = { navigator.open(MangaRankingKey) },

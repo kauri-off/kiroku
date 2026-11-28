@@ -10,11 +10,15 @@ import io.github.kauri_off.kiroku.core.model.sameAsWritten
 import io.github.kauri_off.kiroku.core.repository.ListChange
 import io.github.kauri_off.kiroku.core.repository.ListRepository
 import io.github.kauri_off.kiroku.core.repository.ListWrite
+import io.github.kauri_off.kiroku.core.repository.RecentTitleRemoval
 import io.github.kauri_off.kiroku.core.repository.WriteFailure
 import io.github.kauri_off.kiroku.edit.MangaEditTotals
+import io.github.kauri_off.kiroku.search.ViewedTitleWrites
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -46,6 +50,8 @@ data class ShellMessage(
 
         data object CouldNotSave : Text
 
+        data object CouldNotRemoveViewedTitle : Text
+
         data object MangaUnconfirmed : Text
 
         data object MangaRemovalUnconfirmed : Text
@@ -62,6 +68,12 @@ data class ShellMessage(
 
         data class Retry(
             val write: ListWrite.Retry,
+        ) : Action
+
+        class RetryViewedTitle(
+            val target: RecentTitleRemoval,
+            val applicable: Flow<Boolean>,
+            val run: () -> Unit,
         ) : Action
 
         data class MangaRecovery(
@@ -81,6 +93,7 @@ data class ShellMessage(
         text == Text.MovedToCompleted &&
             action is Action.Undo ||
             action is Action.Retry ||
+            action is Action.RetryViewedTitle ||
             action is Action.MangaRecovery
 
     // The title an Undo or a Retry writes.
@@ -110,6 +123,8 @@ class ShellMessages(
         val message: ShellMessage,
         val serial: Long,
     )
+
+    internal val viewedTitles = ViewedTitleWrites(scope, ::post)
 
     private val shown = MutableStateFlow<Posted?>(null)
     val current: StateFlow<Posted?> = shown.asStateFlow()
@@ -144,13 +159,26 @@ class ShellMessages(
     private var made: Job? = null
 
     fun post(message: ShellMessage) {
-        val posted = Posted(message, ++serial)
         val showing = shown.value
+        val retry = message.action as? ShellMessage.Action.RetryViewedTitle
+        if (retry != null &&
+            (showing.hasViewedRetry(retry.target) || waiting.any { it.posted.hasViewedRetry(retry.target) })
+        ) {
+            return
+        }
+        val posted = Posted(message, ++serial)
         when {
             showing == null || !showing.message.mustStay -> show(posted)
-            message.mustStay -> waiting += Waiting(posted, watch(posted))
+            message.mustStay -> {
+                val watch = watch(posted)
+                waiting += Waiting(posted, watch)
+                watch?.start()
+            }
         }
     }
+
+    private fun Posted?.hasViewedRetry(target: RecentTitleRemoval): Boolean =
+        (this?.message?.action as? ShellMessage.Action.RetryViewedTitle)?.target == target
 
     // A screen's write runs in the shell's scope, so the write and the message about it outlive the screen.
     fun write(
@@ -170,8 +198,9 @@ class ShellMessages(
 
     // A waiting Undo is dropped once its title's values differ from those it would write over, a Retry as a shown one is.
     private fun watch(posted: Posted): Job? {
-        val id = posted.message.title ?: return null
         val action = posted.message.action
+        if (action is ShellMessage.Action.RetryViewedTitle) return watchViewedRetry(posted, action)
+        val id = posted.message.title ?: return null
         val failure = (action as? ShellMessage.Action.Retry)?.write?.failure
         if (failure != null && !failure.judged) return null
         val undone = ((action as? ShellMessage.Action.Undo)?.write as? ListWrite.Undo)?.change
@@ -212,6 +241,11 @@ class ShellMessages(
                 is ShellMessage.Action.Undo -> write(action.write)
                 is ShellMessage.Action.Retry -> write(action.write)
                 is ShellMessage.Action.Change -> requested.value = action
+                is ShellMessage.Action.RetryViewedTitle ->
+                    if (shown.value == posted) {
+                        showNext()
+                        action.run()
+                    }
                 is ShellMessage.Action.MangaRecovery -> action.run()
                 is MangaChange -> if (shown.value == posted) mangaRequested.value = action
                 null -> Unit
@@ -256,10 +290,13 @@ class ShellMessages(
         made?.cancel()
         shown.value = posted
         made = posted?.let(::endWhenMade)
+        made?.start()
     }
 
     private fun endWhenMade(posted: Posted): Job? {
-        val retry = (posted.message.action as? ShellMessage.Action.Retry)?.write ?: return null
+        val action = posted.message.action
+        if (action is ShellMessage.Action.RetryViewedTitle) return watchViewedRetry(posted, action)
+        val retry = (action as? ShellMessage.Action.Retry)?.write ?: return null
         val failure = retry.failure
         if (!failure.judged) return null
         return scope.launch {
@@ -274,6 +311,15 @@ class ShellMessages(
             if (shown.value == posted) showNext()
         }
     }
+
+    private fun watchViewedRetry(
+        posted: Posted,
+        retry: ShellMessage.Action.RetryViewedTitle,
+    ): Job =
+        scope.launch(start = CoroutineStart.LAZY) {
+            retry.applicable.first { !it }
+            if (shown.value == posted) showNext() else waiting.removeAll { it.posted == posted }
+        }
 
     fun editTaken(request: ShellMessage.Action.Change) {
         requested.compareAndSet(request, null)

@@ -355,6 +355,8 @@ Not to forget:
 - [x] **LIST-02 Sort the personal manga list by chapters read.**
 - [x] Season browser.
 - [x] **SEARCH-04 Recently viewed titles.**
+- [x] Delete individual recently viewed titles.
+- [x] Keep only the three most recently viewed titles.
 
 ## After 1.0
 

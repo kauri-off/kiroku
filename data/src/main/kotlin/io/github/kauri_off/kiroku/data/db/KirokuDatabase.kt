@@ -31,6 +31,7 @@ import androidx.sqlite.execSQL
         SentRow::class,
         RecentTitleRow::class,
         RecentVisitSequence::class,
+        RecentTitleDismissal::class,
     ],
     version = KirokuDatabase.VERSION,
 )
@@ -53,7 +54,7 @@ abstract class KirokuDatabase : RoomDatabase() {
 
     companion object {
         const val NAME = "kiroku.db"
-        const val VERSION = 13
+        const val VERSION = 14
 
         val migrations: List<Migration> =
             listOf(
@@ -154,6 +155,23 @@ abstract class KirokuDatabase : RoomDatabase() {
                     execSQL(
                         "CREATE TABLE IF NOT EXISTS `recent_visit_sequence` (`id` INTEGER NOT NULL, `last` INTEGER NOT NULL, " +
                             "PRIMARY KEY(`id`))",
+                    )
+                },
+                migration(13, 14) {
+                    execSQL("ALTER TABLE `recent_visit_sequence` ADD COLUMN `evicted_through` INTEGER NOT NULL DEFAULT 0")
+                    val overflow =
+                        "(manga, title_id) NOT IN (SELECT manga, title_id FROM recent_title AS retained " +
+                            "WHERE retained.owner = recent_title.owner ORDER BY visit DESC, manga, title_id LIMIT 3)"
+                    execSQL(
+                        "INSERT OR REPLACE INTO recent_visit_sequence (id, last, evicted_through) " +
+                            "SELECT 0, max(coalesce((SELECT last FROM recent_visit_sequence WHERE id = 0), 0), " +
+                            "(SELECT max(visit) FROM recent_title)), max(visit) FROM recent_title WHERE $overflow HAVING count(*) > 0",
+                    )
+                    execSQL("DELETE FROM recent_title WHERE $overflow")
+                    execSQL(
+                        "CREATE TABLE IF NOT EXISTS `recent_title_dismissal` (`owner` TEXT NOT NULL, " +
+                            "`manga` INTEGER NOT NULL, `title_id` INTEGER NOT NULL, `visit` INTEGER NOT NULL, " +
+                            "PRIMARY KEY(`owner`, `manga`, `title_id`))",
                     )
                 },
             )

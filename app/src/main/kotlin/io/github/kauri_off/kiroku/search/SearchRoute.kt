@@ -29,6 +29,7 @@ import io.github.kauri_off.kiroku.core.model.SignInId
 import io.github.kauri_off.kiroku.core.model.TitleLanguage
 import io.github.kauri_off.kiroku.core.model.owner
 import io.github.kauri_off.kiroku.core.repository.BrowseList
+import io.github.kauri_off.kiroku.core.repository.RecentTitleRemoval
 import io.github.kauri_off.kiroku.design.component.LocalOnTop
 import io.github.kauri_off.kiroku.edit.EditSheetRoute
 import io.github.kauri_off.kiroku.edit.editSheetViewModel
@@ -75,6 +76,9 @@ fun SearchRoute(
     val historyScope = recentScope(graph)?.takeIf { session != null && it.owner == session?.owner }
     val visits = if (text.isEmpty()) recentTitles(graph, historyScope, adult) else emptyList()
     val scope = rememberCoroutineScope()
+    val writes = messages.viewedTitles
+    val pending by writes.pending.collectAsScreenState()
+    val viewed = historyScope?.let { owner -> visits.map { it.row(owner, language, pending) } }.orEmpty()
     val shown = results.takeIf { it.query == text && it.adult == adult }
     val linkId = search.linkId
     val content =
@@ -84,7 +88,7 @@ fun SearchRoute(
                     recent,
                     suggestions = session is Session.SignedIn,
                     mangaAvailable = graph.mangaCatalogue != null,
-                    viewed = visits.map { RecentTitleRow(it.key, it.titles.preferred(language)) },
+                    viewed = viewed,
                 )
             linkId != null -> SearchContent.AnimeLink(linkId)
             shown == null -> SearchContent.Results(text, Paged.Loading)
@@ -107,10 +111,19 @@ fun SearchRoute(
                 SearchEvent.Submit -> keep(search.text)
                 SearchEvent.Clear -> query.clearText()
                 is SearchEvent.RemoveRecent -> recent = recent - event.query
+                is SearchEvent.RemoveViewed -> {
+                    val target = historyScope?.let { RecentTitleRemoval(it, event.key, event.order) }
+                    if (target == null || visits.none(target::matches)) {
+                        event.restore()
+                    } else {
+                        writes.remove(graph.recentTitles, target, event.restore)
+                    }
+                }
                 is SearchEvent.OpenRecent -> {
                     val current = session ?: return@SearchScreen
                     val openingScope = historyScope ?: return@SearchScreen
-                    val title = visits.firstOrNull { it.key == event.key } ?: return@SearchScreen
+                    if (writes.isRemoving(openingScope, event.key)) return@SearchScreen
+                    val title = visits.firstOrNull { it.key == event.key }?.title ?: return@SearchScreen
                     scope.launch { graph.openRecent(RecentTitleOpening(title, current, language, openingScope), onOpenRecent) }
                 }
                 is SearchEvent.SearchAgain -> {

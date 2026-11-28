@@ -51,6 +51,8 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -79,6 +81,7 @@ import io.github.kauri_off.kiroku.design.component.WindowWithoutAutofill
 import io.github.kauri_off.kiroku.design.component.withoutAutofill
 import io.github.kauri_off.kiroku.design.theme.Sizes
 import io.github.kauri_off.kiroku.design.theme.Spacing
+import kotlinx.coroutines.launch
 
 // Search: the stock search bar, which opens the full-screen search view to type in. Both
 // show what the state holds for the field's text: the recent searches and the browse lists before a query, then the
@@ -336,16 +339,21 @@ private fun LazyListScope.viewedRows(
         val gap = if (afterQueries) Modifier.padding(top = Spacing.l) else Modifier
         SectionHeader(stringResource(R.string.search_recent_titles), gap)
     }
-    items(viewed, contentType = { VIEWED_TITLE }) { title ->
-        ListItem(
-            onClick = { onEvent(SearchEvent.OpenRecent(title.key)) },
-            colors = rows,
-            supportingContent = {
-                Text(stringResource(if (title.key is RecentTitleId.Manga) R.string.list_mode_manga else R.string.list_mode_anime))
-            },
-            trailingContent = { Icon(painterResource(R.drawable.ic_chevron_right), contentDescription = null) },
-            content = { Text(title.title) },
-        )
+    items(viewed, key = { (it.key is RecentTitleId.Manga) to it.key.value }, contentType = { VIEWED_TITLE }) { title ->
+        key(title.order) {
+            DismissibleHistoryRow(
+                removeLabel = stringResource(R.string.search_remove_viewed),
+                onRemove = { restore -> onEvent(SearchEvent.RemoveViewed(title.key, title.order, restore)) },
+                onClick = { onEvent(SearchEvent.OpenRecent(title.key)) },
+                colors = rows,
+                enabled = !title.removing,
+                supportingContent = {
+                    Text(stringResource(if (title.key is RecentTitleId.Manga) R.string.list_mode_manga else R.string.list_mode_anime))
+                },
+                trailingContent = { Icon(painterResource(R.drawable.ic_chevron_right), contentDescription = null) },
+                content = { Text(title.title) },
+            )
+        }
     }
 }
 
@@ -355,14 +363,45 @@ private fun RecentSearchRow(
     rows: ListItemColors,
     onEvent: (SearchEvent) -> Unit,
 ) {
+    DismissibleHistoryRow(
+        removeLabel = stringResource(R.string.search_remove_recent),
+        onRemove = { restore ->
+            onEvent(SearchEvent.RemoveRecent(query))
+            restore()
+        },
+        onClick = { onEvent(SearchEvent.SearchAgain(query)) },
+        colors = rows,
+        content = { Text(query) },
+    )
+}
+
+@Composable
+private fun DismissibleHistoryRow(
+    removeLabel: String,
+    onRemove: (() -> Unit) -> Unit,
+    onClick: () -> Unit,
+    colors: ListItemColors,
+    enabled: Boolean = true,
+    supportingContent: (@Composable () -> Unit)? = null,
+    trailingContent: (@Composable () -> Unit)? = null,
+    content: @Composable () -> Unit,
+) {
     val threshold = SwipeToDismissBoxDefaults.positionalThreshold
     val swipe = remember { SwipeToDismissBoxState(SwipeToDismissBoxValue.Settled, threshold) }
-    val removeLabel = stringResource(R.string.search_remove_recent)
-    val remove = { onEvent(SearchEvent.RemoveRecent(query)) }
+    val scope = rememberCoroutineScope()
+    val remove by rememberUpdatedState(onRemove)
+    val interactive by rememberUpdatedState(enabled)
+    val dismiss: (SwipeToDismissBoxValue) -> Unit =
+        remember(swipe, scope) {
+            {
+                remove { scope.launch { swipe.snapTo(SwipeToDismissBoxValue.Settled) } }
+            }
+        }
     SwipeToDismissBox(
         state = swipe,
         modifier = Modifier.clipToBounds(),
-        onDismiss = { remove() },
+        onDismiss = dismiss,
+        gesturesEnabled = enabled,
         backgroundContent = {
             val direction = swipe.dismissDirection
             if (direction != SwipeToDismissBoxValue.Settled) {
@@ -379,19 +418,24 @@ private fun RecentSearchRow(
         },
     ) {
         ListItem(
-            onClick = { onEvent(SearchEvent.SearchAgain(query)) },
+            onClick = { if (interactive) onClick() },
+            enabled = enabled,
             modifier =
                 Modifier.semantics {
-                    customActions =
-                        listOf(
-                            CustomAccessibilityAction(removeLabel) {
-                                remove()
-                                true
-                            },
-                        )
+                    if (enabled) {
+                        customActions =
+                            listOf(
+                                CustomAccessibilityAction(removeLabel) {
+                                    if (interactive) remove {}
+                                    interactive
+                                },
+                            )
+                    }
                 },
-            colors = rows,
-            content = { Text(query) },
+            colors = colors,
+            supportingContent = supportingContent,
+            trailingContent = trailingContent,
+            content = content,
         )
     }
 }

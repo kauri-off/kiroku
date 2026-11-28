@@ -12,7 +12,10 @@ import io.github.kauri_off.kiroku.core.model.SignInId
 import io.github.kauri_off.kiroku.core.model.Titles
 import io.github.kauri_off.kiroku.core.repository.RecentTitle
 import io.github.kauri_off.kiroku.core.repository.RecentTitleId
+import io.github.kauri_off.kiroku.core.repository.RecentTitleRemoval
+import io.github.kauri_off.kiroku.core.repository.RecentTitleRemovalResult
 import io.github.kauri_off.kiroku.core.repository.RecentTitleScope
+import io.github.kauri_off.kiroku.core.repository.RecentTitleVisit
 import io.github.kauri_off.kiroku.core.repository.RecentTitles
 import io.github.kauri_off.kiroku.data.session.MalSession
 import io.github.kauri_off.kiroku.data.session.fileRetry
@@ -29,6 +32,7 @@ import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.retryWhen
 import kotlinx.coroutines.withContext
 
 @Entity(tableName = "recent_title", primaryKeys = ["manga", "title_id"])
@@ -54,6 +58,15 @@ internal data class RecentTitleRow(
 internal data class RecentVisitSequence(
     @PrimaryKey val id: Int = 0,
     val last: Long,
+    @ColumnInfo(name = "evicted_through", defaultValue = "0") val evictedThrough: Long,
+)
+
+@Entity(tableName = "recent_title_dismissal", primaryKeys = ["owner", "manga", "title_id"])
+internal data class RecentTitleDismissal(
+    val owner: String,
+    val manga: Boolean,
+    @ColumnInfo(name = "title_id") val id: Long,
+    val visit: Long,
 )
 
 @Dao
@@ -64,8 +77,17 @@ internal interface RecentTitleDao {
     )
     suspend fun lastVisit(): Long
 
-    @Insert(onConflict = OnConflictStrategy.REPLACE)
-    suspend fun saveSequence(sequence: RecentVisitSequence)
+    @Query(
+        "INSERT OR REPLACE INTO recent_visit_sequence (id, last, evicted_through) " +
+            "VALUES (0, :last, max(:evictedThrough, coalesce((SELECT evicted_through FROM recent_visit_sequence WHERE id = 0), 0)))",
+    )
+    suspend fun saveSequence(
+        last: Long,
+        evictedThrough: Long = 0,
+    )
+
+    @Query("SELECT evicted_through FROM recent_visit_sequence WHERE id = 0")
+    suspend fun evictedThrough(): Long?
 
     @Query("SELECT * FROM recent_title WHERE owner = :owner ORDER BY visit DESC, manga, title_id")
     fun observe(owner: String): Flow<List<RecentTitleRow>>
@@ -80,11 +102,37 @@ internal interface RecentTitleDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun save(row: RecentTitleRow)
 
+    @Query("SELECT visit FROM recent_title ORDER BY visit DESC, manga, title_id LIMIT 1 OFFSET :limit")
+    suspend fun newestOverflowVisit(limit: Int): Long?
+
     @Query(
         "DELETE FROM recent_title WHERE (manga, title_id) NOT IN " +
             "(SELECT manga, title_id FROM recent_title ORDER BY visit DESC, manga, title_id LIMIT :limit)",
     )
     suspend fun trim(limit: Int)
+
+    @Query("SELECT visit FROM recent_title_dismissal WHERE owner = :owner AND manga = :manga AND title_id = :id")
+    suspend fun dismissedThrough(
+        owner: String,
+        manga: Boolean,
+        id: Long,
+    ): Long?
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun saveDismissal(dismissal: RecentTitleDismissal)
+
+    @Query("DELETE FROM recent_title WHERE owner = :owner AND manga = :manga AND title_id = :id")
+    suspend fun deleteTitle(
+        owner: String,
+        manga: Boolean,
+        id: Long,
+    )
+
+    @Query("DELETE FROM recent_title_dismissal WHERE owner != :owner")
+    suspend fun deleteOtherDismissals(owner: String)
+
+    @Query("DELETE FROM recent_title_dismissal WHERE owner = :owner")
+    suspend fun deleteDismissals(owner: String)
 
     @Query("DELETE FROM recent_title WHERE owner != :owner")
     suspend fun deleteOthers(owner: String)
@@ -124,36 +172,86 @@ class RoomRecentTitles(
                 } else {
                     flowOf(emptyList())
                 }
-            }.map { rows -> rows.map(RecentTitleRow::toTitle) }
+            }.map { rows -> rows.map { RecentTitleVisit(it.toTitle(), it.visit) } }
             .catch { error ->
                 unexpected(error)
                 emit(emptyList())
             }
+
+    @OptIn(ExperimentalCoroutinesApi::class)
+    override fun observeRemovalTarget(removal: RecentTitleRemoval): Flow<Boolean> =
+        session.observeOwner().flatMapLatest { owner ->
+            if (scopeFor(owner) != removal.scope) {
+                flowOf(false)
+            } else {
+                flow {
+                    if (retired(removal.scope.owner)) {
+                        emit(false)
+                    } else {
+                        emitAll(
+                            database().recentTitles().observe(removal.scope.key).map { rows ->
+                                !retired(removal.scope.owner) &&
+                                    rows.any {
+                                        it.visit == removal.order &&
+                                            it.id == removal.key.value &&
+                                            it.manga == (removal.key is RecentTitleId.Manga)
+                                    }
+                            },
+                        )
+                    }
+                }.retryWhen { error, attempt ->
+                    if (error !is Exception || error is CancellationException) throw error
+                    if (attempt == 0L) unexpected(error)
+                    delay(fileRetry(attempt.coerceAtMost(Int.MAX_VALUE.toLong()).toInt()).toMillis())
+                    true
+                }
+            }
+        }
 
     override suspend fun reserveVisit(scope: RecentTitleScope): Long? =
         withScope(scope) { db ->
             db.transaction {
                 val dao = db.recentTitles()
                 val next = dao.lastVisit() + 1
-                dao.saveSequence(RecentVisitSequence(last = next))
+                dao.saveSequence(next)
                 next
             }
         }
 
     private suspend fun <T : Any> withScope(
         scope: RecentTitleScope,
+        stale: T? = null,
         run: suspend (KirokuDatabase) -> T,
     ): T? =
         withContext(Dispatchers.IO) {
             val owner = session.observeOwner().first()
-            if (scopeFor(owner) != scope) return@withContext null
+            if (scopeFor(owner) != scope) return@withContext stale
             stored {
                 session.withOwner(owner) {
-                    if (retired(scope.owner)) return@withOwner null
+                    if (retired(scope.owner)) return@withOwner stale
                     run(database())
-                }
+                } ?: stale
             }
         }
+
+    override suspend fun remove(removal: RecentTitleRemoval): RecentTitleRemovalResult {
+        var through = removal.through
+        return withScope<RecentTitleRemovalResult>(removal.scope, stale = RecentTitleRemovalResult.Stale) { db ->
+            db.transaction {
+                val owner = removal.scope.key
+                val key = removal.key
+                val manga = key is RecentTitleId.Manga
+                val dao = db.recentTitles()
+                if (dao.read(owner, manga, key.value)?.visit != removal.order) return@transaction RecentTitleRemovalResult.Stale
+                val last = dao.lastVisit()
+                val cutoff = through ?: last.also { through = it }
+                dao.saveSequence(last)
+                dao.saveDismissal(RecentTitleDismissal(owner, manga, key.value, cutoff))
+                dao.deleteTitle(owner, manga, key.value)
+                RecentTitleRemovalResult.Removed
+            }
+        } ?: RecentTitleRemovalResult.Failed(through)
+    }
 
     override suspend fun record(
         scope: RecentTitleScope,
@@ -164,8 +262,11 @@ class RoomRecentTitles(
             db.transaction {
                 val dao = db.recentTitles()
                 val manga = title.key is RecentTitleId.Manga
+                val dismissed = dao.dismissedThrough(scope.key, manga, title.key.value)
+                if (dismissed != null && visit <= dismissed) return@transaction
                 val previous = dao.read(scope.key, manga, title.key.value)
-                if (previous != null && previous.visit > visit) return@transaction
+                val minimum = previous?.visit ?: ((dao.evictedThrough() ?: 0) + 1)
+                if (visit < minimum) return@transaction
                 dao.deleteOthers(scope.key)
                 dao.save(
                     RecentTitleRow(
@@ -179,7 +280,11 @@ class RoomRecentTitles(
                         title.safeForSearch ?: previous?.safeForSearch,
                     ),
                 )
-                dao.trim(RecentTitles.LIMIT)
+                val overflow = dao.newestOverflowVisit(RecentTitles.LIMIT)
+                if (overflow != null) {
+                    dao.saveSequence(dao.lastVisit(), overflow)
+                    dao.trim(RecentTitles.LIMIT)
+                }
             }
         }
     }
@@ -190,9 +295,19 @@ class RoomRecentTitles(
             var attempt = 0
             while (stored(report = attempt == 0) {
                     session.withOwner(owner) {
-                        val dao = database().recentTitles()
+                        val db = database()
                         val scope = scopeFor(owner)
-                        if (retired(scope.owner)) dao.delete(scope.key) else dao.deleteOthers(scope.key)
+                        val isRetired = retired(scope.owner)
+                        db.transaction {
+                            val dao = db.recentTitles()
+                            if (isRetired) {
+                                dao.delete(scope.key)
+                                dao.deleteDismissals(scope.key)
+                            } else {
+                                dao.deleteOthers(scope.key)
+                                dao.deleteOtherDismissals(scope.key)
+                            }
+                        }
                     }
                     true
                 } == null
@@ -202,7 +317,14 @@ class RoomRecentTitles(
         }
     }
 
-    suspend fun clear(owner: SignInId): Boolean = stored { database().recentTitles().delete(owner.value) } != null
+    suspend fun clear(owner: SignInId): Boolean =
+        stored {
+            val db = database()
+            db.transaction {
+                db.recentTitles().delete(owner.value)
+                db.recentTitles().deleteDismissals(owner.value)
+            }
+        } != null
 
     private inline fun <T> stored(
         report: Boolean = true,
