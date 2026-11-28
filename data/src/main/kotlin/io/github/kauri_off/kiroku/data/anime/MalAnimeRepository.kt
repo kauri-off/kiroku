@@ -23,8 +23,10 @@ import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
 import java.time.Clock
 import java.time.Instant
+import kotlin.time.Duration.Companion.seconds
 
 // The titles of section 7.1: what the store holds, refreshed from MAL's page; a refresh that fails leaves the store as it was.
 class MalAnimeRepository(
@@ -35,6 +37,7 @@ class MalAnimeRepository(
     // The setting "Show adult content in search", which inside a title changes only its recommendations.
     private val preferences: StoredPreferences,
     private val unexpected: (Throwable) -> Unit,
+    private val awaitList: suspend () -> Unit = {},
 ) : AnimeRepository {
     private var sequence = 0L
     private val publishedDetails = mutableMapOf<AnimeId, Long>()
@@ -64,11 +67,17 @@ class MalAnimeRepository(
     // An answer that comes after a sign-out cleared the store is not stored: its list has ended.
     override suspend fun refresh(id: AnimeId): Outcome<Unit> {
         val owner = session.currentOwner() ?: return Outcome.Failure(DataError.StorageError)
-        val begun =
-            when (val held = stored { store.holder() }) {
-                is Outcome.Failure -> return held
-                is Outcome.Success -> held.value
+        val begun = Holder(owner.id?.value)
+        val ready =
+            stored {
+                if (store.holder() == begun) return@stored true
+                withTimeoutOrNull(5.seconds) { awaitList() } != null && store.holder() == begun
             }
+        if (!session.isCurrentOwner(owner)) return Outcome.Failure(DataError.ListEnded)
+        when (ready) {
+            is Outcome.Failure -> return ready
+            is Outcome.Success -> if (!ready.value) return Outcome.Failure(DataError.StorageError)
+        }
         val (choice, order) = preferences.withAdultChoice { it to ++sequence }
         val answer = titles.title(id, choice?.enabled == true) { session.isCurrentOwner(owner) }
         return session.withOwner(owner) {

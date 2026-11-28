@@ -9,6 +9,7 @@ import io.github.kauri_off.kiroku.core.error.DataError
 import io.github.kauri_off.kiroku.core.error.Outcome
 import io.github.kauri_off.kiroku.core.list.InMemoryLocalList
 import io.github.kauri_off.kiroku.core.list.ListSort
+import io.github.kauri_off.kiroku.core.list.LocalList
 import io.github.kauri_off.kiroku.core.list.SortDirection
 import io.github.kauri_off.kiroku.core.list.StoredEntry
 import io.github.kauri_off.kiroku.core.list.StoredList
@@ -35,6 +36,7 @@ import io.github.kauri_off.kiroku.list.ListContent
 import io.github.kauri_off.kiroku.list.ListEvent
 import io.github.kauri_off.kiroku.list.ListViewModel
 import io.github.kauri_off.kiroku.shell.ShellMessages
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Dispatchers
@@ -50,6 +52,7 @@ import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.withTimeout
+import kotlinx.coroutines.withTimeoutOrNull
 import mockwebserver3.RecordedRequest
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import org.junit.After
@@ -69,6 +72,9 @@ import java.io.File
 import java.io.IOException
 import java.time.Clock
 import java.util.concurrent.CopyOnWriteArrayList
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.atomic.AtomicReference
 import kotlin.time.Duration.Companion.seconds
 
@@ -141,6 +147,63 @@ class LiveListTest {
     }
 
     private suspend fun LiveGraph.signInOnce() = signIn.once()
+
+    @Test
+    fun `a replacement anime read waits for sign-in to clear the guest title cache`() =
+        runBlocking {
+            val guestRequest = CompletableDeferred<Unit>()
+            val guestReply = CountDownLatch(1)
+            val clearing = CompletableDeferred<Unit>()
+            val clear = CompletableDeferred<Unit>()
+            val requests = AtomicInteger()
+            val recorded = ServedMal.recorded("title_airing.200.json")
+            mal.anime = {
+                if (requests.incrementAndGet() == 1) {
+                    guestRequest.complete(Unit)
+                    check(guestReply.await(5, TimeUnit.SECONDS))
+                }
+                ServedMal.answer(200, recorded)
+            }
+            val graph =
+                LiveGraph(parts(process(), "title-owner"), listStore = { parts ->
+                    val room = liveListStore(parts)
+                    object : LocalList by room {
+                        override suspend fun clear(owner: SignInId?) {
+                            if (owner != null) {
+                                clearing.complete(Unit)
+                                clear.await()
+                            }
+                            room.clear(owner)
+                        }
+                    }
+                })
+            val id = AnimeId(61987)
+            try {
+                withTimeout(10.seconds) {
+                    graph.list.observeSyncedAt().first()
+                    val guest = async { graph.anime.refresh(id) }
+                    guestRequest.await()
+                    graph.signInOnce()
+                    clearing.await()
+                    guestReply.countDown()
+                    assertEquals(Outcome.Failure(DataError.ListEnded), guest.await())
+
+                    val replacement = async(start = CoroutineStart.UNDISPATCHED) { graph.anime.refresh(id) }
+                    assertNull(withTimeoutOrNull(750) { replacement.await() })
+                    assertEquals(1, requests.get())
+                    assertNull(graph.anime.observeRefreshedAt(id).first())
+
+                    clear.complete(Unit)
+                    assertEquals(Outcome.Success(Unit), replacement.await())
+                    assertEquals(2, requests.get())
+                    assertEquals(setOf(id), graph.anime.observePagesRead().first())
+                    assertNotNull(graph.anime.observeRefreshedAt(id).first())
+                }
+            } finally {
+                guestReply.countDown()
+                clear.complete(Unit)
+            }
+        }
 
     // The List screen over the graph, shown until the test ends.
     private fun TestScope.listScreen(graph: LiveGraph): ListViewModel =

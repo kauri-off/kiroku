@@ -103,12 +103,13 @@ class MalAnimeRepositoryTest {
     private fun TestScope.subject(
         clock: Clock = network.clock,
         session: MalSession = this@MalAnimeRepositoryTest.session,
+        awaitList: suspend () -> Unit = {},
     ): Subject {
         val database = databases.open(this)
         val store = TitleStore(database, dispatcher, network.unexpected::add)
         val preferences = StoredPreferences(File(folder.newFolder(), "title.preferences_pb"), backgroundScope, network.unexpected::add)
         return Subject(
-            MalAnimeRepository(MalTitles(network.http), store, session, clock, preferences, network.unexpected::add),
+            MalAnimeRepository(MalTitles(network.http), store, session, clock, preferences, network.unexpected::add, awaitList),
             store,
             database,
             preferences,
@@ -294,7 +295,7 @@ class MalAnimeRepositoryTest {
         runTest {
             val s = subject()
             val list = RoomLocalList(s.database, backgroundScope, dispatcher, network.unexpected::add)
-            list.clear(SignInId("a"))
+            list.clear(null)
             serve("title_airing")
             s.titles.refresh(id)
 
@@ -641,7 +642,8 @@ class MalAnimeRepositoryTest {
             runTest {
                 val s = subject()
                 val list = RoomLocalList(s.database, backgroundScope, dispatcher, network.unexpected::add)
-                list.clear(SignInId("a"))
+                assertEquals(Outcome.Success(Unit), session.signIn(TokenGrant("access", "refresh")))
+                list.clear(checkNotNull(session.currentSession()?.owner))
                 val recorded = RecordedAnswers.named("title_airing")
                 val arrived = CountDownLatch(1)
                 val cleared = CountDownLatch(1)
@@ -659,6 +661,8 @@ class MalAnimeRepositoryTest {
 
                 assertEquals(Outcome.Failure(DataError.ListEnded), refresh.await())
                 assertEquals(Triple(null, null, null), s.stored())
+                session.signOut()
+                list.clear(null)
                 assertEquals(Outcome.Success(Unit), s.titles.refresh(id))
                 assertEquals(airing.anime, s.titles.observeAnime(id).first())
             }
@@ -684,10 +688,22 @@ class MalAnimeRepositoryTest {
             disk.failing = false
             val recovered = withContext(Dispatchers.IO) { withTimeout(5_000) { recovering.observeSession().first() } }
             assertEquals(signedIn, recovered)
+            RoomLocalList(s.database, backgroundScope, dispatcher, network.unexpected::add).clear(recovered.owner)
             serve("title_airing")
             assertEquals(Outcome.Success(Unit), s.titles.refresh(id))
             assertEquals(Triple(airing.anime, airing.details, network.clock.now), s.stored())
             assertEquals(1, network.api.requestCount)
+        }
+
+    @Test
+    fun `an unsettled list times out with a storage error before dispatch`() =
+        runTest {
+            val clearing = CompletableDeferred<Unit>()
+            val s = subject(awaitList = { clearing.await() })
+            assertEquals(Outcome.Success(Unit), session.signIn(TokenGrant("access", "refresh")))
+            assertEquals(Outcome.Failure(DataError.StorageError), withTimeoutOrNull(6_000) { s.titles.refresh(id) })
+            assertEquals(0, network.api.requestCount)
+            assertEquals(Triple(null, null, null), s.stored())
         }
 
     @Test

@@ -128,6 +128,7 @@ class TitleViewModel(
     private val airingReads = MutableStateFlow(0)
     private var load: Job? = null
     private var replaceObsolete = false
+    private var deferredOwnerRetry: Asked? = null
 
     // The page's own airing ask, apart from its load: AniList's pace never holds the page's indicator or its walk.
     private var airingAsk: Job? = null
@@ -208,11 +209,24 @@ class TitleViewModel(
 
     // Shown again past the stop timeout, the page goes on through refreshIfStale, after its own page if that is stale.
     private fun shownAgain() {
-        if (cut && load?.isActive != true) walkIfOwed()
+        if (cut && deferredOwnerRetry == null && load?.isActive != true) walkIfOwed()
         viewModelScope.launch {
             val needed = replaceObsolete || anime.recommendationsNeedRefresh(id, adultSearchChoice.first().enabled)
-            if (needed && loads.isShowing && load?.isActive != true) refresh(Asked.Filter)
+            if (!loads.isShowing || load?.isActive == true || resumeOwnerRetry()) return@launch
+            if (needed) refresh(Asked.Filter)
         }
+    }
+
+    private fun resumeOwnerRetry(): Boolean {
+        val asked = deferredOwnerRetry ?: return false
+        refresh(asked, ownerRetry = true)
+        return true
+    }
+
+    private fun deferOwnerRetry(asked: Asked) {
+        waitShown.value = false
+        refreshing.value = false
+        deferredOwnerRetry = asked
     }
 
     // What the page shows of [id], itself or a related title, for the screen it opens.
@@ -309,7 +323,7 @@ class TitleViewModel(
         val stale = anime.stale(id, opened?.anime, clock.instant())
         val otherRecommendations =
             !stale && (replaceObsolete || anime.recommendationsNeedRefresh(id, adultSearchChoice.first().enabled))
-        if (load?.isActive == true) return
+        if (!loads.isShowing || load?.isActive == true || resumeOwnerRetry()) return
         if (stale) {
             refresh(Asked.Shown)
         } else {
@@ -339,9 +353,13 @@ class TitleViewModel(
     }
 
     // A wait the person asked for shows at once; one the page started only after a second.
-    private fun refresh(asked: Asked) {
+    private fun refresh(
+        asked: Asked,
+        ownerRetry: Boolean = false,
+    ) {
         load?.cancel()
         replaceObsolete = false
+        deferredOwnerRetry = null
         if (asked != Asked.Filter) walking?.cancel()
         failure.value = null
         waitShown.value = asked == Asked.Retry
@@ -352,14 +370,14 @@ class TitleViewModel(
                 // The airing beside the details, or once they are stored when the title is not known before.
                 val known = knownTitle()
                 if (known != null && asked != Asked.Filter) askAiring(known, asked)
-                if (loadDetails(asked) && known == null) storedTitle()?.let { askAiring(it, asked) }
+                if (loadDetails(asked, ownerRetry) && known == null) storedTitle()?.let { askAiring(it, asked) }
             }
     }
 
     // Whether the details were loaded.
     private suspend fun loadDetails(
         asked: Asked,
-        retryRetiredOwner: Boolean = owner == null,
+        ownerRetry: Boolean,
     ): Boolean =
         coroutineScope {
             val wait =
@@ -372,15 +390,18 @@ class TitleViewModel(
                     null
                 }
             val choice = adultSearchChoice.first()
+            if (ownerRetry && !loads.isShowing) {
+                wait?.cancel()
+                deferOwnerRetry(asked)
+                return@coroutineScope false
+            }
             val result = anime.refresh(id)
             wait?.cancel()
             val error = (result as? Outcome.Failure)?.error
-            if (error == DataError.ListEnded && retryRetiredOwner) {
+            if (error == DataError.ListEnded && owner == null && !ownerRetry) {
                 currentCoroutineContext().ensureActive()
-                if (loads.isShowing) return@coroutineScope loadDetails(asked, retryRetiredOwner = false)
-                waitShown.value = false
-                refreshing.value = false
-                replaceObsolete = true
+                if (loads.isShowing) return@coroutineScope loadDetails(asked, ownerRetry = true)
+                deferOwnerRetry(asked)
                 return@coroutineScope false
             }
             val obsoleteBeforeRead = adultSearchChoice.first() != choice

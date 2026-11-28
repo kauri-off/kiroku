@@ -41,6 +41,7 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.emitAll
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.onStart
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.TestScope
@@ -1142,7 +1143,7 @@ class TitleViewModelTest {
 
     @Test
     fun `a search title shown again during sign-in reads details for the new session once`() {
-        for ((retireWhileShown, replaced) in listOf(true to true, true to false, false to true)) {
+        for ((retireWhileShown, replaced) in listOf(true to true, true to false, false to true, false to false)) {
             runTest(dispatcher) {
                 val scope = foregroundScope()
                 val graph = TestGraph.over(scope).apply { titlesUnstored.value = true }
@@ -1154,9 +1155,12 @@ class TitleViewModelTest {
                 val anime = FixtureAnime.exactToWatch
                 val retired = CompletableDeferred<Unit>()
                 val replacement = CompletableDeferred<Unit>()
+                var freshness: CompletableDeferred<Unit>? = null
                 val owners = mutableListOf<Session>()
                 val repository =
                     object : AnimeRepository by graph.anime {
+                        override fun observeRefreshedAt(id: AnimeId) = graph.anime.observeRefreshedAt(id).onStart { freshness?.await() }
+
                         override suspend fun refresh(id: AnimeId): Outcome<Unit> {
                             if (id != anime.id) return graph.anime.refresh(id)
                             owners += sessions.value
@@ -1201,6 +1205,20 @@ class TitleViewModelTest {
                     runCurrent()
                     assertEquals(listOf(Session.SignedOut), owners)
                     assertNull(messages.current.value)
+                }
+                if (!retireWhileShown && !replaced) {
+                    advanceTimeBy(STOPPED_AFTER_MILLIS)
+                    val held = CompletableDeferred<Unit>()
+                    freshness = held
+                    val reopened = showing(title.state, title.shown)
+                    runCurrent()
+                    assertEquals(listOf(Session.SignedOut), owners)
+                    reopened.cancel()
+                    runCurrent()
+                    held.complete(Unit)
+                    runCurrent()
+                    assertEquals(listOf(Session.SignedOut), owners)
+                    advanceTimeBy(STOPPED_AFTER_MILLIS)
                 }
                 showing(title.state, title.shown)
                 runCurrent()

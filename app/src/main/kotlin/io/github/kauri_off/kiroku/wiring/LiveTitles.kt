@@ -21,16 +21,18 @@ internal fun liveTitles(
     parts: LiveParts,
     session: () -> MalSession,
     preferences: () -> StoredPreferences = { livePreferences(parts) },
-    build: (LiveParts) -> AnimeRepository = { titlesOf(it, session(), preferences()) },
+    awaitList: suspend () -> Unit = {},
+    build: (LiveParts) -> AnimeRepository = { titlesOf(it, session(), preferences(), awaitList) },
 ): AnimeRepository = TitlesOnFirstUse(parts.scope) { build(parts) }
 
 private fun titlesOf(
     parts: LiveParts,
     session: MalSession,
     preferences: StoredPreferences,
+    awaitList: suspend () -> Unit,
 ): AnimeRepository {
     val store = TitleStore(parts.database, Dispatchers.IO, parts.unexpected)
-    return MalAnimeRepository(MalTitles(parts.http), store, session, parts.clock, preferences, parts.unexpected)
+    return MalAnimeRepository(MalTitles(parts.http), store, session, parts.clock, preferences, parts.unexpected, awaitList)
 }
 
 // The repository and the database under it are built at its first call, off the main thread.
