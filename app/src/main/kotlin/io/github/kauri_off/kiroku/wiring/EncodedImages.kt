@@ -9,6 +9,7 @@ import coil3.decode.Decoder
 import coil3.decode.ImageSource
 import coil3.intercept.Interceptor
 import coil3.memory.MemoryCache
+import coil3.network.okhttp.OkHttpNetworkFetcherFactory
 import coil3.request.CachePolicy
 import coil3.request.ErrorResult
 import coil3.request.ImageRequest
@@ -51,6 +52,7 @@ internal val captureCoverIdentity = Extras.Key(false)
 private val coverIdentity = Extras.Key<CoverIdentity?>(null)
 private val cacheIdentity = ThreadLocal<CoverIdentity?>()
 private val fingerprintExtra = notShown("kiroku.coverFingerprint")
+private val diskOnlyCoverFetcher = OkHttpNetworkFetcherFactory(callFactory = Call.Factory { throw IOException() })
 internal const val MAX_ENCODED_IMAGE_BYTES = 64L * 1024 * 1024
 
 private val SuccessResult.fingerprint: String? get() = request.extras[coverIdentity]?.fingerprint
@@ -69,6 +71,7 @@ internal fun captureEncodedIdentity() =
             chain.request
                 .newBuilder()
                 .memoryCachePolicy(memoryPolicy)
+                .fetcherFactory(diskOnlyCoverFetcher)
                 .build()
         val decoded = chain.withRequest(request).proceedWithCoverIdentity()
         decoded.takeIf { it is SuccessResult && it.fingerprint != null } ?: result

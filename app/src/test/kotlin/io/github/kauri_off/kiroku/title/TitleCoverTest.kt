@@ -20,12 +20,14 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.asAndroidBitmap
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.assertIsNotEnabled
+import androidx.compose.ui.test.captureToImage
 import androidx.compose.ui.test.hasContentDescription
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.isDialog
@@ -91,6 +93,7 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.runBlocking
+import okhttp3.Call
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Protocol
@@ -439,7 +442,7 @@ class TitleCoverTest {
     }
 
     @Test
-    fun anOrdinaryWarmPosterStillOpensOfflineWithoutItsEncodedBytes() {
+    fun anOrdinaryWarmPosterOpensWithoutCallingTransportWhenItsEncodedBytesAreMissing() {
         val original = jpeg(Color.RED)
         val urls = CoverResponses { original }
         urls.warmPoster(LARGE)
@@ -448,9 +451,39 @@ class TitleCoverTest {
 
         show(urls.loader) { TitleCoverDialog("Sample", REGULAR, LARGE) {} }
         waitForCover("Sample")
+        val pixel = coverCenterPixel()
+        assertTrue(Color.red(pixel) > Color.blue(pixel))
+        assertEquals(listOf(LARGE), urls.callsCreated.toList())
         compose.onNodeWithContentDescription("Share image").performClick()
         waitForMessage("Could not share the image")
         assertNull(shadowOf(compose.activity).nextStartedActivity)
+        assertEquals(listOf(LARGE), urls.callsCreated.toList())
+    }
+
+    @Test
+    fun theGalleryDisplaysAndExportsTheSameDiskDecodeAfterAnOrdinaryPosterWarmsMemory() {
+        val storage = registerStorage()
+        val original = jpeg(Color.RED)
+        val diskBytes = jpeg(Color.BLUE)
+        val urls = CoverResponses { original }
+        urls.warmPoster(LARGE)
+        val cache = checkNotNull(urls.loader.diskCache)
+        val editor = checkNotNull(cache.openEditor(LARGE))
+        cache.fileSystem.write(editor.data) { write(diskBytes) }
+        editor.commit()
+        urls.online = false
+
+        show(urls.loader) { TitleCoverDialog("Sample", REGULAR, LARGE) {} }
+        waitForCover("Sample")
+        val pixel = coverCenterPixel()
+        assertTrue(Color.blue(pixel) > Color.red(pixel))
+        saveAndShare(diskBytes, storage)
+        assertEquals(listOf(LARGE), urls.callsCreated.toList())
+    }
+
+    private fun coverCenterPixel(): Int {
+        val image = compose.onNodeWithContentDescription("Cover of Sample").captureToImage().asAndroidBitmap()
+        return image.getPixel(image.width / 2, image.height / 2)
     }
 
     @Test
@@ -731,13 +764,14 @@ class TitleCoverTest {
         answer: (String) -> ByteArray?,
     ) {
         val requested = CopyOnWriteArrayList<String>()
+        val callsCreated = CopyOnWriteArrayList<String>()
 
         @Volatile
         var online = true
 
         private val owner = SignInId("image-export-owner")
         private val context = compose.activity.applicationContext
-        private val calls =
+        private val client =
             OkHttpClient
                 .Builder()
                 .addInterceptor { chain ->
@@ -754,6 +788,11 @@ class TitleCoverTest {
                         .body((bytes ?: byteArrayOf()).toResponseBody("image/jpeg".toMediaType()))
                         .build()
                 }.build()
+        private val calls =
+            Call.Factory { request ->
+                callsCreated += request.url.toString()
+                client.newCall(request)
+            }
         private val images =
             LiveImages(context, "test-cover", { File(context.cacheDir, "retired") }, calls, scope, FileSystem.SYSTEM) { it == owner }
         val loader =
