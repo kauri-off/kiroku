@@ -7,6 +7,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.createSavedStateHandle
@@ -17,9 +18,11 @@ import io.github.kauri_off.kiroku.collectAsScreenState
 import io.github.kauri_off.kiroku.core.model.MangaDetails
 import io.github.kauri_off.kiroku.core.model.Session
 import io.github.kauri_off.kiroku.core.model.TitleLanguage
+import io.github.kauri_off.kiroku.core.model.owner
 import io.github.kauri_off.kiroku.design.component.LocalOnTop
 import io.github.kauri_off.kiroku.manga.MangaTitleSummary
 import io.github.kauri_off.kiroku.wiring.AppGraph
+import kotlinx.coroutines.launch
 import kotlinx.serialization.Serializable
 
 @Serializable
@@ -36,6 +39,7 @@ internal fun MangaSearchRoute(
     onRanking: () -> Unit,
     onOpen: (MangaTitleSummary) -> Unit,
     onSignIn: () -> Unit,
+    onOpenRecent: (RecentTitleOpening) -> Unit,
 ) {
     val source = graph.mangaCatalogue ?: return
     val search =
@@ -51,10 +55,13 @@ internal fun MangaSearchRoute(
     val language by remember(graph) { graph.titleLanguage }.collectAsScreenState(TitleLanguage.Romaji)
     val session by remember(graph) { graph.session.observeSession() }.collectAsScreenState(initial = null)
     var recent by rememberSaveable(saver = recentSaver) { mutableStateOf(emptyList()) }
+    val historyScope = recentScope(graph)?.takeIf { session != null && it.owner == session?.owner }
+    val visits = if (text.isEmpty()) recentTitles(graph, historyScope, adult, mangaOnly = true) else emptyList()
+    val scope = rememberCoroutineScope()
     val shown = results.takeIf { it.query == text && it.adult == adult }
     val content =
         if (text.isEmpty()) {
-            SearchContent.MangaStart(recent)
+            SearchContent.MangaStart(recent, visits.map { RecentTitleRow(it.key, it.titles.preferred(language)) })
         } else {
             val rows = remember(shown, language) { shown?.rows { MangaResultRow(it, it.titles.preferred(language)) } ?: Paged.Loading }
             SearchContent.MangaResults(text, rows)
@@ -71,6 +78,12 @@ internal fun MangaSearchRoute(
                 SearchEvent.Submit -> keep(search.text)
                 SearchEvent.Clear -> query.clearText()
                 is SearchEvent.RemoveRecent -> recent = recent - event.query
+                is SearchEvent.OpenRecent -> {
+                    val current = session ?: return@SearchScreen
+                    val openingScope = historyScope ?: return@SearchScreen
+                    val title = visits.firstOrNull { it.key == event.key } ?: return@SearchScreen
+                    scope.launch { graph.openRecent(RecentTitleOpening(title, current, language, openingScope), onOpenRecent) }
+                }
                 is SearchEvent.SearchAgain -> {
                     query.setTextAndPlaceCursorAtEnd(event.query)
                     keep(event.query)

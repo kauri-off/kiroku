@@ -29,6 +29,8 @@ import androidx.sqlite.execSQL
         NotificationStateRow::class,
         NotificationTitleRow::class,
         SentRow::class,
+        RecentTitleRow::class,
+        RecentVisitSequence::class,
     ],
     version = KirokuDatabase.VERSION,
 )
@@ -47,9 +49,11 @@ abstract class KirokuDatabase : RoomDatabase() {
 
     internal abstract fun notifications(): NotificationDao
 
+    internal abstract fun recentTitles(): RecentTitleDao
+
     companion object {
         const val NAME = "kiroku.db"
-        const val VERSION = 12
+        const val VERSION = 13
 
         val migrations: List<Migration> =
             listOf(
@@ -138,6 +142,19 @@ abstract class KirokuDatabase : RoomDatabase() {
                 migration(11, 12) {
                     execSQL("ALTER TABLE `title_details` ADD COLUMN `pictures` TEXT")
                     execSQL("ALTER TABLE `manga` ADD COLUMN `pictures` TEXT")
+                },
+                migration(12, 13) {
+                    execSQL("ALTER TABLE `title` ADD COLUMN `safe_for_search` INTEGER")
+                    execSQL("ALTER TABLE `manga` ADD COLUMN `safe_for_search` INTEGER")
+                    execSQL(
+                        "CREATE TABLE IF NOT EXISTS `recent_title` (`visit` INTEGER NOT NULL, " +
+                            "`owner` TEXT NOT NULL, `manga` INTEGER NOT NULL, `title_id` INTEGER NOT NULL, `romaji` TEXT NOT NULL, " +
+                            "`english` TEXT, `japanese` TEXT, `safe_for_search` INTEGER, PRIMARY KEY(`manga`, `title_id`))",
+                    )
+                    execSQL(
+                        "CREATE TABLE IF NOT EXISTS `recent_visit_sequence` (`id` INTEGER NOT NULL, `last` INTEGER NOT NULL, " +
+                            "PRIMARY KEY(`id`))",
+                    )
                 },
             )
 

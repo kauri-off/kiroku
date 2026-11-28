@@ -5,6 +5,7 @@ import io.github.kauri_off.kiroku.core.error.DataError
 import io.github.kauri_off.kiroku.core.model.AnimeId
 import io.github.kauri_off.kiroku.core.model.MangaId
 import io.github.kauri_off.kiroku.core.repository.BrowseList
+import io.github.kauri_off.kiroku.core.repository.RecentTitleId
 
 data class SearchState(
     // The search field's text, owned by the caller and read by the field itself, so no keystroke waits (ARCHITECTURE 6.2).
@@ -23,6 +24,7 @@ sealed interface SearchContent {
         val recent: List<String>,
         val suggestions: Boolean = false,
         val mangaAvailable: Boolean = false,
+        val viewed: List<RecentTitleRow> = emptyList(),
     ) : SearchContent {
         init {
             require(recent.size <= MAX_RECENT_SEARCHES)
@@ -44,6 +46,7 @@ sealed interface SearchContent {
 
     data class MangaStart(
         val recent: List<String>,
+        val viewed: List<RecentTitleRow> = emptyList(),
     ) : SearchContent
 
     data class MangaResults(
@@ -51,6 +54,11 @@ sealed interface SearchContent {
         val results: Paged<MangaResultRow>,
     ) : SearchContent
 }
+
+data class RecentTitleRow(
+    val key: RecentTitleId,
+    val title: String,
+)
 
 const val MAX_RECENT_SEARCHES = 5
 
@@ -106,6 +114,10 @@ sealed interface SearchEvent {
 
     data class SearchAgain(
         val query: String,
+    ) : SearchEvent
+
+    data class OpenRecent(
+        val key: RecentTitleId,
     ) : SearchEvent
 
     data class RemoveRecent(

@@ -16,6 +16,10 @@ internal class Tokens(
 internal sealed interface Stored {
     data object SignedOut : Stored
 
+    data class Guest(
+        val generation: String,
+    ) : Stored
+
     class SignedIn(
         val tokens: Tokens,
     ) : Stored

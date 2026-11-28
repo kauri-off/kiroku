@@ -27,6 +27,7 @@ import io.github.kauri_off.kiroku.data.network.ReadAdmission
 import io.github.kauri_off.kiroku.data.network.ReadDeferred
 import io.github.kauri_off.kiroku.data.network.RepairedAnswer
 import io.github.kauri_off.kiroku.data.network.clientIdOutcome
+import io.github.kauri_off.kiroku.data.network.searchSafety
 import io.github.kauri_off.kiroku.data.network.titlePictures
 import io.github.kauri_off.kiroku.data.session.MalSession
 import kotlinx.coroutines.CancellationException
@@ -101,8 +102,9 @@ class MalMangaRepository(
         return storage {
             inSettledOwner(owner) { db ->
                 val dao = db.manga()
-                val pictures = if (PICTURES in repaired) dao.read(id.value)?.pictures ?: row.pictures else row.pictures
-                dao.save(row.copy(pictures = pictures))
+                val previous = dao.read(id.value)
+                val pictures = if (PICTURES in repaired) previous?.pictures ?: row.pictures else row.pictures
+                dao.save(row.copy(pictures = pictures, safeForSearch = row.safeForSearch ?: previous?.safeForSearch))
                 checkNotNull(dao.read(id.value)).toStored(http.unexpected)
             }
         }
@@ -183,6 +185,7 @@ internal fun JsonObject.toManga(
         titles = Titles(requireNotNull(name), english, japanese),
         posterUrl = cover.medium,
         largePosterUrl = cover.large,
+        safeForSearch = get("nsfw").searchSafety(),
         pictures = get(PICTURES).titlePictures(cover) { repaired += PICTURES },
         synopsis = text("synopsis")?.trim()?.takeUnless(String::isEmpty),
         format = formatOf(text("media_type")?.takeUnless(String::isBlank)),
@@ -213,6 +216,7 @@ internal fun MangaDetails.toRow(fetchedAt: Long): MangaRow =
         rank,
         members,
         picturesToColumn(pictures),
+        safeForSearch,
     )
 
 private fun stringValue(value: JsonElement): String? = (value as? JsonPrimitive)?.takeIf { it.isString }?.content
@@ -233,6 +237,7 @@ private fun MangaRow.toStored(unexpected: (Throwable) -> Unit): StoredManga =
             rank,
             members,
             readable(unexpected) { picturesOf(pictures) }.orEmpty(),
+            safeForSearch,
         ),
         instantOf(fetchedAt),
     )

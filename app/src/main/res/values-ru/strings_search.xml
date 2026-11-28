@@ -25,4 +25,5 @@
     <string name="search_season_spring">Весна</string>
     <string name="search_season_summer">Лето</string>
     <string name="search_season_fall">Осень</string>
+    <string name="search_recent_titles">Недавно открытые</string>
 </resources>

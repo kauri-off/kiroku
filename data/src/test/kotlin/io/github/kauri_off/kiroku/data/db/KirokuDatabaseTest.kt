@@ -352,7 +352,12 @@ class KirokuDatabaseTest {
                         ),
                     ),
             )
-        val fixture = list + airing + profile + record + manga
+        val recent =
+            mapOf(
+                "recent_title" to listOf(mapOf("visit" to 1L, "owner" to "owner", "manga" to 0L, "title_id" to 1L, "romaji" to "Recent")),
+                "recent_visit_sequence" to listOf(mapOf("id" to 0L, "last" to 1L)),
+            )
+        val fixture = list + airing + profile + record + manga + recent
         for (version in 1..KirokuDatabase.VERSION) {
             context.deleteDatabase(name)
             val written =
@@ -385,6 +390,10 @@ class KirokuDatabaseTest {
                     assertEquals(8.4, title["mean_score"])
                     assertEquals(null, title["rank"])
                     assertEquals(null, title["members"])
+                }
+                if (version < 13) {
+                    assertTrue(connection.named("title").all { it.containsKey("safe_for_search") && it["safe_for_search"] == null })
+                    assertTrue(connection.named("manga").all { it.containsKey("safe_for_search") && it["safe_for_search"] == null })
                 }
                 if (version < 12) {
                     assertTrue(connection.named("title_details").all { it.containsKey("pictures") && it["pictures"] == null })
@@ -666,6 +675,7 @@ class KirokuDatabaseTest {
                 10 to "26326b4eacb144dad9d1cdf2a8b9bce9",
                 11 to "562cc18b9d5918f02e80e21dd3848f6e",
                 12 to "9dde67be800e8ad34b046ebfd4594f6b",
+                13 to "64cc581574f47440e6ec4264c0d5ba90",
             )
     }
 }

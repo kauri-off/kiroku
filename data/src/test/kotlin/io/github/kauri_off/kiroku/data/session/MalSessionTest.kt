@@ -425,7 +425,7 @@ class MalSessionTest {
             assertEquals(Session.Expired(id), signedOut.now())
             signedOut.signOut()
             assertEquals(Session.SignedOut, signedOut.now())
-            assertEquals(0L, fixture.file.length())
+            assertEquals(37L, fixture.file.length())
             assertEquals(Session.SignedOut, fixture.reopen().now())
 
             // The next sign-in that expires is another one.
@@ -754,7 +754,7 @@ class MalSessionTest {
             assertEquals(expired, session.authorised(mal.request))
             session.renewIfDue()
             assertEquals(emptyList<String>(), mal.sent)
-            assertEquals(0L, fixture.file.length())
+            assertEquals(37L, fixture.file.length())
             assertEquals(Session.SignedOut, fixture.reopen().now())
             assertEquals(emptyList<Map<String, String>>(), fixture.grants)
         }
@@ -976,7 +976,7 @@ class MalSessionTest {
             assertEquals(Session.Expired((other as Session.SignedIn).signIn), again.now())
             again.signOut()
             assertEquals(Session.SignedOut, again.now())
-            assertEquals(0L, fixture.file.length())
+            assertEquals(37L, fixture.file.length())
             assertEquals(Session.SignedOut, fixture.reopen().now())
         }
 
@@ -1068,7 +1068,7 @@ class MalSessionTest {
             session.signOut()
             cipher.seals = true
             delay(200)
-            assertEquals(0L, fixture.file.length())
+            assertEquals(37L, fixture.file.length())
             assertEquals("signed out", stored())
         }
 

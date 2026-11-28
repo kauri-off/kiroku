@@ -25,6 +25,7 @@ internal data class MangaRow(
     val rank: Int?,
     val members: Int?,
     val pictures: String? = null,
+    @ColumnInfo(name = "safe_for_search") val safeForSearch: Boolean? = null,
 )
 
 @Dao

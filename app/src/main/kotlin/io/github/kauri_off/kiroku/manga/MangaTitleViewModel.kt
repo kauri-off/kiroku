@@ -118,6 +118,7 @@ internal class MangaTitleViewModel(
                         else -> MangaTitleContent.Loading
                     },
                 sessionExpired = session is Session.Expired,
+                session = session,
             )
         }.stateIn(
             viewModelScope,
@@ -255,4 +256,5 @@ private fun MangaDetails.withSummary(summary: MangaDetails): MangaDetails =
         volumes = volumes ?: summary.volumes,
         chapters = chapters ?: summary.chapters,
         meanScore = meanScore ?: summary.meanScore,
+        safeForSearch = safeForSearch ?: summary.safeForSearch,
     )

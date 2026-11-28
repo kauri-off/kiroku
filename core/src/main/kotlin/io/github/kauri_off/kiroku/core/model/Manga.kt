@@ -19,6 +19,7 @@ data class MangaDetails(
     val rank: Int? = null,
     val members: Int? = null,
     val pictures: List<TitlePicture> = emptyList(),
+    val safeForSearch: Boolean? = null,
 )
 
 sealed interface MangaFormat {

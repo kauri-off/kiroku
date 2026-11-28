@@ -299,7 +299,7 @@ class ImageSignOutTest {
                     cancelled.await()
                 }
                 assertEquals(Session.SignedOut, graph.session.observeSession().first())
-                assertEquals(0L, parts.tokenFile.length())
+                assertEquals(37L, parts.tokenFile.length())
                 assertEquals(settings, graph.preferences.observeNotificationSettings().first())
                 assertFalse(held.isCompleted)
                 val fresh = graph.loader()
@@ -412,7 +412,7 @@ class ImageSignOutTest {
             val signOutProcess = process()
             graph(parts("restarted", signOutProcess), denyDelete).session.signOut()
             withTimeout(5_000) { failed.receive() }
-            assertEquals(0L, signOut.tokenFile.length())
+            assertEquals(37L, signOut.tokenFile.length())
             assertTrue(FileSystem.SYSTEM.exists(orphan))
             signOutProcess.coroutineContext.job.cancelAndJoin()
 
@@ -593,7 +593,7 @@ class ImageSignOutTest {
                 val second = async { graph.signOut(b) }
                 try {
                     withTimeout(5_000) { graph.session.observeSession().first { it == Session.SignedOut } }
-                    assertEquals(0L, parts.tokenFile.length())
+                    assertEquals(37L, parts.tokenFile.length())
                     assertFalse(first.isCompleted)
                     assertTrue(graph.imagesRetired(b))
                 } finally {

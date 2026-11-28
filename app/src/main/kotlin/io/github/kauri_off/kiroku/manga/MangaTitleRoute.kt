@@ -22,7 +22,11 @@ import io.github.kauri_off.kiroku.core.model.MangaId
 import io.github.kauri_off.kiroku.core.model.SignInId
 import io.github.kauri_off.kiroku.core.model.TitleLanguage
 import io.github.kauri_off.kiroku.core.repository.Connection
+import io.github.kauri_off.kiroku.core.repository.RecentTitle
+import io.github.kauri_off.kiroku.core.repository.RecentTitleId
 import io.github.kauri_off.kiroku.edit.MangaEditTotals
+import io.github.kauri_off.kiroku.search.RecordTitleVisit
+import io.github.kauri_off.kiroku.search.recentOpeningIsCurrent
 import io.github.kauri_off.kiroku.shell.ShellMessage
 import io.github.kauri_off.kiroku.shell.ShellMessages
 import io.github.kauri_off.kiroku.wiring.AppGraph
@@ -37,12 +41,13 @@ import kotlinx.serialization.Transient
 @Serializable
 internal data class MangaTitleKey(
     val id: Long,
+    val recentOwner: String? = null,
 ) : NavKey {
     @Transient
     var opened: MangaTitleSummary? = null
         private set
 
-    constructor(opened: MangaTitleSummary) : this(opened.details.id.value) {
+    constructor(opened: MangaTitleSummary, recentOwner: String? = null) : this(opened.details.id.value, recentOwner) {
         this.opened = opened
     }
 }
@@ -62,6 +67,7 @@ internal fun MangaTitleRoute(
     onBack: () -> Unit,
     onSignIn: () -> Unit,
 ) {
+    if (!recentOpeningIsCurrent(graph, key.recentOwner)) return
     val manga =
         viewModel {
             MangaTitleViewModel(
@@ -87,6 +93,11 @@ internal fun MangaTitleRoute(
         }
     val owner = editing?.owner
     val content = state.content as? MangaTitleContent.Shown
+    RecordTitleVisit(
+        graph,
+        state.session,
+        content?.details?.let { RecentTitle(RecentTitleId.Manga(key.id), it.titles, it.safeForSearch) },
+    )
     val membership =
         if (editor != null && owner != null && content != null && editing.signedIn && editing.observed) {
             key(editor, owner, key.id) {
